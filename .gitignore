@@ -1,0 +1,32 @@
+# Installed dependencies
+node_modules/
+
+# Generated build and test output
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local environment files; example files must contain placeholders only
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Credentials and local runtime data
+secrets/
+runtime-data/
+backups/
+*.pem
+*.key
+credentials*.json
+*service-account*.json
+*service_account*.json
+*.log
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
