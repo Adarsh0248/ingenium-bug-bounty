@@ -1,10 +1,10 @@
 # Ingenium Bug Bounty Architecture
 
-Status: the user approved the complete core architecture and local build direction. The user requested an architecture commit before coding; implementation has not begun.
+Status: the complete core architecture is approved and the user committed its checkpoint as `2209483`. The first local backend foundation is implemented on `feat/project-foundation`; competition features, frontend, Judge0 and cloud deployment are not implemented.
 
-Implementation boundary: the architecture review and overall core-design approval gate are satisfied. Complete the user-owned architecture commit before starting the small local foundation. Git mutations, cloud provisioning/spending, real competition bug authoring and event launch retain their separately agreed boundaries. Architecture examples are not implemented application features.
+Implementation boundary: the architecture approval and user-owned commit/implementation-branch gates are satisfied. Continue in small teaching-first local milestones. Git mutations remain user-owned; cloud provisioning/spending, real competition bug authoring and event launch retain their separately agreed boundaries. Architecture examples are not implemented competition features.
 
-Latest checkpoint: Reviews 1-4 and the complete core architecture are approved. Sections 9.1, 10.1, 11.1, 11.2 and 12.1 hold the confirmed topic contracts; Section 12.2 records the final recap/approval and remaining implementation/launch evidence. Earlier open-item inventories are historical. Next, the user commits the architecture checkpoint; local implementation follows in small teaching-first steps. No application has been implemented.
+Latest checkpoint: Reviews 1-4 and the complete core architecture are approved. Sections 9.1, 10.1, 11.1, 11.2 and 12.1 hold the confirmed topic contracts; Section 12.2 records the final recap/approval and remaining implementation/launch evidence. Earlier open-item inventories are historical. Local milestone 1 adds only a loopback Fastify/TypeScript API, liveness/database-readiness checks, restricted development PostgreSQL access and tests. It does not implement or prove the competition/judge/security/lifecycle contracts.
 
 ## 1. Competition Requirements
 
@@ -2516,7 +2516,7 @@ Status: planning checklist, not a declaration that the architecture is complete.
 
 ### 4.2 Remaining Design Chunks
 
-Latest checkpoint: Sections 9.1, 10.1, 11.1, 11.2 and 12.1 confirm all four review groups: access/security, judge execution/recovery, command/API/live-state, physical enforcement, result/draw/carryover, capacity/retention and deployment/operations/verification. Earlier open-item inventories below are historical dependencies, not a reversal of those approvals. Section 12.2 records the final recap and the user's complete core-design/local-build approval. The user requested an architecture commit before coding; no implementation has begun.
+Latest checkpoint: Sections 9.1, 10.1, 11.1, 11.2 and 12.1 confirm all four review groups: access/security, judge execution/recovery, command/API/live-state, physical enforcement, result/draw/carryover, capacity/retention and deployment/operations/verification. Earlier open-item inventories below are historical dependencies, not a reversal of those approvals. The user committed the approved architecture as `2209483` and created `feat/project-foundation`. The initial local API/development-PostgreSQL health/readiness milestone now exists; the competition and event-launch gates remain unimplemented/unproven.
 
 | Order | Area | Remaining Architecture Work |
 | --- | --- | --- |
@@ -2546,7 +2546,7 @@ Latest checkpoint: Sections 9.1, 10.1, 11.1, 11.2 and 12.1 confirm all four revi
 
 Status: all four topic review groups and the complete core architecture are approved. Section 12.2 records the final recap and the requested user-owned commit-before-coding checkpoint. Approval is not evidence that migrations, security, judge integration, recovery or capacity tests have passed.
 
-Current checkpoint: the user approved the complete architecture after the final recap and requested a commit before coding. The agreed local foundation may begin after that user-owned checkpoint, following the teaching-first build order. No additional architecture topic is queued. No application, executable schema or package setup has been created; cloud spending/provisioning and assistant Git mutations are not authorised.
+Current checkpoint: the user completed the architecture commit and implementation branch. The first local foundation now includes Fastify/TypeScript, a bounded pg pool using a restricted API role, development Docker PostgreSQL, separate ignored environment files and harmless health/readiness checks. Fifteen unit/setup tests, two real-database tests, type checking/build and an HTTP database-stop/recovery check passed for this milestone. No competition tables, Drizzle migrations, auth, arena, Judge0 or cloud resources are implemented. No additional architecture topic is queued; cloud spending/provisioning and assistant Git mutations are not authorised.
 
 | Review | Status and work before implementation-ready core sign-off |
 | --- | --- |
@@ -2555,7 +2555,7 @@ Current checkpoint: the user approved the complete architecture after the final 
 | 3. Concrete data/API/live contracts | Confirmed in Sections 11.1/11.2: command/API/live protocol, per-record support/null/constraint and operation-lock map, result/draw/carryover enforcement, total quotas/storage and safe retention. No migration or concurrency test exists yet. |
 | 4. Deployment and verification plan | Confirmed in Section 12.1: candidate app/database versus isolated-judge topology, HTTPS/private access/secrets, clock-health and incident runbooks, backup/restore/archive, test/load launch gates, residual risks and phased build order. Actual account quota/cost, machine capacity and restoration remain to be verified before deployment/launch. No resources are provisioned. |
 
-- The final recap and complete core-design/build approval are recorded in Section 12.2. Guide the user through the requested architecture commit before coding; do not introduce another routine design-confirmation sequence. A contradiction or unsupported guarantee discovered while implementing must still be reported and resolved rather than silently changing a policy. Worker fencing, snapshot consistency and cancellation safety remain required implementation/launch gates, not optional refinements.
+- The final recap and complete core-design/build approval are recorded in Section 12.2; the user-owned architecture commit is complete. Continue the small teaching-first build sequence without another routine design-confirmation loop. A contradiction or unsupported guarantee discovered while implementing must still be reported and resolved rather than silently changing a policy. Worker fencing, snapshot consistency and cancellation safety remain required implementation/launch gates, not optional refinements.
 - Distinguish design from evidence: define initial bounds and test/incident procedures now; measure actual throughput, tune deployment sizing within approved safety bounds, verify fresh/upgraded migrations, run restore drills and load/browser tests once implementation exists and before a live event. A plan cannot substitute for those later checks, and their absence now is not a reason to claim they already passed.
 - Special shop items/bonus systems, function-only submissions, HTML/CSS/React grading and other explicitly deferred features do not need implementation designs to finish the agreed initial full-program scope. Requested core controls cannot be removed merely to make the checklist shorter; any narrower scope needs user approval.
 - Architecture completion is not application completion. No application code, packages, database schema, executable migrations, hosting setup or app tests exist as a result of these design approvals; the user still owns all Git mutations. A rough conversational progress estimate is not a measured percentage or a schedule guarantee.
@@ -3671,7 +3671,7 @@ Operator -> restricted IAP / OS Login -> both hosts
 
 ### 12.2 Final Core-Design Recap and Approval
 
-Status: the user approved the complete architecture/local-build direction after the final recap and explicitly requested a commit before coding. All four review groups are confirmed; no new competition policy is introduced here. The assistant guides the user through that Git checkpoint, then proceeds with the agreed small local foundation. This approval does not authorise assistant Git mutations, cloud provisioning/spending, real competition bug authoring or event launch.
+Status: the user approved the complete architecture/local-build direction, committed the architecture checkpoint as `2209483` and created `feat/project-foundation`. All four review groups are confirmed; no new competition policy is introduced here. The first local API/PostgreSQL health/readiness milestone is implemented; future competition/judge/operational requirements remain to be built and verified. Approval does not authorise assistant Git mutations, cloud provisioning/spending, real competition bug authoring or event launch.
 
 #### Agreed Initial System
 
@@ -3696,6 +3696,6 @@ Status: the user approved the complete architecture/local-build direction after 
 
 #### Approved Next Step
 
-- The complete core architecture and local-build direction are approved. First, guide the user through committing this architecture checkpoint. After the user confirms that commit, begin the small local foundation in Section 12.1's teaching-first order: explain each folder/service and one harmless local health/read connection, not the entire application at once.
+- The complete core architecture, local-build direction, user-owned architecture commit and implementation branch are confirmed. The first local foundation implements the harmless health/read connection in Section 12.1's teaching-first order. Walk through its files and request path with the user before broadening the milestone; this is not the entire backend or an event-ready system.
 - That approval permits only the agreed implementation scope. The user continues to perform all branch/stage/commit/push/pull/PR actions; explain and guide them without executing those mutations. Cloud spending/provisioning, real competition bug authoring and eventual live launch retain their separate approval/readiness gates.
-- Until the user confirms the requested architecture commit, change documentation only. During implementation, keep the learning pace: explain the next small deliverable, implement/verify it, and show what it proves and what remains.
+- Keep the learning pace during implementation: explain the next small deliverable, implement/verify it, and show what it proves and what remains. The early judge feasibility/security spike retains its isolated-runtime and separate cloud-resource authorisation gate; do not execute participant code in this development database/API environment.

@@ -1,0 +1,22 @@
+{
+  "name": "ingenium-bug-bounty",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "engines": {
+    "node": ">=24.22.0 <25"
+  },
+  "packageManager": "npm@11.19.1",
+  "scripts": {
+    "setup:env": "node scripts/setup-env.mjs",
+    "dev": "npm run dev --workspace @ingenium/api",
+    "build": "npm run build --workspace @ingenium/api",
+    "start": "npm run start --workspace @ingenium/api",
+    "typecheck": "npm run typecheck --workspace @ingenium/api",
+    "test": "npm run test --workspace @ingenium/api",
+    "test:db": "npm run test:db --workspace @ingenium/api",
+    "db:up": "docker compose --env-file .env.database up -d --wait postgres",
+    "db:stop": "docker compose --env-file .env.database stop postgres",
+    "db:logs": "docker compose --env-file .env.database logs --tail=50 postgres"
+  }
+}
