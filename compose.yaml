@@ -1,0 +1,27 @@
+name: ingenium-bug-bounty-dev
+
+services:
+  postgres:
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Run npm run setup:env first}
+      POSTGRES_USER: ${POSTGRES_USER:?Run npm run setup:env first}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run setup:env first}
+      POSTGRES_API_PASSWORD: ${POSTGRES_API_PASSWORD:?Run npm run setup:env first}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/01-api-role.sql:/docker-entrypoint-initdb.d/01-api-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    cpus: 1
+    mem_limit: 512m
+    shm_size: 128m
+
+volumes:
+  postgres_data:
