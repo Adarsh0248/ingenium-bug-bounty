@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!.dockerignore
+!entrypoint.sh
+!server.sh
+!workers.sh
+!LICENSE.judge0

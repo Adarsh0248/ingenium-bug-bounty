@@ -1,0 +1,42 @@
+services:
+  api:
+    image: sha256:1e91aa8647a728487bcc7259bc87762b06306193ba13d90fa6881b13462b8a54
+    pull_policy: never
+    platform: linux/amd64
+    user: "1000:999"
+    command: ["/api/scripts/server"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: /opt/ingenium-judge-spike/judge0.conf
+        target: /api/judge0.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,uid=1000,gid=999,mode=0700
+      - /api/tmp:rw,nosuid,nodev,noexec,size=64m,uid=1000,gid=999,mode=0700
+    healthcheck:
+      test: ["CMD", "ruby", "-rsocket", "-e", "TCPSocket.new('127.0.0.1', 2358).close"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    networks: [judge_private]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.75
+    mem_limit: 768m
+    pids_limit: 128
+    restart: "no"
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"

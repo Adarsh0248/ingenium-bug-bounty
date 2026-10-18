@@ -1,0 +1,104 @@
+name: ingenium-judge-spike
+
+services:
+  db:
+    image: postgres:16.15-bookworm@sha256:ec9f656f17c8b4dfebf49e58cf5c46d493d4846d4ea6d8b85d0637f68ee33bfc
+    platform: linux/amd64
+    user: "999:999"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_bootstrap_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    command: ["postgres", "-c", "max_connections=40", "-c", "shared_buffers=128MB"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: /opt/ingenium-judge-spike/dependencies/init-db.sh
+        target: /docker-entrypoint-initdb.d/10-judge0.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    secrets:
+      - postgres_bootstrap_password
+      - postgres_password
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=64m,uid=999,gid=999,mode=0700
+      - /var/run/postgresql:rw,nosuid,nodev,noexec,size=16m,uid=999,gid=999,mode=3775
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$$(cat /run/secrets/postgres_password)\" psql -h 127.0.0.1 -U judge0 -d judge0 -Atqc 'SELECT 1' | grep -qx 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    networks: [judge_private]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.5
+    mem_limit: 512m
+    shm_size: 128m
+    pids_limit: 128
+    restart: "no"
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"
+
+  redis:
+    image: redis:7.2.16-bookworm@sha256:6510e071eecd994fb187c15f126d424a293006669f590da800ca4a06564ae7d0
+    platform: linux/amd64
+    user: "999:999"
+    entrypoint: ["/bin/sh", "/run/ingenium-redis-entrypoint.sh"]
+    command: []
+    volumes:
+      - redis_data:/data
+      - type: bind
+        source: /opt/ingenium-judge-spike/dependencies/redis-entrypoint.sh
+        target: /run/ingenium-redis-entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    secrets: [redis_password]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m,uid=999,gid=999,mode=0700
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/redis_password)\" redis-cli -h 127.0.0.1 -p 6379 ping | grep -qx PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks: [judge_private]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.25
+    mem_limit: 512m
+    pids_limit: 64
+    restart: "no"
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "2"
+
+networks:
+  judge_private:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+  redis_data:
+
+secrets:
+  postgres_bootstrap_password:
+    file: /opt/ingenium-judge-spike/dependencies/postgres-bootstrap-password
+  postgres_password:
+    file: /opt/ingenium-judge-spike/dependencies/postgres-password
+  redis_password:
+    file: /opt/ingenium-judge-spike/dependencies/redis-password

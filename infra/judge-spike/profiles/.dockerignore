@@ -1,0 +1,8 @@
+**
+!Dockerfile
+!.dockerignore
+!lock.json
+!runtime.py
+!limits.c
+!fixtures/
+!fixtures/*

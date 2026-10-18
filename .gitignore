@@ -17,6 +17,8 @@ test-results/
 
 # Credentials and local runtime data
 secrets/
+judge0.spike.conf
+.judge0.spike.conf.*
 runtime-data/
 backups/
 *.pem

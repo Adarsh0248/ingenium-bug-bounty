@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "scope": "synthetic-profile-parity-only",
+  "platform": "linux/amd64",
+  "legacy_image": "docker.io/judge0/judge0:1.13.1@sha256:6b5d6a66aa19a8e878a52ea3c6a560afc1086734d96e2885b561fd5c6018f082",
+  "isolate_sha256": "c8ad768bf22499f579eb07be75379c890347272de8190302b48b2bc0bab8d1d3",
+  "images": {
+    "gcc": {
+      "image": "docker.io/library/gcc:15.3.0-trixie@sha256:980e5c2310bee44d11ee46964174cc11dfea822ba60f0d050d2161d63b64b8f5",
+      "config": "sha256:9f14e671a09bc195b93ca39524b8dcf401bc832b0c520e462327ce94986799aa",
+      "version": "15.3.0"
+    },
+    "python": {
+      "image": "docker.io/library/python:3.14.8-trixie@sha256:c23ebccb22bca6335521be462d1d4a3449a623c5ca8ce513d163c79c636dae79",
+      "config": "sha256:16cfda0e6a1d9077709d0cbcd378562b025bb82d8243de633da2ab31d6489cb7",
+      "version": "3.14.8"
+    },
+    "node": {
+      "image": "docker.io/library/node:24.22.0-trixie@sha256:a3e43f3f15bea8c59c689afeebe63c945885677ae469ae8d12578567ef18f1df",
+      "config": "sha256:cce0124bbf73d23cb776bcb26ce6c30a0d0086ce1f3b2fca0edb2db6b1911352",
+      "version": "24.22.0"
+    },
+    "java": {
+      "image": "docker.io/library/eclipse-temurin:21.0.12.1_1-jdk-jammy@sha256:074d6f95f1e69965dbd23750a37ec3b234025d0864e9821e0b1fba0763a3e853",
+      "config": "sha256:76d6a518726d43fda4421992ad624ad57bb1bac904c0768b0e307687ffacd5de",
+      "version": "21.0.12.1+1"
+    }
+  },
+  "profiles": {
+    "c": {
+      "source": "main.c",
+      "sha256": "c5ee366d7e901fb8cb278a7c7b37605d41e5cdd362e864347791c648ccef9993",
+      "compile": ["/usr/local/bin/gcc", "-std=c17", "-O2", "/box/main.c", "-o", "/box/main"],
+      "artifact": "main",
+      "compile_comm": ["cc1", "gcc"],
+      "run": ["/box/main"],
+      "run_comm": ["main"],
+      "cpu": 2,
+      "wall": 10
+    },
+    "cpp": {
+      "source": "main.cpp",
+      "sha256": "239b8cb01c848cd5a29cdbc042121c6cf5cb3d7d0c4c5ce990f55ddece4e6521",
+      "compile": ["/usr/local/bin/g++", "-std=c++17", "-O2", "/box/main.cpp", "-o", "/box/main"],
+      "artifact": "main",
+      "compile_comm": ["cc1plus", "g++"],
+      "run": ["/box/main"],
+      "run_comm": ["main"],
+      "cpu": 2,
+      "wall": 10
+    },
+    "java": {
+      "source": "Main.java",
+      "sha256": "ead07a51b258b6aadec042262824b0e3c5bba63527bd239e048f9d4b8c7eeadb",
+      "compile": ["/usr/local/java/bin/javac", "-J-XX:-UseContainerSupport", "-J-XX:ActiveProcessorCount=1", "-J-XX:+UseSerialGC", "-J-XX:-UsePerfData", "-J-Xmx256m", "-J-Xss1m", "-J-Djava.io.tmpdir=/box", "-encoding", "UTF-8", "-d", "/box", "/box/Main.java"],
+      "artifact": "Main.class",
+      "compile_comm": ["javac"],
+      "run": ["/usr/local/java/bin/java", "-XX:-UseContainerSupport", "-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:-UsePerfData", "-Xmx256m", "-Xss1m", "-Djava.io.tmpdir=/box", "-Dfile.encoding=UTF-8", "-cp", "/box", "Main"],
+      "run_comm": ["java"],
+      "cpu": 4,
+      "wall": 15
+    },
+    "python": {
+      "source": "main.py",
+      "sha256": "562c1d3aece3d6fb137ee3237b191ac3e1d447130fdeae9cff6a3c2e0be5575f",
+      "compile": null,
+      "artifact": null,
+      "compile_comm": [],
+      "run": ["/usr/local/bin/python3.14", "-I", "-B", "/box/main.py"],
+      "run_comm": ["python3.14"],
+      "cpu": 4,
+      "wall": 15
+    },
+    "javascript": {
+      "source": "main.cjs",
+      "sha256": "ddf02b40c41cbd8417091c3cb4bca4a9f851094d8ff9560ff5d414946f3c2146",
+      "compile": null,
+      "artifact": null,
+      "compile_comm": [],
+      "run": ["/usr/local/bin/node", "--max-old-space-size=256", "--v8-pool-size=1", "/box/main.cjs"],
+      "run_comm": ["node"],
+      "cpu": 4,
+      "wall": 15
+    }
+  }
+}

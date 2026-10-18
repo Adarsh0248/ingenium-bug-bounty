@@ -1,0 +1,30 @@
+# Trusted-command lab probe only; not a participant execution policy.
+abi <abi/3.0>,
+#include <tunables/global>
+
+profile ingenium-isolate-smoke-v1 flags=(attach_disconnected,mediate_deleted) {
+  file,
+  deny network,
+
+  capability chown,
+  capability dac_override,
+  capability kill,
+  capability setgid,
+  capability setuid,
+  capability sys_admin,
+  capability sys_chroot,
+
+  signal (send,receive) peer=ingenium-isolate-smoke-v1,
+  signal (receive) peer=unconfined,
+  signal (receive) peer=runc,
+  signal (receive) peer=crun,
+  ptrace (read,readby) peer=ingenium-isolate-smoke-v1,
+
+  deny /proc/** wklx,
+  deny /sys/** rwklx,
+
+  # Isolate first makes the container's mounts private, then builds this root.
+  mount options=(rw,rprivate) -> /,
+  mount fstype=tmpfs -> /var/local/lib/isolate/0/root/,
+  mount options in (rw,ro,bind,rbind,remount,nosuid,nodev) -> /var/local/lib/isolate/0/root/{box,usr,lib,lib64}/,
+}

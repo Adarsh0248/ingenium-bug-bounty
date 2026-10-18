@@ -6,6 +6,14 @@ A gamified bug-fixing competition platform for Ingenium, the college technical f
 
 The architecture is approved. The first local backend foundation provides API liveness and a development PostgreSQL connectivity check, with automated tests. Competition features, frontend, Judge0 integration and cloud deployment are not implemented yet.
 
+Current milestone: [Judge0 feasibility](docs/judge-feasibility.md). The isolated cloud lab has passed the fixed C++ API/queue/result flow, eight failure/output cases, all five pinned language profiles, scoped retained-result/permit recovery, the [private HTTP/queue association experiment](infra/judge-spike/HTTP-LAB.md), a fixed [active worker crash/drain test](infra/judge-spike/CRASH-LAB.md), the fifty-case [bounded output/shared checker suite](infra/judge-spike/STREAMS-LAB.md), the fixed [five-profile HTTP/bounded evidence integration](infra/judge-spike/TRANSPORT-LAB.md) and three fixed [shared sandbox boundary probes](infra/judge-spike/ISOLATION-LAB.md). Fifteen provider records are retained, including all ten earlier records unchanged. These are synthetic checks, not a participant-ready deployment. Output-channel hardening, general failure mapping, broader crash/retirement recovery, adversarial isolation, dependency review and load verification remain open. Preserve completed evidence and the earlier intentionally held lab reservation; do not repeat completed experiments or historical nine/ten-row probes. Any additional cloud resources or budget changes need separate approval.
+
+The earlier guarded stream recovery and fifty-case suite passed. Its failed journal/log, separate `streams-v1/cleanup-v1` proof and sealed `streams-v2` evidence remain preserved; do not rerun either controller.
+
+The earlier five-profile HTTP/queue/checker integration passed. Lost token bodies and duplicate deliveries/replies resolved to one execution per job with matching retained bytes/accounting and expected checker results. Preserve `transport-v1` and its schema; do not rerun it.
+
+Latest checkpoint (2026-10-18): the user reported the [shared-boundary batch](infra/judge-spike/ISOLATION-LAB.md) passing. Boundary denials/identity checks, the bounded fork limit and detached-child cleanup passed with accounting and normal cleanup. All fifteen provider rows and earlier evidence remained unchanged, the queue is empty and maintenance remains enabled. Preserve `isolation-v1`; this completed one-shot batch must not be rerun. Next harden output collection against hostile producers, including replacement or interference with writable-box FIFOs. These fixed probes are not a full hostile-code/security sign-off. No Git or cloud operation has been performed by the assistant.
+
 ## First Local Milestone
 
 Requirements: Node.js 24.22.x (npm included) and running Docker Desktop with Linux containers. Run these from this repository's root in PowerShell; use `npm.cmd` if PowerShell blocks the `npm.ps1` wrapper.
