@@ -24,6 +24,7 @@ backups/
 *.pem
 *.key
 credentials*.json
+entry-runtime.json
 *service-account*.json
 *service_account*.json
 *.log

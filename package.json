@@ -7,6 +7,11 @@
     "node": ">=24.22.0 <25"
   },
   "packageManager": "npm@11.19.1",
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "0.25.12"
+    }
+  },
   "scripts": {
     "setup:env": "node scripts/setup-env.mjs",
     "dev": "npm run dev --workspace @ingenium/api",
@@ -15,6 +20,9 @@
     "typecheck": "npm run typecheck --workspace @ingenium/api",
     "test": "npm run test --workspace @ingenium/api",
     "test:db": "npm run test:db --workspace @ingenium/api",
+    "test:db:schema": "npm run test:db:schema --workspace @ingenium/api",
+    "db:generate": "npm run db:generate --workspace @ingenium/api",
+    "db:migrate": "npm run db:migrate --workspace @ingenium/api",
     "db:up": "docker compose --env-file .env.database up -d --wait postgres",
     "db:stop": "docker compose --env-file .env.database stop postgres",
     "db:logs": "docker compose --env-file .env.database logs --tail=50 postgres"

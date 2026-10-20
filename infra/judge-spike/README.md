@@ -16,16 +16,54 @@ empty and maintenance enabled. Preserve `transport-v1` and its schema; this is a
 completed one-shot experiment, not a procedure to repeat. General failure mapping,
 wider recovery, adversarial isolation, dependency review and load gates remain open.
 
-Latest user-reported checkpoint (2026-10-18): the [shared sandbox boundary
+Earlier user-reported checkpoint (2026-10-18): the [shared sandbox boundary
 batch](ISOLATION-LAB.md) passed all three fixed probes: boundary denials/identity
 checks, the bounded fork limit and detached-child cleanup. Accounting and normal
 cleanup passed, all fifteen provider rows and earlier evidence remained unchanged,
 the queue is empty and maintenance remains enabled. Preserve `isolation-v1`;
 this is a completed one-shot experiment, not a procedure to repeat. It reused the
 cached image and unchanged policy, with no provider record/schema added or
-external network request. Next harden output collection against hostile FIFO
-producers. Dependencies, wider recovery and measured load remain open; these
+external network request. The later scoped protected-output result is below.
+Dependencies, wider recovery and measured load remain open; these
 fixed probes do not approve arbitrary participant execution.
+
+Latest user-reported checkpoint (2026-10-18): all 80 bundled VM unit tests and
+the [eighteen fixed protected verdict cases](VERDICTS-LAB.md) passed. Compilation
+and runtime errors, answer checks, CPU/wall/job-memory limits and stdout overflow
+matched expectations; the ambiguous kill produced `RECOVERY_REQUIRED`, not a
+participant verdict. Evidence was sealed with all fifteen provider rows and
+earlier evidence unchanged, queue empty and maintenance enabled. Preserve
+`verdicts-v1`; do not rerun this completed controller. Repeated earlier-case PASS
+lines validate saved evidence, not new executions. The next
+[protected-verdict HTTP/queue batch](VERDICT-HTTP-LAB.md) passed its 95 VM unit
+tests and Ruby preflight, but admission stopped at the rejected 0.3-second wall
+envelope. The diagnosed retained state is 23 provider rows, eight unstarted
+associations and zero consumed permits. The separate
+[guarded continuation](VERDICT-HTTP-LAB.md#retained-admission-continuation)
+corrects only that absent provider envelope while preserving the actual 300 ms
+sandbox limit and original eight bindings. Do not rerun the original controller.
+Archive 03's 107 VM tests passed, but its whole-stdout model-validation check
+rejected the reply before continuation checkpoint creation or admission.
+Archive 04 accepts exactly one complete validation-success line alongside logs,
+while retaining checked exit, read-only mode, output bounds and all state guards.
+Cloud continuation is pending. Archive 01 stopped before checkpoint creation;
+archive 02 corrected the payload-hash copy without relaxing
+duplicate JSON-key rejection; its corrected preflight/cloud result is pending.
+Arbitrary compiler
+failure attribution, broader recovery, calibration, dependency/security review
+and event-load verification remain open.
+
+Earlier user-reported checkpoint (2026-10-18): the [protected-output sealing
+continuation](OUTPUT-LAB.md) passed. Fifty language cases and three tampering/EOF
+probes were reconstructed from the completed log, without code rerun. Compact
+evidence was sealed with the original journal/log and all fifteen provider rows
+unchanged, queue empty and maintenance enabled. Preserve `output-v1` and its
+completed `seal-fix-v1` evidence; neither controller nor continuation should be
+repeated. The earlier size-cap failure and its one-line writer correction remain
+documented. The later [18-case protected-verdict batch](VERDICTS-LAB.md) also has
+a user-reported cloud PASS, as recorded above. Runtime-overhead calibration,
+broader recovery, dependency
+review and measured load remain open.
 
 The earlier guarded [stream recovery and
 fifty-case checker suite](STREAMS-LAB.md) passed across all five cached profiles.

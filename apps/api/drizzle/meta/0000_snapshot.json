@@ -1,0 +1,148 @@
+{
+  "id": "dac562b2-d688-4a1b-ad4a-814a02a9ae23",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.team_members": {
+      "name": "team_members",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', clock_timestamp())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_members_team_id_teams_id_fk": {
+          "name": "team_members_team_id_teams_id_fk",
+          "tableFrom": "team_members",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "team_members_team_position": {
+          "name": "team_members_team_position",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "position"
+          ]
+        },
+        "team_members_id_team": {
+          "name": "team_members_id_team",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "team_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "team_members_position": {
+          "name": "team_members_position",
+          "value": "\"team_members\".\"position\" in (1, 2)"
+        },
+        "team_members_display_name_bytes": {
+          "name": "team_members_display_name_bytes",
+          "value": "octet_length(\"team_members\".\"display_name\") between 1 and 120"
+        },
+        "team_members_display_name_nonblank": {
+          "name": "team_members_display_name_nonblank",
+          "value": "length(btrim(\"team_members\".\"display_name\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.teams": {
+      "name": "teams",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', clock_timestamp())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "teams_display_name_bytes": {
+          "name": "teams_display_name_bytes",
+          "value": "octet_length(\"teams\".\"display_name\") between 1 and 120"
+        },
+        "teams_display_name_nonblank": {
+          "name": "teams_display_name_nonblank",
+          "value": "length(btrim(\"teams\".\"display_name\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

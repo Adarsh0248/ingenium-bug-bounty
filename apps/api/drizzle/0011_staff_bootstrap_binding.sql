@@ -1,0 +1,21 @@
+ALTER TABLE "operator_bootstraps" DROP CONSTRAINT "operator_bootstrap_shape";--> statement-breakpoint
+ALTER TABLE "staff_management_outcomes" DROP CONSTRAINT "staff_management_shape";--> statement-breakpoint
+ALTER TABLE "operator_bootstraps" ADD COLUMN "fingerprint" "bytea" NOT NULL;--> statement-breakpoint
+ALTER TABLE "operator_bootstraps" ADD CONSTRAINT "operator_bootstrap_shape" CHECK ("operator_bootstraps"."control_id"=1
+  and octet_length("operator_bootstraps"."operator") between 1 and 120 and octet_length("operator_bootstraps"."os_user") between 1 and 120
+  and octet_length("operator_bootstraps"."reason") between 1 and 1024 and length(btrim("operator_bootstraps"."reason"))>0 and octet_length("operator_bootstraps"."fingerprint")=32);--> statement-breakpoint
+ALTER TABLE "staff_management_outcomes" ADD CONSTRAINT "staff_management_shape" CHECK ("staff_management_outcomes"."control_id"=1 and "staff_management_outcomes"."expected_revision">=0 and octet_length("staff_management_outcomes"."fingerprint")=32
+    and octet_length("staff_management_outcomes"."reason") between 1 and 1024 and length(btrim("staff_management_outcomes"."reason"))>0
+    and "staff_management_outcomes"."action" in ('CREATE','UPDATE','ROTATE') and "staff_management_outcomes"."outcome" in ('APPLIED','UNCHANGED','REJECTED')
+    and (("staff_management_outcomes"."outcome"='REJECTED' and "staff_management_outcomes"."denial_reason" is not null and "staff_management_outcomes"."denial_reason" in ('STALE_VERSION','STAFF_CAPACITY')) or ("staff_management_outcomes"."outcome"<>'REJECTED' and "staff_management_outcomes"."denial_reason" is null))
+    and (("staff_management_outcomes"."action"='CREATE' and "staff_management_outcomes"."target_staff_id" is null and "staff_management_outcomes"."display_name" is not null and "staff_management_outcomes"."role" is not null and "staff_management_outcomes"."enabled" is not null and "staff_management_outcomes"."enabled"=true)
+      or ("staff_management_outcomes"."action"='UPDATE' and "staff_management_outcomes"."target_staff_id" is not null and "staff_management_outcomes"."display_name" is not null and "staff_management_outcomes"."role" is not null and "staff_management_outcomes"."enabled" is not null)
+      or ("staff_management_outcomes"."action"='ROTATE' and "staff_management_outcomes"."target_staff_id" is not null and "staff_management_outcomes"."display_name" is null and "staff_management_outcomes"."role" is null and "staff_management_outcomes"."enabled" is null))
+    and ("staff_management_outcomes"."display_name" is null or (octet_length("staff_management_outcomes"."display_name") between 1 and 120 and length(btrim("staff_management_outcomes"."display_name"))>0))
+    and ("staff_management_outcomes"."role" is null or "staff_management_outcomes"."role" in ('OWNER','ORGANISER'))
+    and (("staff_management_outcomes"."action"='CREATE' and "staff_management_outcomes"."outcome"='APPLIED' and "staff_management_outcomes"."result_staff_id" is not null) or (("staff_management_outcomes"."action"<>'CREATE' or "staff_management_outcomes"."outcome"<>'APPLIED') and "staff_management_outcomes"."result_staff_id" is null))
+    and (("staff_management_outcomes"."action" in ('CREATE','ROTATE') and "staff_management_outcomes"."outcome"='APPLIED' and "staff_management_outcomes"."result_credential_id" is not null)
+      or (("staff_management_outcomes"."action"='UPDATE' or "staff_management_outcomes"."outcome"<>'APPLIED') and "staff_management_outcomes"."result_credential_id" is null))
+    and ("staff_management_outcomes"."action"='UPDATE' or "staff_management_outcomes"."outcome"<>'UNCHANGED')
+    and ("staff_management_outcomes"."before_state" is null or (jsonb_typeof("staff_management_outcomes"."before_state")='object' and octet_length("staff_management_outcomes"."before_state"::text)<=1024))
+    and ("staff_management_outcomes"."after_state" is null or (jsonb_typeof("staff_management_outcomes"."after_state")='object' and octet_length("staff_management_outcomes"."after_state"::text)<=1024)));

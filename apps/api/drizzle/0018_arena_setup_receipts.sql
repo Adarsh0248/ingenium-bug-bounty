@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX "arena_setup_applied_revision" ON "arena_setup_outcomes" USING btree ("result_round_id","result_revision") WHERE "arena_setup_outcomes"."outcome"='APPLIED';--> statement-breakpoint
+ALTER TABLE "arena_setup_outcomes" ADD CONSTRAINT "arena_setup_applied_revision_shape" CHECK ("arena_setup_outcomes"."outcome"<>'APPLIED' or ("arena_setup_outcomes"."action"='CREATE' and "arena_setup_outcomes"."result_revision"=1)
+    or ("arena_setup_outcomes"."action"='CONFIGURE' and "arena_setup_outcomes"."result_revision"="arena_setup_outcomes"."expected_revision"+1));

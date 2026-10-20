@@ -1,0 +1,3370 @@
+{
+  "id": "59991ecb-bae5-4f82-b555-bc89bd5b2bdf",
+  "prevId": "11a2d8ed-9a7d-44e3-825e-cbfc69faffe2",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.team_members": {
+      "name": "team_members",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', clock_timestamp())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_members_team_id_teams_id_fk": {
+          "name": "team_members_team_id_teams_id_fk",
+          "tableFrom": "team_members",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "team_members_team_position": {
+          "name": "team_members_team_position",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "position"
+          ]
+        },
+        "team_members_id_team": {
+          "name": "team_members_id_team",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "team_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "team_members_position": {
+          "name": "team_members_position",
+          "value": "\"team_members\".\"position\" in (1, 2)"
+        },
+        "team_members_display_name_bytes": {
+          "name": "team_members_display_name_bytes",
+          "value": "octet_length(\"team_members\".\"display_name\") between 1 and 120"
+        },
+        "team_members_display_name_nonblank": {
+          "name": "team_members_display_name_nonblank",
+          "value": "length(btrim(\"team_members\".\"display_name\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.teams": {
+      "name": "teams",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "date_trunc('milliseconds', clock_timestamp())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "teams_display_name_bytes": {
+          "name": "teams_display_name_bytes",
+          "value": "octet_length(\"teams\".\"display_name\") between 1 and 120"
+        },
+        "teams_display_name_nonblank": {
+          "name": "teams_display_name_nonblank",
+          "value": "length(btrim(\"teams\".\"display_name\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.access_blocks": {
+      "name": "access_blocks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "arena_instance_id": {
+          "name": "arena_instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cleared_at": {
+          "name": "cleared_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "access_block_one_team": {
+          "name": "access_block_one_team",
+          "columns": [
+            {
+              "expression": "arena_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "team_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"access_blocks\".\"cleared_at\" is null and \"access_blocks\".\"team_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "access_block_one_member": {
+          "name": "access_block_one_member",
+          "columns": [
+            {
+              "expression": "arena_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"access_blocks\".\"cleared_at\" is null and \"access_blocks\".\"member_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "access_blocks_arena_instance_id_arena_instances_id_fk": {
+          "name": "access_blocks_arena_instance_id_arena_instances_id_fk",
+          "tableFrom": "access_blocks",
+          "tableTo": "arena_instances",
+          "columnsFrom": [
+            "arena_instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "access_blocks_team_id_teams_id_fk": {
+          "name": "access_blocks_team_id_teams_id_fk",
+          "tableFrom": "access_blocks",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "access_blocks_member_id_team_members_id_fk": {
+          "name": "access_blocks_member_id_team_members_id_fk",
+          "tableFrom": "access_blocks",
+          "tableTo": "team_members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "access_blocks_created_by_staff_identities_id_fk": {
+          "name": "access_blocks_created_by_staff_identities_id_fk",
+          "tableFrom": "access_blocks",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "access_block_target": {
+          "name": "access_block_target",
+          "value": "num_nonnulls(\"access_blocks\".\"team_id\", \"access_blocks\".\"member_id\") = 1 and octet_length(\"access_blocks\".\"reason\") between 1 and 1024 and (\"access_blocks\".\"cleared_at\" is null or \"access_blocks\".\"cleared_at\" >= \"access_blocks\".\"created_at\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.access_credentials": {
+      "name": "access_credentials",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "staff_id": {
+          "name": "staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verifier": {
+          "name": "verifier",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issued_at": {
+          "name": "issued_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "credential_one_active_team": {
+          "name": "credential_one_active_team",
+          "columns": [
+            {
+              "expression": "team_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"access_credentials\".\"revoked_at\" is null and \"access_credentials\".\"team_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "credential_one_active_staff": {
+          "name": "credential_one_active_staff",
+          "columns": [
+            {
+              "expression": "staff_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"access_credentials\".\"revoked_at\" is null and \"access_credentials\".\"staff_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "access_credentials_team_id_teams_id_fk": {
+          "name": "access_credentials_team_id_teams_id_fk",
+          "tableFrom": "access_credentials",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "access_credentials_staff_id_staff_identities_id_fk": {
+          "name": "access_credentials_staff_id_staff_identities_id_fk",
+          "tableFrom": "access_credentials",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "credential_verifier_unique": {
+          "name": "credential_verifier_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "verifier"
+          ]
+        },
+        "credential_team_version": {
+          "name": "credential_team_version",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "version"
+          ]
+        },
+        "credential_staff_version": {
+          "name": "credential_staff_version",
+          "nullsNotDistinct": false,
+          "columns": [
+            "staff_id",
+            "version"
+          ]
+        },
+        "credential_id_version_team": {
+          "name": "credential_id_version_team",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "version",
+            "team_id"
+          ]
+        },
+        "credential_id_version_staff": {
+          "name": "credential_id_version_staff",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "version",
+            "staff_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "credential_exact_owner": {
+          "name": "credential_exact_owner",
+          "value": "num_nonnulls(\"access_credentials\".\"team_id\", \"access_credentials\".\"staff_id\") = 1"
+        },
+        "credential_verifier": {
+          "name": "credential_verifier",
+          "value": "octet_length(\"access_credentials\".\"verifier\") = 32 and \"access_credentials\".\"version\" > 0"
+        },
+        "credential_revoked_time": {
+          "name": "credential_revoked_time",
+          "value": "\"access_credentials\".\"revoked_at\" is null or \"access_credentials\".\"revoked_at\" >= \"access_credentials\".\"issued_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.arena_control": {
+      "name": "arena_control",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "current_instance_id": {
+          "name": "current_instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "arena_control_current_instance_id_arena_instances_id_fk": {
+          "name": "arena_control_current_instance_id_arena_instances_id_fk",
+          "tableFrom": "arena_control",
+          "tableTo": "arena_instances",
+          "columnsFrom": [
+            "current_instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "arena_control_singleton": {
+          "name": "arena_control_singleton",
+          "value": "\"arena_control\".\"id\" = 1 and \"arena_control\".\"revision\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.arena_instances": {
+      "name": "arena_instances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {
+        "arena_one_reserved_instance": {
+          "name": "arena_one_reserved_instance",
+          "columns": [
+            {
+              "expression": "(true)",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"arena_instances\".\"status\" in ('SETUP', 'IN_PROGRESS')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "arena_instances_created_by_staff_identities_id_fk": {
+          "name": "arena_instances_created_by_staff_identities_id_fk",
+          "tableFrom": "arena_instances",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "arena_instance_status": {
+          "name": "arena_instance_status",
+          "value": "\"arena_instances\".\"status\" in ('SETUP', 'IN_PROGRESS', 'COMPLETED', 'DISCARDED') and \"arena_instances\".\"revision\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.entry_events": {
+      "name": "entry_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "entry_events_flow_id_entry_flows_id_fk": {
+          "name": "entry_events_flow_id_entry_flows_id_fk",
+          "tableFrom": "entry_events",
+          "tableTo": "entry_flows",
+          "columnsFrom": [
+            "flow_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "entry_events_session_id_participant_sessions_id_fk": {
+          "name": "entry_events_session_id_participant_sessions_id_fk",
+          "tableFrom": "entry_events",
+          "tableTo": "participant_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "entry_event_session_flow": {
+          "name": "entry_event_session_flow",
+          "tableFrom": "entry_events",
+          "tableTo": "participant_sessions",
+          "columnsFrom": [
+            "session_id",
+            "flow_id"
+          ],
+          "columnsTo": [
+            "id",
+            "entry_flow_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "entry_event_kind": {
+          "name": "entry_event_kind",
+          "value": "(\"entry_events\".\"kind\" = 'FLOW_OPENED' and \"entry_events\".\"session_id\" is null)\n  or (\"entry_events\".\"kind\" in ('SESSION_ACTIVATED','SESSION_REVOKED') and \"entry_events\".\"session_id\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.entry_flows": {
+      "name": "entry_flows",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proof_verifier": {
+          "name": "proof_verifier",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "activated_session_id": {
+          "name": "activated_session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activated_at": {
+          "name": "activated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "entry_flows_round_id_rounds_id_fk": {
+          "name": "entry_flows_round_id_rounds_id_fk",
+          "tableFrom": "entry_flows",
+          "tableTo": "rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "entry_flows_activated_session_id_participant_sessions_id_fk": {
+          "name": "entry_flows_activated_session_id_participant_sessions_id_fk",
+          "tableFrom": "entry_flows",
+          "tableTo": "participant_sessions",
+          "columnsFrom": [
+            "activated_session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "entry_flow_credential_owner": {
+          "name": "entry_flow_credential_owner",
+          "tableFrom": "entry_flows",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id",
+            "credential_version",
+            "team_id"
+          ],
+          "columnsTo": [
+            "id",
+            "version",
+            "team_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "entry_flow_id_team": {
+          "name": "entry_flow_id_team",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "team_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "entry_flow_shape": {
+          "name": "entry_flow_shape",
+          "value": "octet_length(\"entry_flows\".\"proof_verifier\") = 32 and \"entry_flows\".\"expires_at\" = \"entry_flows\".\"created_at\" + interval '10 minutes'\n    and \"entry_flows\".\"state\" in ('OPEN', 'ACTIVATED', 'EXPIRED', 'REVOKED', 'SUPERSEDED')\n    and ((\"entry_flows\".\"activated_session_id\" is null and \"entry_flows\".\"activated_at\" is null and \"entry_flows\".\"state\" <> 'ACTIVATED')\n      or (\"entry_flows\".\"state\" <> 'OPEN' and \"entry_flows\".\"activated_session_id\" is not null and \"entry_flows\".\"activated_at\" is not null and \"entry_flows\".\"activated_at\" >= \"entry_flows\".\"created_at\" and \"entry_flows\".\"activated_at\" < \"entry_flows\".\"expires_at\"))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.entry_outcomes": {
+      "name": "entry_outcomes",
+      "schema": "",
+      "columns": {
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_key": {
+          "name": "request_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "entry_outcomes_flow_id_entry_flows_id_fk": {
+          "name": "entry_outcomes_flow_id_entry_flows_id_fk",
+          "tableFrom": "entry_outcomes",
+          "tableTo": "entry_flows",
+          "columnsFrom": [
+            "flow_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "entry_outcomes_member_id_team_members_id_fk": {
+          "name": "entry_outcomes_member_id_team_members_id_fk",
+          "tableFrom": "entry_outcomes",
+          "tableTo": "team_members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "entry_outcomes_session_id_participant_sessions_id_fk": {
+          "name": "entry_outcomes_session_id_participant_sessions_id_fk",
+          "tableFrom": "entry_outcomes",
+          "tableTo": "participant_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "entry_outcomes_flow_id_request_key_pk": {
+          "name": "entry_outcomes_flow_id_request_key_pk",
+          "columns": [
+            "flow_id",
+            "request_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "entry_outcome_shape": {
+          "name": "entry_outcome_shape",
+          "value": "octet_length(\"entry_outcomes\".\"fingerprint\") = 32\n    and \"entry_outcomes\".\"language\" in ('c','cpp','java','python','javascript') and ((\"entry_outcomes\".\"outcome\" = 'ACTIVATED' and \"entry_outcomes\".\"session_id\" is not null and \"entry_outcomes\".\"reason\" is null)\n    or (\"entry_outcomes\".\"outcome\" = 'REJECTED' and \"entry_outcomes\".\"session_id\" is null and \"entry_outcomes\".\"reason\" is not null and \"entry_outcomes\".\"reason\" in ('ALREADY_ENROLLED','ROUND_UNAVAILABLE','ACCESS_UNAVAILABLE')))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.member_rounds": {
+      "name": "member_rounds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "team_round_id": {
+          "name": "team_round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enrolled_at": {
+          "name": "enrolled_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_entry_flow_id": {
+          "name": "first_entry_flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "member_round_registered_team": {
+          "name": "member_round_registered_team",
+          "tableFrom": "member_rounds",
+          "tableTo": "team_members",
+          "columnsFrom": [
+            "member_id",
+            "team_id"
+          ],
+          "columnsTo": [
+            "id",
+            "team_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "member_round_team_round": {
+          "name": "member_round_team_round",
+          "tableFrom": "member_rounds",
+          "tableTo": "team_rounds",
+          "columnsFrom": [
+            "team_round_id",
+            "team_id",
+            "round_id"
+          ],
+          "columnsTo": [
+            "id",
+            "team_id",
+            "round_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "member_round_entry_team": {
+          "name": "member_round_entry_team",
+          "tableFrom": "member_rounds",
+          "tableTo": "entry_flows",
+          "columnsFrom": [
+            "first_entry_flow_id",
+            "team_id"
+          ],
+          "columnsTo": [
+            "id",
+            "team_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "member_round_once": {
+          "name": "member_round_once",
+          "nullsNotDistinct": false,
+          "columns": [
+            "member_id",
+            "round_id"
+          ]
+        },
+        "member_round_session_scope": {
+          "name": "member_round_session_scope",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "member_id",
+            "team_id",
+            "round_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "member_round_name": {
+          "name": "member_round_name",
+          "value": "octet_length(\"member_rounds\".\"display_name\") between 1 and 120 and length(btrim(\"member_rounds\".\"display_name\")) > 0"
+        },
+        "member_round_enrolment": {
+          "name": "member_round_enrolment",
+          "value": "(\"member_rounds\".\"language\" is null and \"member_rounds\".\"enrolled_at\" is null and \"member_rounds\".\"first_entry_flow_id\" is null)\n    or (\"member_rounds\".\"language\" is not null and \"member_rounds\".\"language\" in ('c','cpp','java','python','javascript') and \"member_rounds\".\"enrolled_at\" is not null and \"member_rounds\".\"first_entry_flow_id\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.member_session_slots": {
+      "name": "member_session_slots",
+      "schema": "",
+      "columns": {
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "member_session_slots_member_id_team_members_id_fk": {
+          "name": "member_session_slots_member_id_team_members_id_fk",
+          "tableFrom": "member_session_slots",
+          "tableTo": "team_members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "slot_session_member": {
+          "name": "slot_session_member",
+          "tableFrom": "member_session_slots",
+          "tableTo": "participant_sessions",
+          "columnsFrom": [
+            "session_id",
+            "member_id"
+          ],
+          "columnsTo": [
+            "id",
+            "member_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "slot_revision": {
+          "name": "slot_revision",
+          "value": "\"member_session_slots\".\"revision\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.participant_sessions": {
+      "name": "participant_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "member_round_id": {
+          "name": "member_round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_flow_id": {
+          "name": "entry_flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "secret_verifier": {
+          "name": "secret_verifier",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "absolute_expires_at": {
+          "name": "absolute_expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_activity_at": {
+          "name": "last_activity_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revocation_reason": {
+          "name": "revocation_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "session_one_unrevoked_member": {
+          "name": "session_one_unrevoked_member",
+          "columns": [
+            {
+              "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"participant_sessions\".\"revoked_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "session_member_scope": {
+          "name": "session_member_scope",
+          "tableFrom": "participant_sessions",
+          "tableTo": "member_rounds",
+          "columnsFrom": [
+            "member_round_id",
+            "member_id",
+            "team_id",
+            "round_id"
+          ],
+          "columnsTo": [
+            "id",
+            "member_id",
+            "team_id",
+            "round_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "session_credential_owner": {
+          "name": "session_credential_owner",
+          "tableFrom": "participant_sessions",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id",
+            "credential_version",
+            "team_id"
+          ],
+          "columnsTo": [
+            "id",
+            "version",
+            "team_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "session_entry_team": {
+          "name": "session_entry_team",
+          "tableFrom": "participant_sessions",
+          "tableTo": "entry_flows",
+          "columnsFrom": [
+            "entry_flow_id",
+            "team_id"
+          ],
+          "columnsTo": [
+            "id",
+            "team_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "session_id_member": {
+          "name": "session_id_member",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "member_id"
+          ]
+        },
+        "session_id_flow": {
+          "name": "session_id_flow",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "entry_flow_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "session_lifetime": {
+          "name": "session_lifetime",
+          "value": "octet_length(\"participant_sessions\".\"secret_verifier\") = 32 and \"participant_sessions\".\"absolute_expires_at\" = \"participant_sessions\".\"created_at\" + interval '8 hours'\n    and \"participant_sessions\".\"last_activity_at\" >= \"participant_sessions\".\"created_at\" and \"participant_sessions\".\"last_activity_at\" < \"participant_sessions\".\"absolute_expires_at\"\n    and ((\"participant_sessions\".\"revoked_at\" is null and \"participant_sessions\".\"revocation_reason\" is null) or (\"participant_sessions\".\"revoked_at\" is not null and \"participant_sessions\".\"revoked_at\" >= \"participant_sessions\".\"created_at\" and \"participant_sessions\".\"revocation_reason\" is not null))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.quota_buckets": {
+      "name": "quota_buckets",
+      "schema": "",
+      "columns": {
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_hash": {
+          "name": "key_hash",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rate": {
+          "name": "rate",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "burst": {
+          "name": "burst",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credits": {
+          "name": "credits",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "refilled_at": {
+          "name": "refilled_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seen_at": {
+          "name": "seen_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "quota_buckets_kind_key_hash_pk": {
+          "name": "quota_buckets_kind_key_hash_pk",
+          "columns": [
+            "kind",
+            "key_hash"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "quota_bucket_shape": {
+          "name": "quota_bucket_shape",
+          "value": "\"quota_buckets\".\"kind\" in ('AUTH_GLOBAL','AUTH_IP','AUTH_BROWSER','AUTH_CODE','HTTP_GLOBAL','HTTP_IP','READ_MEMBER','READ_STAFF','STAFF_CONFIRM','STAFF_COMMAND')\n  and octet_length(\"quota_buckets\".\"key_hash\") = 32 and \"quota_buckets\".\"rate\" > 0 and \"quota_buckets\".\"burst\" > 0 and \"quota_buckets\".\"credits\" between 0 and \"quota_buckets\".\"burst\"::bigint * 60000 and \"quota_buckets\".\"seen_at\" >= \"quota_buckets\".\"refilled_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.quota_control": {
+      "name": "quota_control",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "quota_control_singleton": {
+          "name": "quota_control_singleton",
+          "value": "\"quota_control\".\"id\" = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.rounds": {
+      "name": "rounds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "arena_instance_id": {
+          "name": "arena_instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closes_at": {
+          "name": "closes_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "trusted_time_at": {
+          "name": "trusted_time_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "round_one_live_per_instance": {
+          "name": "round_one_live_per_instance",
+          "columns": [
+            {
+              "expression": "arena_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"rounds\".\"state\" in ('RUNNING','PAUSED','CLOSING','CANCELLING')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "rounds_arena_instance_id_arena_instances_id_fk": {
+          "name": "rounds_arena_instance_id_arena_instances_id_fk",
+          "tableFrom": "rounds",
+          "tableTo": "arena_instances",
+          "columnsFrom": [
+            "arena_instance_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "round_instance_kind": {
+          "name": "round_instance_kind",
+          "nullsNotDistinct": false,
+          "columns": [
+            "arena_instance_id",
+            "kind"
+          ]
+        },
+        "round_id_instance": {
+          "name": "round_id_instance",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "arena_instance_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "round_kind_duration": {
+          "name": "round_kind_duration",
+          "value": "\"rounds\".\"kind\" in (1, 2) and \"rounds\".\"duration_ms\" between 1 and 18000000 and \"rounds\".\"revision\" >= 0"
+        },
+        "round_state": {
+          "name": "round_state",
+          "value": "\"rounds\".\"state\" in ('DRAFT', 'READY', 'RUNNING', 'PAUSED', 'CLOSING', 'CLOSED', 'CANCELLING', 'CANCELLED')"
+        },
+        "round_start_shape": {
+          "name": "round_start_shape",
+          "value": "(\"rounds\".\"state\" in ('DRAFT', 'READY') and \"rounds\".\"started_at\" is null and \"rounds\".\"closes_at\" is null)\n    or (\"rounds\".\"state\" not in ('DRAFT', 'READY') and \"rounds\".\"started_at\" is not null and \"rounds\".\"closes_at\" is not null and \"rounds\".\"closes_at\" > \"rounds\".\"started_at\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.security_control": {
+      "name": "security_control",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "security_control_singleton": {
+          "name": "security_control_singleton",
+          "value": "\"security_control\".\"id\" = 1 and \"security_control\".\"revision\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.session_deliveries": {
+      "name": "session_deliveries",
+      "schema": "",
+      "columns": {
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_id": {
+          "name": "key_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ciphertext": {
+          "name": "ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purged_at": {
+          "name": "purged_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "delivery_session_flow": {
+          "name": "delivery_session_flow",
+          "tableFrom": "session_deliveries",
+          "tableTo": "participant_sessions",
+          "columnsFrom": [
+            "session_id",
+            "flow_id"
+          ],
+          "columnsTo": [
+            "id",
+            "entry_flow_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "delivery_shape": {
+          "name": "delivery_shape",
+          "value": "length(\"session_deliveries\".\"key_id\") between 1 and 64 and ((\"session_deliveries\".\"ciphertext\" is not null and octet_length(\"session_deliveries\".\"ciphertext\") between 1 and 4096 and \"session_deliveries\".\"purged_at\" is null)\n    or (\"session_deliveries\".\"ciphertext\" is null and \"session_deliveries\".\"purged_at\" is not null))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_identities": {
+      "name": "staff_identities",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "disabled_at": {
+          "name": "disabled_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "staff_identity_role": {
+          "name": "staff_identity_role",
+          "value": "\"staff_identities\".\"role\" in ('ORGANISER', 'OWNER', 'SUPER_ADMIN')"
+        },
+        "staff_identity_name": {
+          "name": "staff_identity_name",
+          "value": "octet_length(\"staff_identities\".\"display_name\") between 1 and 120 and length(btrim(\"staff_identities\".\"display_name\")) > 0 and \"staff_identities\".\"revision\">=0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.team_rounds": {
+      "name": "team_rounds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "team_id": {
+          "name": "team_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round_id": {
+          "name": "round_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "team_rounds_team_id_teams_id_fk": {
+          "name": "team_rounds_team_id_teams_id_fk",
+          "tableFrom": "team_rounds",
+          "tableTo": "teams",
+          "columnsFrom": [
+            "team_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "team_rounds_round_id_rounds_id_fk": {
+          "name": "team_rounds_round_id_rounds_id_fk",
+          "tableFrom": "team_rounds",
+          "tableTo": "rounds",
+          "columnsFrom": [
+            "round_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "team_round_once": {
+          "name": "team_round_once",
+          "nullsNotDistinct": false,
+          "columns": [
+            "team_id",
+            "round_id"
+          ]
+        },
+        "team_round_same_scope": {
+          "name": "team_round_same_scope",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "team_id",
+            "round_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "team_round_name": {
+          "name": "team_round_name",
+          "value": "octet_length(\"team_rounds\".\"display_name\") between 1 and 120 and length(btrim(\"team_rounds\".\"display_name\")) > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.clock_events": {
+      "name": "clock_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "runtime_id": {
+          "name": "runtime_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "generation": {
+          "name": "generation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "clock_events_runtime_id_clock_runs_id_fk": {
+          "name": "clock_events_runtime_id_clock_runs_id_fk",
+          "tableFrom": "clock_events",
+          "tableTo": "clock_runs",
+          "columnsFrom": [
+            "runtime_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "clock_event_shape": {
+          "name": "clock_event_shape",
+          "value": "\"clock_events\".\"generation\">=0 and \"clock_events\".\"kind\" in ('STARTED','FAULT','TRUST_ESTABLISHED','STOPPED')\n    and ((\"clock_events\".\"kind\"='FAULT' and \"clock_events\".\"reason\" is not null) or (\"clock_events\".\"kind\"<>'FAULT' and \"clock_events\".\"reason\" is null))\n    and jsonb_typeof(\"clock_events\".\"evidence\")='object' and octet_length(\"clock_events\".\"evidence\"::text)<=4096"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.clock_health": {
+      "name": "clock_health",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "runtime_id": {
+          "name": "runtime_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "boot_id": {
+          "name": "boot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "running": {
+          "name": "running",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "fault_latched": {
+          "name": "fault_latched",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "fault_generation": {
+          "name": "fault_generation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "fault_reason": {
+          "name": "fault_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "received_ns": {
+          "name": "received_ns",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "report": {
+          "name": "report",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "healthy_count": {
+          "name": "healthy_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "healthy_since_ns": {
+          "name": "healthy_since_ns",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "healthy_last_ns": {
+          "name": "healthy_last_ns",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'STOPPED'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "clock_health_run": {
+          "name": "clock_health_run",
+          "tableFrom": "clock_health",
+          "tableTo": "clock_runs",
+          "columnsFrom": [
+            "runtime_id",
+            "boot_id"
+          ],
+          "columnsTo": [
+            "id",
+            "boot_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "clock_health_shape": {
+          "name": "clock_health_shape",
+          "value": "\"clock_health\".\"id\"=1 and \"clock_health\".\"fault_generation\">=0 and \"clock_health\".\"sequence\">=0 and \"clock_health\".\"healthy_count\" between 0 and 7\n    and \"clock_health\".\"state\" in ('STOPPED','STARTING','HEALTHY','WARNING','FAULT')\n    and ((\"clock_health\".\"runtime_id\" is null and \"clock_health\".\"boot_id\" is null and not \"clock_health\".\"running\") or (\"clock_health\".\"runtime_id\" is not null and \"clock_health\".\"boot_id\" is not null))\n    and ((\"clock_health\".\"fault_latched\" and \"clock_health\".\"fault_reason\" is not null and \"clock_health\".\"fault_generation\">0) or (not \"clock_health\".\"fault_latched\" and \"clock_health\".\"fault_reason\" is null))\n    and ((\"clock_health\".\"healthy_count\"=0 and \"clock_health\".\"healthy_since_ns\" is null and \"clock_health\".\"healthy_last_ns\" is null)\n      or (\"clock_health\".\"healthy_count\">0 and \"clock_health\".\"healthy_since_ns\" is not null and \"clock_health\".\"healthy_since_ns\">=0 and \"clock_health\".\"healthy_last_ns\" is not null and \"clock_health\".\"healthy_last_ns\">=\"clock_health\".\"healthy_since_ns\"))\n    and (\"clock_health\".\"state\" not in ('HEALTHY','WARNING') or (not \"clock_health\".\"fault_latched\" and \"clock_health\".\"running\" and \"clock_health\".\"healthy_count\"=7 and \"clock_health\".\"received_ns\" is not null and \"clock_health\".\"report\" is not null))\n    and (\"clock_health\".\"received_ns\" is null or \"clock_health\".\"received_ns\">=0)\n    and (\"clock_health\".\"report\" is null or (jsonb_typeof(\"clock_health\".\"report\")='object' and octet_length(\"clock_health\".\"report\"::text)<=4096))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.clock_runs": {
+      "name": "clock_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "boot_id": {
+          "name": "boot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_observed_at": {
+          "name": "started_observed_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stopped_observed_at": {
+          "name": "stopped_observed_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "clock_run_boot": {
+          "name": "clock_run_boot",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "boot_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.clock_clearances": {
+      "name": "clock_clearances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "staff_id": {
+          "name": "staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_key": {
+          "name": "request_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "runtime_id": {
+          "name": "runtime_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "generation": {
+          "name": "generation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "report_sequence": {
+          "name": "report_sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "clock_clearances_runtime_id_clock_runs_id_fk": {
+          "name": "clock_clearances_runtime_id_clock_runs_id_fk",
+          "tableFrom": "clock_clearances",
+          "tableTo": "clock_runs",
+          "columnsFrom": [
+            "runtime_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "clearance_session_actor": {
+          "name": "clearance_session_actor",
+          "tableFrom": "clock_clearances",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id",
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "clearance_credential_actor": {
+          "name": "clearance_credential_actor",
+          "tableFrom": "clock_clearances",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id",
+            "credential_version",
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id",
+            "version",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "clock_clearance_generation": {
+          "name": "clock_clearance_generation",
+          "nullsNotDistinct": false,
+          "columns": [
+            "generation"
+          ]
+        },
+        "clock_clearance_intent": {
+          "name": "clock_clearance_intent",
+          "nullsNotDistinct": false,
+          "columns": [
+            "staff_id",
+            "request_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "clock_clearance_shape": {
+          "name": "clock_clearance_shape",
+          "value": "\"clock_clearances\".\"generation\">0 and \"clock_clearances\".\"report_sequence\">0 and octet_length(\"clock_clearances\".\"fingerprint\")=32 and octet_length(\"clock_clearances\".\"reason\") between 1 and 1024 and length(btrim(\"clock_clearances\".\"reason\"))>0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_entry_flows": {
+      "name": "staff_entry_flows",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "staff_id": {
+          "name": "staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proof_verifier": {
+          "name": "proof_verifier",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "generation": {
+          "name": "generation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activated_at": {
+          "name": "activated_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_entry_flows_staff_id_staff_identities_id_fk": {
+          "name": "staff_entry_flows_staff_id_staff_identities_id_fk",
+          "tableFrom": "staff_entry_flows",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_entry_flows_session_id_staff_sessions_id_fk": {
+          "name": "staff_entry_flows_session_id_staff_sessions_id_fk",
+          "tableFrom": "staff_entry_flows",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_flow_credential": {
+          "name": "staff_flow_credential",
+          "tableFrom": "staff_entry_flows",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id",
+            "credential_version",
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id",
+            "version",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "staff_flow_owner": {
+          "name": "staff_flow_owner",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "staff_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "staff_flow_shape": {
+          "name": "staff_flow_shape",
+          "value": "octet_length(\"staff_entry_flows\".\"proof_verifier\")=32 and \"staff_entry_flows\".\"expires_at\"=\"staff_entry_flows\".\"created_at\"+interval '10 minutes'\n    and \"staff_entry_flows\".\"mode\" in ('NORMAL','CLOCK_RECOVERY') and \"staff_entry_flows\".\"generation\">=0 and (\"staff_entry_flows\".\"mode\"<>'CLOCK_RECOVERY' or \"staff_entry_flows\".\"generation\">0)\n    and \"staff_entry_flows\".\"state\" in ('OPEN','ACTIVATED','EXPIRED','REVOKED','SUPERSEDED')\n    and ((\"staff_entry_flows\".\"session_id\" is null and \"staff_entry_flows\".\"activated_at\" is null and \"staff_entry_flows\".\"state\"<>'ACTIVATED')\n      or (\"staff_entry_flows\".\"session_id\" is not null and \"staff_entry_flows\".\"activated_at\" is not null and \"staff_entry_flows\".\"state\"<>'OPEN' and \"staff_entry_flows\".\"activated_at\">=\"staff_entry_flows\".\"created_at\" and \"staff_entry_flows\".\"activated_at\"<\"staff_entry_flows\".\"expires_at\"))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_entry_outcomes": {
+      "name": "staff_entry_outcomes",
+      "schema": "",
+      "columns": {
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_key": {
+          "name": "request_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_entry_outcomes_flow_id_staff_entry_flows_id_fk": {
+          "name": "staff_entry_outcomes_flow_id_staff_entry_flows_id_fk",
+          "tableFrom": "staff_entry_outcomes",
+          "tableTo": "staff_entry_flows",
+          "columnsFrom": [
+            "flow_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_entry_outcomes_session_id_staff_sessions_id_fk": {
+          "name": "staff_entry_outcomes_session_id_staff_sessions_id_fk",
+          "tableFrom": "staff_entry_outcomes",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "staff_entry_outcomes_flow_id_request_key_pk": {
+          "name": "staff_entry_outcomes_flow_id_request_key_pk",
+          "columns": [
+            "flow_id",
+            "request_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {
+        "staff_one_activation": {
+          "name": "staff_one_activation",
+          "nullsNotDistinct": false,
+          "columns": [
+            "flow_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "staff_outcome_fingerprint": {
+          "name": "staff_outcome_fingerprint",
+          "value": "octet_length(\"staff_entry_outcomes\".\"fingerprint\")=32"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_keep_alive_outcomes": {
+      "name": "staff_keep_alive_outcomes",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_key": {
+          "name": "request_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_keep_alive_outcomes_session_id_staff_sessions_id_fk": {
+          "name": "staff_keep_alive_outcomes_session_id_staff_sessions_id_fk",
+          "tableFrom": "staff_keep_alive_outcomes",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "staff_keep_alive_outcomes_session_id_request_key_pk": {
+          "name": "staff_keep_alive_outcomes_session_id_request_key_pk",
+          "columns": [
+            "session_id",
+            "request_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.staff_session_deliveries": {
+      "name": "staff_session_deliveries",
+      "schema": "",
+      "columns": {
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_id": {
+          "name": "key_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ciphertext": {
+          "name": "ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purged_at": {
+          "name": "purged_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_delivery_flow": {
+          "name": "staff_delivery_flow",
+          "tableFrom": "staff_session_deliveries",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id",
+            "flow_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "staff_delivery_shape": {
+          "name": "staff_delivery_shape",
+          "value": "length(\"staff_session_deliveries\".\"key_id\") between 1 and 64 and ((\"staff_session_deliveries\".\"ciphertext\" is not null and octet_length(\"staff_session_deliveries\".\"ciphertext\") between 1 and 4096 and \"staff_session_deliveries\".\"purged_at\" is null) or (\"staff_session_deliveries\".\"ciphertext\" is null and \"staff_session_deliveries\".\"purged_at\" is not null))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_session_events": {
+      "name": "staff_session_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_session_events_session_id_staff_sessions_id_fk": {
+          "name": "staff_session_events_session_id_staff_sessions_id_fk",
+          "tableFrom": "staff_session_events",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "staff_session_event_kind": {
+          "name": "staff_session_event_kind",
+          "value": "\"staff_session_events\".\"kind\" in ('ACTIVATED','SIGNED_OUT','SUPERSEDED')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_session_slots": {
+      "name": "staff_session_slots",
+      "schema": "",
+      "columns": {
+        "staff_id": {
+          "name": "staff_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_session_slots_staff_id_staff_identities_id_fk": {
+          "name": "staff_session_slots_staff_id_staff_identities_id_fk",
+          "tableFrom": "staff_session_slots",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_slot_owner": {
+          "name": "staff_slot_owner",
+          "tableFrom": "staff_session_slots",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id",
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "staff_slot_revision": {
+          "name": "staff_slot_revision",
+          "value": "\"staff_session_slots\".\"revision\">=0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_sessions": {
+      "name": "staff_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "staff_id": {
+          "name": "staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_id": {
+          "name": "flow_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "secret_verifier": {
+          "name": "secret_verifier",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "generation": {
+          "name": "generation",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "absolute_expires_at": {
+          "name": "absolute_expires_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_activity_at": {
+          "name": "last_activity_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revocation_reason": {
+          "name": "revocation_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "staff_one_unrevoked": {
+          "name": "staff_one_unrevoked",
+          "columns": [
+            {
+              "expression": "staff_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"staff_sessions\".\"revoked_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "staff_sessions_staff_id_staff_identities_id_fk": {
+          "name": "staff_sessions_staff_id_staff_identities_id_fk",
+          "tableFrom": "staff_sessions",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_session_credential": {
+          "name": "staff_session_credential",
+          "tableFrom": "staff_sessions",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id",
+            "credential_version",
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id",
+            "version",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_session_flow_owner": {
+          "name": "staff_session_flow_owner",
+          "tableFrom": "staff_sessions",
+          "tableTo": "staff_entry_flows",
+          "columnsFrom": [
+            "flow_id",
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "staff_session_owner": {
+          "name": "staff_session_owner",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "staff_id"
+          ]
+        },
+        "staff_session_flow": {
+          "name": "staff_session_flow",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "flow_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "staff_session_lifetime": {
+          "name": "staff_session_lifetime",
+          "value": "octet_length(\"staff_sessions\".\"secret_verifier\")=32 and \"staff_sessions\".\"absolute_expires_at\"=\"staff_sessions\".\"created_at\"+interval '8 hours'\n    and \"staff_sessions\".\"last_activity_at\">=\"staff_sessions\".\"created_at\" and \"staff_sessions\".\"last_activity_at\"<\"staff_sessions\".\"absolute_expires_at\"\n    and \"staff_sessions\".\"mode\" in ('NORMAL','CLOCK_RECOVERY') and \"staff_sessions\".\"generation\">=0 and (\"staff_sessions\".\"mode\"<>'CLOCK_RECOVERY' or \"staff_sessions\".\"generation\">0)\n    and ((\"staff_sessions\".\"revoked_at\" is null and \"staff_sessions\".\"revocation_reason\" is null) or (\"staff_sessions\".\"revoked_at\" is not null and \"staff_sessions\".\"revoked_at\">=\"staff_sessions\".\"created_at\" and \"staff_sessions\".\"revocation_reason\" is not null))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.operator_bootstraps": {
+      "name": "operator_bootstraps",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "control_id": {
+          "name": "control_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_key": {
+          "name": "request_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operator": {
+          "name": "operator",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "os_user": {
+          "name": "os_user",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "staff_id": {
+          "name": "staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "operator_bootstraps_control_id_security_control_id_fk": {
+          "name": "operator_bootstraps_control_id_security_control_id_fk",
+          "tableFrom": "operator_bootstraps",
+          "tableTo": "security_control",
+          "columnsFrom": [
+            "control_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "operator_bootstraps_staff_id_staff_identities_id_fk": {
+          "name": "operator_bootstraps_staff_id_staff_identities_id_fk",
+          "tableFrom": "operator_bootstraps",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "staff_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "operator_bootstraps_credential_id_access_credentials_id_fk": {
+          "name": "operator_bootstraps_credential_id_access_credentials_id_fk",
+          "tableFrom": "operator_bootstraps",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "first_super_admin_once": {
+          "name": "first_super_admin_once",
+          "nullsNotDistinct": false,
+          "columns": [
+            "control_id"
+          ]
+        },
+        "operator_bootstrap_intent": {
+          "name": "operator_bootstrap_intent",
+          "nullsNotDistinct": false,
+          "columns": [
+            "request_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "operator_bootstrap_shape": {
+          "name": "operator_bootstrap_shape",
+          "value": "\"operator_bootstraps\".\"control_id\"=1\n  and octet_length(\"operator_bootstraps\".\"operator\") between 1 and 120 and octet_length(\"operator_bootstraps\".\"os_user\") between 1 and 120\n  and octet_length(\"operator_bootstraps\".\"reason\") between 1 and 1024 and length(btrim(\"operator_bootstraps\".\"reason\"))>0 and octet_length(\"operator_bootstraps\".\"fingerprint\")=32"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_credential_issues": {
+      "name": "staff_credential_issues",
+      "schema": "",
+      "columns": {
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "management_id": {
+          "name": "management_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bootstrap_id": {
+          "name": "bootstrap_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "staff_credential_issues_credential_id_access_credentials_id_fk": {
+          "name": "staff_credential_issues_credential_id_access_credentials_id_fk",
+          "tableFrom": "staff_credential_issues",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_credential_issues_management_id_staff_management_outcomes_id_fk": {
+          "name": "staff_credential_issues_management_id_staff_management_outcomes_id_fk",
+          "tableFrom": "staff_credential_issues",
+          "tableTo": "staff_management_outcomes",
+          "columnsFrom": [
+            "management_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_credential_issues_bootstrap_id_operator_bootstraps_id_fk": {
+          "name": "staff_credential_issues_bootstrap_id_operator_bootstraps_id_fk",
+          "tableFrom": "staff_credential_issues",
+          "tableTo": "operator_bootstraps",
+          "columnsFrom": [
+            "bootstrap_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "management_one_credential": {
+          "name": "management_one_credential",
+          "nullsNotDistinct": false,
+          "columns": [
+            "management_id"
+          ]
+        },
+        "bootstrap_one_credential": {
+          "name": "bootstrap_one_credential",
+          "nullsNotDistinct": false,
+          "columns": [
+            "bootstrap_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "staff_issue_source": {
+          "name": "staff_issue_source",
+          "value": "num_nonnulls(\"staff_credential_issues\".\"management_id\",\"staff_credential_issues\".\"bootstrap_id\")=1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.staff_management_outcomes": {
+      "name": "staff_management_outcomes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "credential_version": {
+          "name": "credential_version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "control_id": {
+          "name": "control_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_staff_id": {
+          "name": "target_staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_key": {
+          "name": "request_key",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_revision": {
+          "name": "expected_revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "denial_reason": {
+          "name": "denial_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result_staff_id": {
+          "name": "result_staff_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result_credential_id": {
+          "name": "result_credential_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "before_state": {
+          "name": "before_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "after_state": {
+          "name": "after_state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "staff_create_intent": {
+          "name": "staff_create_intent",
+          "columns": [
+            {
+              "expression": "actor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "action",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "request_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"staff_management_outcomes\".\"target_staff_id\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "staff_management_outcomes_control_id_security_control_id_fk": {
+          "name": "staff_management_outcomes_control_id_security_control_id_fk",
+          "tableFrom": "staff_management_outcomes",
+          "tableTo": "security_control",
+          "columnsFrom": [
+            "control_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_management_outcomes_target_staff_id_staff_identities_id_fk": {
+          "name": "staff_management_outcomes_target_staff_id_staff_identities_id_fk",
+          "tableFrom": "staff_management_outcomes",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "target_staff_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_management_outcomes_result_staff_id_staff_identities_id_fk": {
+          "name": "staff_management_outcomes_result_staff_id_staff_identities_id_fk",
+          "tableFrom": "staff_management_outcomes",
+          "tableTo": "staff_identities",
+          "columnsFrom": [
+            "result_staff_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_management_outcomes_result_credential_id_access_credentials_id_fk": {
+          "name": "staff_management_outcomes_result_credential_id_access_credentials_id_fk",
+          "tableFrom": "staff_management_outcomes",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "result_credential_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_management_session_actor": {
+          "name": "staff_management_session_actor",
+          "tableFrom": "staff_management_outcomes",
+          "tableTo": "staff_sessions",
+          "columnsFrom": [
+            "session_id",
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "staff_management_credential_actor": {
+          "name": "staff_management_credential_actor",
+          "tableFrom": "staff_management_outcomes",
+          "tableTo": "access_credentials",
+          "columnsFrom": [
+            "credential_id",
+            "credential_version",
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id",
+            "version",
+            "staff_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "staff_manage_intent": {
+          "name": "staff_manage_intent",
+          "nullsNotDistinct": false,
+          "columns": [
+            "actor_id",
+            "action",
+            "target_staff_id",
+            "request_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "staff_management_shape": {
+          "name": "staff_management_shape",
+          "value": "\"staff_management_outcomes\".\"control_id\"=1 and \"staff_management_outcomes\".\"expected_revision\">=0 and octet_length(\"staff_management_outcomes\".\"fingerprint\")=32\n    and octet_length(\"staff_management_outcomes\".\"reason\") between 1 and 1024 and length(btrim(\"staff_management_outcomes\".\"reason\"))>0\n    and \"staff_management_outcomes\".\"action\" in ('CREATE','UPDATE','ROTATE') and \"staff_management_outcomes\".\"outcome\" in ('APPLIED','UNCHANGED','REJECTED')\n    and ((\"staff_management_outcomes\".\"outcome\"='REJECTED' and \"staff_management_outcomes\".\"denial_reason\" is not null and \"staff_management_outcomes\".\"denial_reason\" in ('STALE_VERSION','STAFF_CAPACITY')) or (\"staff_management_outcomes\".\"outcome\"<>'REJECTED' and \"staff_management_outcomes\".\"denial_reason\" is null))\n    and ((\"staff_management_outcomes\".\"action\"='CREATE' and \"staff_management_outcomes\".\"target_staff_id\" is null and \"staff_management_outcomes\".\"display_name\" is not null and \"staff_management_outcomes\".\"role\" is not null and \"staff_management_outcomes\".\"enabled\" is not null and \"staff_management_outcomes\".\"enabled\"=true)\n      or (\"staff_management_outcomes\".\"action\"='UPDATE' and \"staff_management_outcomes\".\"target_staff_id\" is not null and \"staff_management_outcomes\".\"display_name\" is not null and \"staff_management_outcomes\".\"role\" is not null and \"staff_management_outcomes\".\"enabled\" is not null)\n      or (\"staff_management_outcomes\".\"action\"='ROTATE' and \"staff_management_outcomes\".\"target_staff_id\" is not null and \"staff_management_outcomes\".\"display_name\" is null and \"staff_management_outcomes\".\"role\" is null and \"staff_management_outcomes\".\"enabled\" is null))\n    and (\"staff_management_outcomes\".\"display_name\" is null or (octet_length(\"staff_management_outcomes\".\"display_name\") between 1 and 120 and length(btrim(\"staff_management_outcomes\".\"display_name\"))>0))\n    and (\"staff_management_outcomes\".\"role\" is null or \"staff_management_outcomes\".\"role\" in ('OWNER','ORGANISER'))\n    and ((\"staff_management_outcomes\".\"action\"='CREATE' and \"staff_management_outcomes\".\"outcome\"='APPLIED' and \"staff_management_outcomes\".\"result_staff_id\" is not null) or ((\"staff_management_outcomes\".\"action\"<>'CREATE' or \"staff_management_outcomes\".\"outcome\"<>'APPLIED') and \"staff_management_outcomes\".\"result_staff_id\" is null))\n    and ((\"staff_management_outcomes\".\"action\" in ('CREATE','ROTATE') and \"staff_management_outcomes\".\"outcome\"='APPLIED' and \"staff_management_outcomes\".\"result_credential_id\" is not null)\n      or ((\"staff_management_outcomes\".\"action\"='UPDATE' or \"staff_management_outcomes\".\"outcome\"<>'APPLIED') and \"staff_management_outcomes\".\"result_credential_id\" is null))\n    and (\"staff_management_outcomes\".\"action\"='UPDATE' or \"staff_management_outcomes\".\"outcome\"<>'UNCHANGED')\n    and (\"staff_management_outcomes\".\"before_state\" is null or (jsonb_typeof(\"staff_management_outcomes\".\"before_state\")='object' and octet_length(\"staff_management_outcomes\".\"before_state\"::text)<=1024))\n    and (\"staff_management_outcomes\".\"after_state\" is null or (jsonb_typeof(\"staff_management_outcomes\".\"after_state\")='object' and octet_length(\"staff_management_outcomes\".\"after_state\"::text)<=1024))"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

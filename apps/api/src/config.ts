@@ -1,7 +1,10 @@
+import { isAbsolute } from "node:path";
+
 export interface Config {
   host: "127.0.0.1" | "::1";
   port: number;
   databaseUrl: string;
+  entryRuntimeFile?: string;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv): Config {
@@ -38,5 +41,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv): Config {
     throw new Error("DATABASE_URL must specify a PostgreSQL host, user and database.");
   }
 
-  return { host, port, databaseUrl };
+  const entryRuntimeFile = environment.ENTRY_RUNTIME_FILE;
+  if (entryRuntimeFile !== undefined && (!entryRuntimeFile || !isAbsolute(entryRuntimeFile)
+      || !["127.0.0.1", "[::1]", "localhost"].includes(parsed.hostname))) throw new Error("ENTRY_RUNTIME_FILE requires an absolute private path and primary-host loopback PostgreSQL.");
+  return { host, port, databaseUrl, ...(entryRuntimeFile !== undefined ? { entryRuntimeFile } : {}) };
 }

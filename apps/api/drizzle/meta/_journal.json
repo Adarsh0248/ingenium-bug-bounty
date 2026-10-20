@@ -1,0 +1,209 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792348074687,
+      "tag": "0000_registration",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792349665003,
+      "tag": "0001_access_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792349709091,
+      "tag": "0002_access_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792385734310,
+      "tag": "0003_browser_quotas",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792387445555,
+      "tag": "0004_clock_health",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792387592055,
+      "tag": "0005_clock_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792389498980,
+      "tag": "0006_staff_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792389508856,
+      "tag": "0007_staff_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792389841363,
+      "tag": "0008_staff_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792390709057,
+      "tag": "0009_staff_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792390730407,
+      "tag": "0010_staff_management_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792391310329,
+      "tag": "0011_staff_bootstrap_binding",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792412555172,
+      "tag": "0012_participant_session_controls",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792412562623,
+      "tag": "0013_participant_session_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792413964418,
+      "tag": "0014_participant_replacement",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792413967008,
+      "tag": "0015_replacement_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792416191923,
+      "tag": "0016_arena_setup",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792416263739,
+      "tag": "0017_arena_setup_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792416798745,
+      "tag": "0018_arena_setup_receipts",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792422760421,
+      "tag": "0019_content_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792422793210,
+      "tag": "0020_draft_case_retirement",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792422833254,
+      "tag": "0021_content_draft_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792423058291,
+      "tag": "0022_content_read_targets",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792423588356,
+      "tag": "0023_hint_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792424599184,
+      "tag": "0024_validation_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792424606024,
+      "tag": "0025_validation_snapshot_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792476481166,
+      "tag": "0026_validation_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792476487434,
+      "tag": "0027_validation_run_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792477519774,
+      "tag": "0028_authoring_poll_limits",
+      "breakpoints": true
+    }
+  ]
+}

@@ -8,11 +8,12 @@ export interface Database {
 export function createDatabase(
   connectionString: string,
   onUnexpectedError: () => void,
-): Database {
+  max = 4,
+): Database & { pool: Pool } {
   const pool = new Pool({
     connectionString,
     application_name: "ingenium-api-foundation",
-    max: 4,
+    max,
     connectionTimeoutMillis: 1000,
     idleTimeoutMillis: 10000,
     statement_timeout: 2000,
@@ -22,6 +23,7 @@ export function createDatabase(
   pool.on("error", onUnexpectedError);
 
   return {
+    pool,
     async check() {
       await pool.query("SELECT 1");
     },

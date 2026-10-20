@@ -6,7 +6,8 @@ failure/output-boundary cases, all five pinned language profiles, normal cleanup
 scoped retained-result/permit recovery, the fixed private HTTP/queue association
 experiment, the fixed active-worker crash/drain continuation, all fifty bounded
 stream/checker cases, five fixed HTTP/queue/profile/checker jobs and three fixed
-shared sandbox boundary probes passed;
+shared sandbox boundary probes, guarded protected-output sealing and eighteen
+fixed protected-verdict cases passed;
 complete Judge0 runtime feasibility/security is not proved.
 
 This records implementation evidence for `architecture.md` Sections 10.1 and 12.1.
@@ -82,15 +83,36 @@ and event-load benchmarks follow correctness and isolation tests.
 ## Current Decision and Next Action
 
 - Continue with a bounded Judge0 feasibility investigation, not production integration.
-- Latest group: the [shared sandbox boundary batch](../infra/judge-spike/ISOLATION-LAB.md)
+- Latest group: all 80 bundled VM unit tests and the
+  [eighteen protected verdict cases](../infra/judge-spike/VERDICTS-LAB.md) have a
+  user-reported cloud PASS. Compiler/runtime errors, answer checking, proven
+  CPU/wall/job-memory limits and overflow matched expectations; an ambiguous
+  kill returned `RECOVERY_REQUIRED` without a participant verdict. Evidence was
+  sealed with fifteen provider rows and prior evidence unchanged, queue empty
+  and maintenance enabled. Preserve `verdicts-v1`; do not repeat this controller.
+  The next [protected-verdict HTTP/queue batch](../infra/judge-spike/VERDICT-HTTP-LAB.md)
+  is prepared and locally tested; cloud execution is pending. Eighteen fresh
+  provider records must yield seventeen final verdicts and one held uncertain
+  result, with the prior fifteen rows unchanged. Arbitrary compiler-failure attribution, broader recovery, calibration,
+  dependency/security review and measured load remain open.
+- Earlier group: the [protected-output sealing continuation](../infra/judge-spike/OUTPUT-LAB.md)
+  has a user-reported cloud PASS. All fifty language cases and three output probes
+  were reconstructed from the completed log with no code rerun, then compact
+  evidence was sealed. Original journal/log and fifteen provider rows remained
+  unchanged, queue empty and maintenance enabled. Preserve `output-v1` and its
+  completed `seal-fix-v1`; do not repeat either procedure. The later
+  [18-case protected-verdict batch](../infra/judge-spike/VERDICTS-LAB.md) also has
+  a user-reported cloud PASS, as recorded above. Bootstrap-overhead
+  calibration, broader recovery, dependency review and measured load remain open.
+- Earlier group: the [shared sandbox boundary batch](../infra/judge-spike/ISOLATION-LAB.md)
   has a user-reported cloud PASS for boundary denials/identity checks, the bounded
   fork limit and detached-child cleanup, with accounting and normal cleanup.
   All fifteen provider rows and previous evidence remained unchanged, the queue
   is empty and maintenance remains enabled. Preserve `isolation-v1`; do not rerun
   this completed one-shot batch. These are fixed shared-boundary probes, not a
-  full hostile-code audit. Next harden output capture against hostile producers,
-  including replacement or interference with the writable-box FIFOs. General
-  failure mapping, dependency review, broader recovery and measured load remain open.
+  full hostile-code audit. The later scoped protected-capture result is above.
+  General failure mapping, dependency review, broader recovery and measured load
+  remain open.
 - Earlier group: the [five-profile HTTP/bounded evidence lab](../infra/judge-spike/TRANSPORT-LAB.md)
   now has a user-reported cloud PASS. Five real provider/outbox associations
   survived lost token bodies and explicit duplicate POSTs. Duplicate Redis
@@ -2824,6 +2846,362 @@ capacity. The next concrete implementation gap is output capture that participan
 code cannot replace, drain or otherwise interfere with. Dependency review,
 broader failure/recovery and measured load remain separate gates. Maintenance
 stays enabled; participant execution is not approved by this checkpoint.
+
+### Protected Output Batch: Prepared, Cloud Result Pending
+
+The new collector uses anonymous pipes owned by the trusted outer runner rather
+than FIFO pathnames inside writable `/box`. Only write ends cross `Popen` exec;
+one explicit extra descriptor survives Isolate for a fixed UID-60000 Python
+handoff. Before the original program starts, that helper redirects stderr and
+closes all extra descriptors through the approved descriptor ceiling. Isolate
+diagnostics remain separate. Existing output caps/checker and accounted phase
+cleanup are reused. The historical stream sources stay byte-for-byte unchanged.
+
+`output.py` revalidates the fifteen provider records, sealed HTTP associations,
+isolation evidence and earlier held reservation before a fresh exclusive private
+`output-v1` run. Read-only pre/post snapshots and source/boot fingerprints must
+match. Its only launcher extension is a separately fingerprinted read-only output
+bundle; policy, capabilities, cached image and aggregate budgets stay unchanged.
+Selected FD inheritance and the trusted bootstrap are the execution change being
+tested, not a claim that inheritance is harmless by default.
+
+Local verification: 202 Python tests (200 pass, two Linux/POSIX-only skips),
+11 Node checks and 26 stubbed Bash launcher groups. All 24 frozen runtime,
+fixture, isolation and policy inputs match the saved verified isolation package.
+Tests cover descriptor selection/closure, byte/count validation, bounded retention,
+early EOF versus process exit, vanished-process handling, refused uncertain
+results, preservation of old evidence and refusal to seal after state/source/boot
+changes. The real pipe unit test must run on Linux before the sandbox controller.
+
+One pending VM batch reuses the fifty existing language fixtures and adds three
+fixed Python probes: replace/create/drain fake output paths, reject reads or extra
+descriptors, and close output before completing the program. It preserves all
+old checkpoints and adds no provider record or database write. The bootstrap adds
+accounted Python startup cost; participant budgets still need calibration.
+General nonzero-result mapping, modern compiler diagnostics, broader recovery,
+dependencies and measured event load remain open. The approved architecture,
+Git history and unrelated local/editor changes were not modified. See the
+[procedure and limits](../infra/judge-spike/OUTPUT-LAB.md).
+
+Prepared `ingenium-judge-output-20261018-01.tar.gz`: 53 allowlisted regular public
+files, 125,169 bytes, SHA-256
+`3dc22c1f34cd5a14e5c73deeff7f9d119616163e9ff62eb4b98996d170de16e6`.
+Every archived byte matches its source; all entries are ASCII/LF and Python files
+parse with Python 3.10 syntax. A fresh extraction passed 60 of its 62 packaged
+tests on Windows, with the existing real FIFO and new anonymous-pipe tests
+explicitly skipped pending Linux. The published isolation archive retains its
+original checksum; no historical archive was overwritten or recreated. Actual
+sandbox verification remains pending; the assistant performed no cloud operation
+or Git mutation.
+
+### Protected Output: Execution Passed, Guarded Seal Pending
+
+The user reported all five profiles' ten stream/checker cases and all three
+protected-pipe probes passing, with normal cleanup, followed by the final API
+gates passing. Final report writing then raised `Oversized fixed recovery
+evidence.` Source review identifies the entrypoint's incorrect choice of
+`recovery.private_json`, a pretty-printed 64 KiB writer whose size check precedes
+file creation. No overall output checkpoint seal has been reported.
+
+The one-line entrypoint correction uses the existing compact `transport.save`
+writer, still bounded to 2 MiB. A regression reproduces a large pretty report
+that fits compactly and verifies the original small-writer cap, overwrite refusal
+and compact-writer ceiling remain enforced. No execution limit, runtime, policy,
+provider record, old artifact or approved architecture changes.
+
+The new `seal-output.py` is a sealing-only continuation. It requires the exact
+original source identity and completed/unsealed journal stage, unchanged log
+digest, all 53 results, cached runtime/bundles, host boot, prior fifteen-record
+snapshot and physical absence of the owned container/profile/controller paths.
+It creates only `output-v1/seal-fix-v1`, preserving the original journal/log, and
+cannot invoke the execution launcher. Completion is conditional on identical
+post-checks. Tests cover mismatches, partial states, save failure and no-relaunch
+behavior. There are now 208 Python tests, with only the two Linux/POSIX-only
+exercises skipped on Windows. Actual guarded sealing is pending, not cloud PASS.
+
+Prepared sealing archive `ingenium-judge-output-20261018-02.tar.gz`: 55 regular
+allowlisted public files, 130,210 bytes, SHA-256
+`acdd843dbfaad6993730f347b0f5c2263bf76a75380e5a276c8ef0eb5c6ae82b`.
+All bytes match current sources, use ASCII/LF and parse with Python 3.10 syntax.
+Only the one-line host writer correction, its regression test, this runbook and
+the new continuation/tests differ from archive 01. All sandbox/profile, stream,
+policy and launcher bytes remain unchanged. A fresh extraction passes 66 of 68
+packaged tests on Windows; the two POSIX/Linux exercises remain explicitly
+skipped locally. Archive 01 still has its published checksum and was not
+overwritten. No assistant cloud operation or Git mutation occurred.
+
+### Protected Output: Guarded Seal User-Reported PASS
+
+The user supplied the sealing continuation's final PASS output. It revalidated
+the saved five-profile results and all three output-tampering/EOF probes, then
+reported fifty language cases and three probes reconstructed from the completed
+log with no code rerun. Compact evidence was sealed while the original
+journal/log and all fifteen provider records remained unchanged. The queue was
+empty, maintenance stayed enabled, original service/API gates passed and saved
+isolation evidence was verified. Repeated isolation PASS lines did not represent
+new sandbox executions.
+
+Preserve `output-v1`, whose original journal remains at `OUTPUT_FINISHED`, and
+the separate completed `output-v1/seal-fix-v1` journal/evidence. Neither the
+execution controller nor sealing continuation should be repeated. The earlier
+size-cap failure, original public archives, earlier evidence and intentionally
+held reservation remain preserved. This entry records supplied controller output,
+not an independent inspection of private cloud evidence.
+
+Only progress documentation changed to record this result; no runtime, approved
+architecture, Git history or cloud resource was changed. Next implement modern
+compilation/runtime/limit verdicts through protected capture; the current
+collector handles successful fixed phases only. Startup-overhead calibration,
+general failure causes, larger compiler diagnostics, broader crash/retirement
+recovery, dependency review and realistic event capacity remain open. This
+scoped checkpoint does not approve participant execution.
+
+### Protected Verdicts: Preparation Record
+
+The new [18-case fixed verdict batch](../infra/judge-spike/VERDICTS-LAB.md)
+adds clipped modern compiler diagnostics in C/C++/Java, runtime failures in all
+five profiles, proven CPU/wall/job-memory causes, protected output overflow and
+an ambiguous SIGKILL that must not receive a participant verdict. Python and
+JavaScript syntax failures remain runtime errors. The old success-only caller
+stays strict; the new caller requires exact target-command identity in both job
+controllers, not just observation of the pipe bootstrap.
+
+The host rechecks the completed output seal against historical source pins and
+freezes the updated collector/launcher separately. All fifteen provider rows,
+earlier journals/evidence, the intentionally held reservation, image/policy,
+private API restrictions and resource budgets remain unchanged. Only the new
+batch log has a 4 MiB ceiling; participant output caps and the existing 2 MiB
+compact evidence writer are unchanged. No production worker or compiler-failure
+attribution for arbitrary participant sources is claimed.
+
+Local checks: 220 Python tests (218 pass, two POSIX-only skips on Windows),
+11 Node checks and 28 stubbed Bash launcher groups. The public archive contains
+62 regular allowlisted ASCII/LF files, byte-checked against source/extraction
+and parsed for Python 3.10 compatibility. Its 80 bundled Python tests pass with
+the same two Windows skips. Historical collector/launcher pins match archive 02;
+51 previous package files remain byte-identical. No cloud or Git mutation was
+performed; the approved architecture and unrelated user changes are untouched.
+
+Prepared ignored archive: `ingenium-judge-verdicts-20261018-01.tar.gz`, 147485 bytes,
+SHA-256 `27484849e988a366472d25f67bfecdf942c6385fbe99400e76e1ec76794cc1a1`.
+At preparation its VM unit tests and once-only `verdicts.py` execution were
+pending. They subsequently passed as reported below. The immutable archive
+remains unchanged; do not replay its completed procedure.
+
+### Protected Verdicts: User-Reported Cloud PASS
+
+The user supplied all 80 bundled tests passing on the VM, with no skips reported,
+and all eighteen expected fixed verdict outcomes. C/C++/Java compilation errors,
+runtime failures across all five profiles, passed/wrong-answer controls, CPU/wall
+timeouts, job memory limit and stdout overflow passed protected-byte, cause and
+normal-cleanup checks. The ambiguous kill returned `RECOVERY_REQUIRED`, not an
+invented participant error. This classification control does not itself create
+a production recovery reservation.
+
+The final controller output reports sealed evidence, all fifteen provider rows
+and old evidence unchanged, queue empty and maintenance enabled. The original
+three-service inventory and four private API gates passed. Earlier boundary,
+language-stream and tampering PASS lines validate saved evidence; they are not
+new executions of completed controllers.
+
+Preserve `/opt/ingenium-judge-spike/verdicts-v1`, all earlier checkpoints, the
+intentionally held lab reservation and the public archive. Do not rerun the
+controller or force-clean. This records user-supplied output, not independent
+inspection of private VM files. Only progress documentation changed to record
+the result; no runtime, source bundle, approved architecture, Git history or
+cloud resource was changed. Next connect protected failure evidence to the
+existing HTTP/queue/backend flow. General compiler-failure attribution,
+production cancellation/retirement, dependency/security review, calibrated
+language budgets and event capacity remain open; participant readiness is not
+proved.
+
+### Protected Verdict HTTP/Queue: Prepared, Cloud Run Pending
+
+`verdict-http.py` connects the frozen eighteen-case verdict inventory to private
+authenticated admission, real provider/outbox records, competing duplicate Redis
+deliveries, one-time execution permits, protected phase evidence and backend
+verification. Each job has a fresh bound submission and compiles/runs only once;
+it does not replay the earlier verdict controller or reset any old permit.
+
+Seventeen cases must seal final evidence atomically with the legacy provider
+execution projection. The ambiguous kill keeps its `STARTED` record, consumed
+permit and reserved slot, with write-once held evidence recoverable through HTTP
+and no final participant/provider verdict. It cannot be cleared, sealed, deleted
+or claimed again. Actual cleanup does not automatically resolve this uncertainty.
+The earlier intentionally held recovery reservation stays untouched.
+
+Before mutation, the new driver revalidates earlier seals against historical
+source pins, checks all fifteen old provider rows and snapshots prior tables and
+files. It freezes the new context, helper/bundle fingerprints, runtime and boot.
+It creates only `verdict-http-v1`, `ingenium_verdict_http_v1` and eighteen fresh
+synthetic provider rows. Expected final count: 33 providers, with the original
+fifteen unchanged, seventeen new final rows and one new row still processing.
+The original API remains in maintenance; the temporary private admission API has
+no public port; stock workers never start. Existing images, policies, budgets
+and the VM STOP guard are unchanged. No cloud resource creation is required.
+
+Local verification: 235 Python tests (233 pass, two POSIX-only skips on Windows),
+11 Node checks, 30 stubbed Bash launcher groups and a real disposable local
+PostgreSQL schema/transition test. The database test loads the actual inherited
+schemas and rejects ten forbidden mutations, without connecting to an existing
+database. Ruby is unavailable locally; the new middleware's stub checks run on
+the VM before schema creation/admission. Actual private HTTP/Redis/Rails and
+pinned sandbox execution remain pending until the user's cloud run.
+
+Prepared ignored public archive: `ingenium-judge-verdict-http-20261018-01.tar.gz`,
+175201 bytes, SHA-256 `ef2d1ca3a626a9018207d085153ee0e496f9dd39ce6e37665a5f2285ec36cace`.
+All 74 allowlisted regular files match source/archive/extraction exactly and
+pass ASCII/LF plus Python 3.10 parsing checks. Its 95 bundled Python tests pass
+locally with the same two POSIX-only Windows skips; the real PostgreSQL schema
+test also passes from the extracted package. The preceding three public archive
+hashes remain unchanged, as do 56 prior non-document/non-launcher package inputs.
+
+The [new runbook](../infra/judge-spike/VERDICT-HTTP-LAB.md) gives the one-shot
+procedure and preservation rules. Any failure retains the checkpoint, schema,
+permits and resources; do not rerun, clear queues or force-clean. Approved
+architecture, previous source bundles/archives and unrelated user changes are
+untouched; no Git or cloud mutation was performed. Arbitrary compiler failure
+attribution, production recovery/retirement, dependency/security review,
+calibration and measured event capacity remain open.
+
+### Verdict HTTP: Preflight Failure and Scoped Correction
+
+The user supplied all 95 packaged tests passing on the VM, followed by saved
+evidence/API PASS lines and `CalledProcessError`. A separate stub-only diagnostic
+reported `CheckpointExists: False`, Ruby 2.7.0p0, and
+`Expected 503, got 400` at the injected database-failure assertion. This locates
+the failure before the controller creates its new checkpoint/schema or admits
+submissions; it is not a verdict or sandbox failure.
+
+The root cause is the normalization copy: the newly strict context parser
+returns `UniqueObject` for nested payloads. `.dup` preserves that subclass, whose
+`[]=` rejects overwriting an existing key. Decoding `source_code` therefore
+raised `ArgumentError`, mapped to 400, before the intended stubbed database
+failure. `payload.to_h` makes a plain Hash copy in Ruby 2.7, preserving duplicate
+JSON-key rejection at the parsing boundary. No limit, binding, status rule,
+schema, launcher, runtime, queue or permit behavior changes.
+
+Ruby regression assertions now cover that exact subclass-copy behavior, plain
+mutable conversion, duplicate-key refusal, decoded plain payloads and unchanged
+frozen context across all eighteen admissions. The existing rollback, duplicate
+POST and held-result tests remain. Ruby is unavailable locally, so the corrected
+test must pass on the VM before admission. The unchanged controller still checks
+that its checkpoint and schema are absent before mutation; do not reset either.
+Archive 01 remains immutable. Archive 02 is a corrected first-start package in a
+separate public extraction, not a replay of an executed job. No cloud or Git
+mutation was performed by the assistant; private evidence and unrelated user
+changes remain untouched.
+
+Prepared corrected archive: `ingenium-judge-verdict-http-20261018-02.tar.gz`,
+176302 bytes, SHA-256 `a584e10bdaa51892c2504a13cece968971cf87c512d2e4783fbc52d5e9a07925`.
+All 74 public files match source/archive/extraction exactly and pass ASCII/LF
+and Python 3.10 checks. Seventy-one files, including the controller, schema,
+launcher, runtime and execution bundles, are unchanged from archive 01. The
+full 235 Python tests and 95 packaged tests pass locally with two POSIX-only
+Windows skips. The corrected Ruby preflight and cloud execution remain pending;
+no new safety or participant-readiness claim is made.
+
+### Verdict HTTP: Retained Wall-Envelope Correction
+
+Archive 02 passed the 95 VM unit tests and corrected Ruby stub preflight. The
+user's read-only diagnostic then confirmed 23 provider rows, eight associations,
+zero started executions and zero consumed permits. Its exact journal ends at
+`HTTP_SEND_STARTED` for `cpp-wall`, then normal temporary-API removal. Model
+validation succeeds for seventeen payloads and rejects only the 0.3-second
+`wall_time_limit`, below Judge0's one-second model minimum.
+
+The separate `resume-verdict-http.py` continuation retains all original source
+fingerprints and private evidence. It corrects only the absent `cpp-wall`
+provider field to one second and recalculates its unregistered payload hash.
+The actual frozen sandbox wall limit remains 300 ms. No source, sandbox limit,
+schema, existing association, permit or old held reservation is reset.
+
+Before changes, it validates the exact diagnosed journal, boot, cached runtime,
+original eight complete attempt/provider rows, prior fifteen records and saved
+evidence, idle queue and all eighteen payloads through read-only Rails model
+validation. It records a separate `admission-fix-v1` checkpoint. Existing eight
+admissions use GET only; the ten remaining attempts require positive HTTP and
+database absence before their once-only POST. The eight original row hashes must
+still match before any execution starts. The existing tested worker and bound
+sandbox then run each previously unstarted case once. Seventeen sealed results
+and one held ambiguity are required; original failed files remain unchanged.
+
+See the [current continuation procedure](../infra/judge-spike/VERDICT-HTTP-LAB.md#retained-admission-continuation).
+Local regression tests cover the single-field correction, exact failure stage,
+immutable original bindings/evidence, GET-only reconciliation, no POST after
+uncertain acknowledgement, unstarted inventory checks, read-only validation,
+worker entry/source guards, duplicate delivery and refusal to seal after changed
+state. Actual cloud continuation remains pending; no Git or cloud mutation was
+performed by the assistant.
+
+Prepared ignored archive: `ingenium-judge-verdict-http-20261018-03.tar.gz`,
+184786 bytes, SHA-256 `2df601cf0635a4221ce86425443f4cb67774a4cc3f12329d88955da055dea33f`.
+All 76 allowlisted regular files match the checked extraction and pass ASCII/LF
+and Python 3.10 parsing. All 73 non-document inputs from archive 02 are unchanged;
+only the runbook is updated and the continuation plus its twelve regression
+tests are added. The full 247-test Python suite and 107-test extracted package
+pass locally with two POSIX-only Windows skips. Ruby/Rails model execution and
+the actual cloud continuation are not available locally and remain pending.
+
+### Verdict HTTP: Validation Output Preflight
+
+The user reported all 107 archive-03 tests passing on the VM, then the exact
+`Fixed payload model validation failed; nothing was admitted` error. This is the
+whole-stdout comparison after a successful checked command exit, before the
+continuation creates its checkpoint or admits any records. The existing failed
+parent checkpoint and eight unstarted associations remain protected by the same
+read-only preflight. No permit or schema reset is required or permitted.
+
+The validation parser now requires exactly one complete success-marker line
+rather than requiring that line to be the entire stdout stream. Judge0's
+configuration loader enables Rails stdout logging. The original checked exit,
+read-only model validation and 8192-byte output bound remain unchanged. Missing,
+embedded, incomplete or duplicate markers fail, as does a nonzero command exit
+even with an apparent success marker. Only the validated marker is printed;
+failure diagnostics expose byte/marker counts, never private log contents.
+
+A regression test first reproduced the rejection with startup/SQL logs and then
+passed with the correction. Archive 04 changes only the continuation, that test
+and its runbook; all 73 other archive-03 files, all frozen worker/runtime inputs
+and every prior archive remain unchanged. The new entrypoint still refuses any
+existing continuation checkpoint or unexpected execution state. The actual
+cloud stdout was not directly inspected, so the logging explanation is an
+inference from the successful exit, strict comparison and runtime configuration;
+cloud continuation remains pending. No cloud or Git mutation was performed.
+
+Prepared ignored archive: `ingenium-judge-verdict-http-20261018-04.tar.gz`,
+185620 bytes, SHA-256 `195155c158b4c0e39564e968fc6fd1aee33768f46dd95dd4f5de7dd71484a58f`.
+All 76 allowlisted files match the checked extraction and pass ASCII/LF and
+Python 3.10 parsing checks. Seventy-three files are byte-for-byte unchanged from
+archive 03. The full 248 Python tests and 108 extracted-package tests pass
+locally with the same two POSIX-only Windows skips. Actual Ruby/Rails execution
+and the corrected cloud continuation remain unverified locally.
+
+### Protected Verdict HTTP: User-Reported Cloud PASS
+
+The user reported all 108 archive-04 Python tests passing on the VM, followed
+by the complete guarded continuation PASS. All eighteen corrected payloads
+passed actual read-only Rails model validation. The original eight unstarted
+associations were reconciled unchanged; ten remaining records were admitted;
+no execution permit was reset.
+
+All eighteen fixed cases then ran exactly once under their bound worker, with
+lost HTTP replies recovered and protected bytes/accounting/reservation checks
+passing. Seventeen results sealed; `cpp-ambiguous` remained `RECOVERY_REQUIRED`
+with its reservation held and no invented participant verdict. The final total
+is 33 provider rows, with all fifteen earlier rows unchanged. The original failed
+checkpoint is preserved, the original queue is empty, only the existing three
+services remain running, and all four API restriction gates passed again.
+
+Preserve `verdict-http-v1/admission-fix-v1`, the failed parent contexts/journal,
+all public archives and all earlier evidence/held reservations. Do not rerun
+either original controller or its now-completed continuation. This closes the
+fixed protected-verdict HTTP integration batch, not the remaining general
+production gateway/supervisor, arbitrary-failure attribution, cancellation,
+host-retirement, security review or measured-load requirements. The next app
+implementation batch starts with reviewed competition registration storage,
+not another replay of these synthetic jobs. No cloud or Git mutation was
+performed by the assistant.
 
 ### Cost Review Before Creation
 

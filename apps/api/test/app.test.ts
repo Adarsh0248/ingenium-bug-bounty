@@ -69,3 +69,15 @@ test("closing the application releases its database pool", async () => {
   await app.close();
   assert.equal(closes, 1);
 });
+
+test("normal startup cannot expose entry routes without explicit security dependencies", async (t) => {
+  const app = buildApp({ database: { async check() {}, async close() {} } });
+  t.after(() => app.close());
+  assert.equal((await app.inject({ method: "GET", url: "/api/v1/bootstrap?audience=ANONYMOUS" })).statusCode, 404);
+});
+
+test("the redacted runtime logger configuration starts successfully", async (t) => {
+  const app = buildApp({ logger: true, database: { async check() {}, async close() {} } });
+  t.after(() => app.close());
+  assert.equal((await app.inject({ method: "GET", url: "/health" })).statusCode, 200);
+});

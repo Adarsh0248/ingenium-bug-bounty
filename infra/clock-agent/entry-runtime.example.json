@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "mode": "production",
+  "origin": "https://your-authorised-event-origin.example",
+  "cookie_key": "replace-with-independent-32-byte-lowercase-hex",
+  "csrf_key": "replace-with-independent-32-byte-lowercase-hex",
+  "delivery_key": "replace-with-independent-32-byte-lowercase-hex",
+  "delivery_key_id": "event-entry-v1"
+}

@@ -14,17 +14,21 @@ stream_mode=0
 stream_job=''
 stream_job_hash=''
 isolation_mode=0
+output_mode=0
+verdict_mode=0
+verdict_job=''
+verdict_job_hash=''
 crash_nonce=''
 image_user=judge0
 parent_bytes=268435456 parent_mib=256 parent_tasks=32 container_memory=256m
 workspace_options='size=16m' temporary_size=4m deadline=60s
 if [[ $# -ne 0 ]]; then
-  if { [[ $# -eq 2 && "$1" == --profiles ]] || [[ $# -eq 3 && "$1" == --streams && "$3" =~ ^[0-9a-f]{64}$ ]] || [[ $# -eq 5 && "$1" == --stream-job && "$3" =~ ^[0-9a-f]{64}$ && "$5" =~ ^[0-9a-f]{64}$ ]] || [[ $# -eq 4 && "$1" == --isolation && "$3" =~ ^[0-9a-f]{64}$ && "$4" =~ ^[0-9a-f]{64}$ ]]; } && [[ "$2" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  if { [[ $# -eq 2 && "$1" == --profiles ]] || [[ $# -eq 3 && "$1" == --streams && "$3" =~ ^[0-9a-f]{64}$ ]] || [[ $# -eq 5 && "$1" == --stream-job && "$3" =~ ^[0-9a-f]{64}$ && "$5" =~ ^[0-9a-f]{64}$ ]] || [[ $# -eq 4 && ( "$1" == --isolation || "$1" == --output ) && "$3" =~ ^[0-9a-f]{64}$ && "$4" =~ ^[0-9a-f]{64}$ ]] || [[ $# -eq 5 && "$1" == --verdicts && "$3" =~ ^[0-9a-f]{64}$ && "$4" =~ ^[0-9a-f]{64}$ && "$5" =~ ^[0-9a-f]{64}$ ]] || [[ $# -eq 8 && "$1" == --verdict-job && "$3" =~ ^[0-9a-f]{64}$ && "$4" =~ ^[0-9a-f]{64}$ && "$5" =~ ^[0-9a-f]{64}$ && "$6" =~ ^[0-9a-f]{64}$ && "$8" =~ ^[0-9a-f]{64}$ ]]; } && [[ "$2" =~ ^sha256:[0-9a-f]{64}$ ]]; then
     profile_mode=1 image="$2" image_user=65534:65534
     parent_bytes=1610612736 parent_mib=1536 parent_tasks=128 container_memory=1536m
     workspace_options='size=64m,nr_inodes=4096' temporary_size=16m deadline=420s
     [[ "$(docker image inspect "$image" --format '{{index .Config.Labels "ingenium.lab.profiles"}}')" == 1 ]] || fail 'Missing fixed language-profile image label.'
-    if [[ "$1" == --streams || "$1" == --stream-job || "$1" == --isolation ]]; then
+    if [[ "$1" == --streams || "$1" == --stream-job || "$1" == --isolation || "$1" == --output || "$1" == --verdicts || "$1" == --verdict-job ]]; then
       [[ -f "$source_directory/streams/bundle.py" && ! -L "$source_directory/streams/bundle.py" ]] || fail 'Missing regular stream bundle helper.'
       [[ "$(python3 -B "$source_directory/streams/bundle.py")" == "$3" ]] || fail 'Fixed stream bundle fingerprint differs.'
       stream_mode=1
@@ -32,6 +36,25 @@ if [[ $# -ne 0 ]]; then
         [[ -f "$source_directory/isolation/bundle.py" && ! -L "$source_directory/isolation/bundle.py" ]] || fail 'Missing fixed isolation bundle.'
         [[ "$(python3 -B "$source_directory/isolation/bundle.py")" == "$4" ]] || fail 'Fixed isolation bundle fingerprint differs.'
         isolation_mode=1
+      fi
+      if [[ "$1" == --output || "$1" == --verdicts || "$1" == --verdict-job ]]; then
+        [[ -f "$source_directory/output/bundle.py" && ! -L "$source_directory/output/bundle.py" ]] || fail 'Missing protected-output bundle.'
+        [[ "$(python3 -B "$source_directory/output/bundle.py")" == "$4" ]] || fail 'Protected-output bundle fingerprint differs.'
+        output_mode=1
+      fi
+      if [[ "$1" == --verdicts || "$1" == --verdict-job ]]; then
+        [[ -f "$source_directory/verdicts/bundle.py" && ! -L "$source_directory/verdicts/bundle.py" ]] || fail 'Missing fixed verdict bundle.'
+        [[ "$(python3 -B "$source_directory/verdicts/bundle.py")" == "$5" ]] || fail 'Fixed verdict bundle fingerprint differs.'
+        verdict_mode=1
+      fi
+      if [[ "$1" == --verdict-job ]]; then
+        [[ -f "$source_directory/verdict-transport/bundle.py" && ! -L "$source_directory/verdict-transport/bundle.py" ]] || fail 'Missing bound-verdict bundle.'
+        [[ "$(python3 -B "$source_directory/verdict-transport/bundle.py")" == "$6" ]] || fail 'Bound-verdict bundle fingerprint differs.'
+        [[ "$7" =~ ^/opt/ingenium-judge-spike/verdict-http-v1/execution-[0-9a-f-]{36}/job.json$ && -f "$7" && ! -L "$7" && "$(readlink -f "$7")" == "$7" ]] || fail 'Invalid private bound-verdict job path.'
+        [[ "$(stat -c '%u:%g:%a:%s' "$7")" =~ ^0:0:600:[0-9]+$ && "$(stat -c %s "$7")" -le 8192 ]] || fail 'Invalid private bound-verdict job permissions/size.'
+        actual_hash="$(sha256sum "$7")"
+        [[ "${actual_hash%% *}" == "$8" ]] || fail 'Bound-verdict job fingerprint differs.'
+        verdict_job="$7" verdict_job_hash="$8"
       fi
       if [[ "$1" == --stream-job ]]; then
         [[ "$4" =~ ^/opt/ingenium-judge-spike/transport-v1/execution-[0-9a-f-]{36}/job.json$ && -f "$4" && ! -L "$4" && "$(readlink -f "$4")" == "$4" ]] || fail 'Invalid private bound-job path.'
@@ -437,6 +460,22 @@ if [[ "$isolation_mode" -eq 1 ]]; then
   sandbox_command=(/usr/local/bin/python3.14 -I -B /run/ingenium-isolation/runtime.py --fixed-security)
   extra_mounts+=(--mount "type=bind,src=$source_directory/isolation,dst=/run/ingenium-isolation,readonly")
   extra_options=(--log-driver json-file --log-opt max-size=1m --log-opt max-file=1)
+fi
+if [[ "$output_mode" -eq 1 ]]; then
+  sandbox_command=(/usr/local/bin/python3.14 -I -B /run/ingenium-output/runtime.py --fixed-output)
+  extra_mounts+=(--mount "type=bind,src=$source_directory/output,dst=/run/ingenium-output,readonly")
+  extra_options=(--log-driver json-file --log-opt max-size=1m --log-opt max-file=1)
+fi
+if [[ "$verdict_mode" -eq 1 ]]; then
+  sandbox_command=(/usr/local/bin/python3.14 -I -B /run/ingenium-verdicts/runtime.py --fixed-verdicts)
+  extra_mounts+=(--mount "type=bind,src=$source_directory/verdicts,dst=/run/ingenium-verdicts,readonly")
+  extra_options=(--log-driver json-file --log-opt max-size=4m --log-opt max-file=1)
+fi
+if [[ -n "$verdict_job" ]]; then
+  sandbox_command=(/usr/local/bin/python3.14 -I -B /run/ingenium-verdict-transport/runtime.py "$verdict_job_hash")
+  extra_mounts+=(--mount "type=bind,src=$source_directory/verdict-transport,dst=/run/ingenium-verdict-transport,readonly"
+                 --mount "type=bind,src=$verdict_job,dst=/run/ingenium-verdict-job.json,readonly")
+  extra_options=(--log-driver json-file --log-opt max-size=2m --log-opt max-file=1)
 fi
 if [[ -n "$crash_nonce" ]]; then
   sandbox_command=(/bin/bash /run/ingenium-crash-box.sh)

@@ -33,6 +33,9 @@ python3() {
   case "$*" in
     "-B $source_directory/streams/bundle.py") printf '%s\n' "${STUB_STREAM_HASH:-unreviewed}" ;;
     "-B $source_directory/isolation/bundle.py") printf '%s\n' "${STUB_ISOLATION_HASH:-unreviewed}" ;;
+    "-B $source_directory/output/bundle.py") printf '%s\n' "${STUB_OUTPUT_HASH:-unreviewed}" ;;
+    "-B $source_directory/verdicts/bundle.py") printf '%s\n' "${STUB_VERDICT_HASH:-unreviewed}" ;;
+    "-B $source_directory/verdict-transport/bundle.py") printf '%s\n' "${STUB_BOUND_VERDICT_HASH:-unreviewed}" ;;
     *) return 98 ;;
   esac
 }
@@ -131,7 +134,7 @@ docker() {
       printf 'run\n' >> "$FIXTURE_ROOT/sequence"
       : > "$FIXTURE_ROOT/run_attempted"
       printf '%s\n' "$@" > "$FIXTURE_ROOT/args"
-      if [[ " $* " == *' --parity '* || " $* " == *' --fixed-suite '* || " $* " == *' --bound-job '* || " $* " == *' --fixed-security '* ]]; then
+      if [[ " $* " == *' --parity '* || " $* " == *' --fixed-suite '* || " $* " == *' --bound-job '* || " $* " == *' --fixed-security '* || " $* " == *' --fixed-output '* || " $* " == *' --fixed-verdicts '* || " $* " == *' /run/ingenium-verdict-transport/runtime.py '* ]]; then
         printf '%s\n' 'profile-runtime-command-not-executed' > "$FIXTURE_ROOT/inner.sh"
       elif [[ " $* " == *' /run/ingenium-failure-box.sh '* ]]; then
         command cp "$source_directory/failure-box.sh" "$FIXTURE_ROOT/inner.sh"
@@ -155,7 +158,7 @@ fixture() {
   command rm -rf -- "$FIXTURE_ROOT/cgroups"
   command rm -f -- "$FIXTURE_ROOT"/{created,writes,removed,sequence,args,inner.sh,config,config-mode,run_attempted}
   unset STUB_HOST STUB_CONTROLLERS STUB_UNIFIED_FS STUB_FS STUB_ENABLED STUB_PROFILES STUB_V2_CONTROLLERS STUB_HIERARCHY STUB_CPUS STUB_BAD_BUDGET STUB_POST_BAD_BUDGET STUB_PARENT_PRESSURE STUB_TASKS STUB_MAINTENANCE_EXIT STUB_COLLISION_ROOT STUB_WRITE_EXIT STUB_REMOVE_EXIT STUB_PARSE_EXIT STUB_LOAD_EXIT STUB_UNLOAD_EXIT STUB_DOCKER_CGROUP STUB_IMAGE STUB_STATE STUB_OOM STUB_RUN_EXIT STUB_RM_EXIT STUB_PROFILE_LABEL
-  unset STUB_STREAM_HASH STUB_ISOLATION_HASH
+  unset STUB_STREAM_HASH STUB_ISOLATION_HASH STUB_OUTPUT_HASH STUB_VERDICT_HASH STUB_BOUND_VERDICT_HASH
 }
 run_script() {
   status=0
@@ -629,4 +632,91 @@ for scenario in missing bad_image bad_bundle changed_bundle; do
   [[ "$status" -ne 0 && ! -e "$FIXTURE_ROOT/created" && ! -e "$FIXTURE_ROOT/run_attempted" ]] || fail 'Unreviewed isolation mode reached allocation/execution.'
 done
 printf 'PASS: changed or incomplete isolation bundle/image identities fail before allocation\n'
-printf '24 cgroup smoke orchestration/membership/result groups passed; no Docker/Judge0 call or host cgroup write occurred.\n'
+fixture
+export STUB_STREAM_HASH="$(printf 'a%.0s' {1..64})" STUB_OUTPUT_HASH="$(printf 'b%.0s' {1..64})"
+run_script --output "$profile_image" "$STUB_STREAM_HASH" "$STUB_OUTPUT_HASH"
+[[ "$status" -eq 0 && -z "$(ls -A /run)" ]] || fail 'Protected-output mode did not complete owned cleanup.'
+[[ "$(grep -c -- '--mount' "$FIXTURE_ROOT/args")" -eq 5 && "$(grep -c -- '--cap-add' "$FIXTURE_ROOT/args")" -eq 7 ]] || fail 'Protected-output mode changed capability/mount scope.'
+grep -q 'dst=/run/ingenium-output,readonly$' "$FIXTURE_ROOT/args"
+grep -qx 'max-size=1m' "$FIXTURE_ROOT/args"
+grep -qx -- '--fixed-output' "$FIXTURE_ROOT/args"
+[[ "$(grep -cx '1536m' "$FIXTURE_ROOT/args")" -eq 2 ]] || fail 'Protected-output mode changed its bounded parent memory.'
+printf 'PASS: protected-output mode adds only a fingerprinted read-only bundle with unchanged container budgets and capabilities\n'
+for scenario in missing image bundle changed; do
+  fixture
+  export STUB_STREAM_HASH="$(printf 'a%.0s' {1..64})" STUB_OUTPUT_HASH="$(printf 'b%.0s' {1..64})"
+  args=(--output "$profile_image" "$STUB_STREAM_HASH" "$STUB_OUTPUT_HASH")
+  case "$scenario" in
+    missing) args=(--output "$profile_image" "$STUB_STREAM_HASH") ;;
+    image) args[1]=latest ;;
+    bundle) args[3]=unreviewed ;;
+    changed) args[3]="$(printf 'c%.0s' {1..64})" ;;
+  esac
+  run_script "${args[@]}"
+  [[ "$status" -ne 0 && ! -e "$FIXTURE_ROOT/created" && ! -e "$FIXTURE_ROOT/run_attempted" ]] || fail 'Unreviewed protected-output mode reached allocation.'
+done
+printf 'PASS: incomplete, mutable or changed output bundle identities fail before allocation\n'
+fixture
+export STUB_STREAM_HASH="$(printf 'a%.0s' {1..64})" STUB_OUTPUT_HASH="$(printf 'b%.0s' {1..64})" STUB_VERDICT_HASH="$(printf 'c%.0s' {1..64})"
+run_script --verdicts "$profile_image" "$STUB_STREAM_HASH" "$STUB_OUTPUT_HASH" "$STUB_VERDICT_HASH"
+[[ "$status" -eq 0 && -z "$(ls -A /run)" ]] || fail 'Verdict mode did not complete owned cleanup.'
+[[ "$(grep -c -- '--mount' "$FIXTURE_ROOT/args")" -eq 6 && "$(grep -c -- '--cap-add' "$FIXTURE_ROOT/args")" -eq 7 ]] || fail 'Verdict mode changed capability/mount scope.'
+for target in streams output verdicts; do grep -q "dst=/run/ingenium-$target,readonly$" "$FIXTURE_ROOT/args"; done
+grep -qx 'max-size=4m' "$FIXTURE_ROOT/args"
+grep -qx '420s' "$FIXTURE_ROOT/args"
+grep -qx -- '--fixed-verdicts' "$FIXTURE_ROOT/args"
+[[ "$(grep -cx '1536m' "$FIXTURE_ROOT/args")" -eq 2 ]] || fail 'Verdict mode changed its bounded parent memory.'
+if grep -Eq -- '--privileged|unconfined|seccomp=|docker.sock|PASSWORD|AUTHN' "$FIXTURE_ROOT/args"; then fail 'Verdict mode exposed privilege/credentials.'; fi
+printf 'PASS: verdict mode uses three fingerprinted read-only bundles, bounded logs and unchanged capability/resource limits\n'
+for scenario in missing image stream output verdict malformed; do
+  fixture
+  export STUB_STREAM_HASH="$(printf 'a%.0s' {1..64})" STUB_OUTPUT_HASH="$(printf 'b%.0s' {1..64})" STUB_VERDICT_HASH="$(printf 'c%.0s' {1..64})"
+  args=(--verdicts "$profile_image" "$STUB_STREAM_HASH" "$STUB_OUTPUT_HASH" "$STUB_VERDICT_HASH")
+  case "$scenario" in
+    missing) args=(--verdicts "$profile_image" "$STUB_STREAM_HASH" "$STUB_OUTPUT_HASH") ;;
+    image) args[1]=latest ;;
+    stream) args[2]="$(printf 'd%.0s' {1..64})" ;;
+    output) args[3]="$(printf 'd%.0s' {1..64})" ;;
+    verdict) args[4]="$(printf 'd%.0s' {1..64})" ;;
+    malformed) args[4]=unreviewed ;;
+  esac
+  run_script "${args[@]}"
+  [[ "$status" -ne 0 && ! -e "$FIXTURE_ROOT/created" && ! -e "$FIXTURE_ROOT/run_attempted" ]] || fail 'Unreviewed verdict mode reached allocation.'
+done
+printf 'PASS: incomplete, mutable or changed verdict image/source identities fail before allocation\n'
+fixture
+export STUB_STREAM_HASH="$(printf 'a%.0s' {1..64})" STUB_OUTPUT_HASH="$(printf 'b%.0s' {1..64})" STUB_VERDICT_HASH="$(printf 'c%.0s' {1..64})" STUB_BOUND_VERDICT_HASH="$(printf 'd%.0s' {1..64})"
+verdict_directory=/opt/ingenium-judge-spike/verdict-http-v1/execution-8cf9f0bd-8374-4d81-bbf5-405d0df22442
+command mkdir -p -m 700 "$verdict_directory"
+printf '{"fixed":"verdict"}' > "$verdict_directory/job.json"
+verdict_hash="$(sha256sum "$verdict_directory/job.json")"
+verdict_hash="${verdict_hash%% *}"
+run_script --verdict-job "$profile_image" "$STUB_STREAM_HASH" "$STUB_OUTPUT_HASH" "$STUB_VERDICT_HASH" "$STUB_BOUND_VERDICT_HASH" "$verdict_directory/job.json" "$verdict_hash"
+[[ "$status" -eq 0 && -z "$(ls -A /run)" ]] || fail 'Bound-verdict mode did not complete owned cleanup.'
+[[ "$(grep -c -- '--mount' "$FIXTURE_ROOT/args")" -eq 8 && "$(grep -c -- '--cap-add' "$FIXTURE_ROOT/args")" -eq 7 ]] || fail 'Bound-verdict mode changed capability/mount scope.'
+grep -q 'dst=/run/ingenium-verdict-job.json,readonly$' "$FIXTURE_ROOT/args"
+grep -q 'dst=/run/ingenium-verdict-transport,readonly$' "$FIXTURE_ROOT/args"
+grep -qx 'max-size=2m' "$FIXTURE_ROOT/args"
+[[ "$(tail -n 2 "$FIXTURE_ROOT/args")" == "$(printf '/run/ingenium-verdict-transport/runtime.py\n%s' "$verdict_hash")" ]] || fail 'Wrong bound-verdict command.'
+printf 'PASS: bound-verdict mode adds only fingerprinted read-only source/job mounts with unchanged policy, budgets and capabilities\n'
+for scenario in missing image stream output verdict bound job_hash path permissions oversized; do
+  fixture
+  export STUB_STREAM_HASH="$(printf 'a%.0s' {1..64})" STUB_OUTPUT_HASH="$(printf 'b%.0s' {1..64})" STUB_VERDICT_HASH="$(printf 'c%.0s' {1..64})" STUB_BOUND_VERDICT_HASH="$(printf 'd%.0s' {1..64})"
+  args=(--verdict-job "$profile_image" "$STUB_STREAM_HASH" "$STUB_OUTPUT_HASH" "$STUB_VERDICT_HASH" "$STUB_BOUND_VERDICT_HASH" "$verdict_directory/job.json" "$verdict_hash")
+  case "$scenario" in
+    missing) args=(--verdict-job "$profile_image") ;;
+    image) args[1]=latest ;;
+    stream) args[2]="$(printf 'e%.0s' {1..64})" ;;
+    output) args[3]="$(printf 'e%.0s' {1..64})" ;;
+    verdict) args[4]="$(printf 'e%.0s' {1..64})" ;;
+    bound) args[5]="$(printf 'e%.0s' {1..64})" ;;
+    job_hash) args[7]="$(printf 'e%.0s' {1..64})" ;;
+    path) args[6]=/tmp/job.json ;;
+    permissions) chmod 644 "$verdict_directory/job.json" ;;
+    oversized) chmod 600 "$verdict_directory/job.json"; head -c 8193 /dev/zero > "$verdict_directory/job.json" ;;
+  esac
+  run_script "${args[@]}"
+  [[ "$status" -ne 0 && ! -e "$FIXTURE_ROOT/created" && ! -e "$FIXTURE_ROOT/run_attempted" ]] || fail 'Unreviewed bound-verdict mode reached allocation.'
+done
+printf 'PASS: changed bound-verdict images/bundles/job bytes and unsafe private paths/modes fail before allocation\n'
+printf '30 cgroup smoke orchestration/membership/result groups passed; no Docker/Judge0 call or host cgroup write occurred.\n'
