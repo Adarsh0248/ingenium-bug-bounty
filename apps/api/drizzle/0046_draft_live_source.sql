@@ -1,0 +1,4 @@
+ALTER TABLE "live_effects" DROP CONSTRAINT "live_effect_source";--> statement-breakpoint
+ALTER TABLE "live_effects" ADD COLUMN "draft_outcome_id" uuid;--> statement-breakpoint
+ALTER TABLE "live_effects" ADD CONSTRAINT "live_effects_draft_outcome_id_draft_save_outcomes_id_fk" FOREIGN KEY ("draft_outcome_id") REFERENCES "public"."draft_save_outcomes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "live_effects" ADD CONSTRAINT "live_effect_source" CHECK (num_nonnulls("live_effects"."competition_sequence","live_effects"."parent_id","live_effects"."round_id","live_effects"."arena_id","live_effects"."participant_session_id","live_effects"."staff_session_id","live_effects"."staff_id","live_effects"."credential_id","live_effects"."block_id","live_effects"."validation_run_id","live_effects"."version_id","live_effects"."draft_outcome_id")=1);

@@ -53,4 +53,23 @@ export const staffCredentialIssues=pgTable("staff_credential_issues",{
   credentialId:uuid("credential_id").primaryKey().references(()=>accessCredentials.id,{onDelete:"restrict"}),
   managementId:uuid("management_id").references(()=>staffManagementOutcomes.id,{onDelete:"restrict"}),
   bootstrapId:uuid("bootstrap_id").references(()=>operatorBootstraps.id,{onDelete:"restrict"}),
-},t=>[unique("management_one_credential").on(t.managementId),unique("bootstrap_one_credential").on(t.bootstrapId),check("staff_issue_source",sql`num_nonnulls(${t.managementId},${t.bootstrapId})=1`)]);
+  recoveryId:uuid("recovery_id").references(()=>operatorStaffOutcomes.id,{onDelete:"restrict"}),
+},t=>[unique("management_one_credential").on(t.managementId),unique("bootstrap_one_credential").on(t.bootstrapId),unique("recovery_one_credential").on(t.recoveryId),check("staff_issue_source",sql`num_nonnulls(${t.managementId},${t.bootstrapId},${t.recoveryId})=1`)]);
+
+export const operatorStaffOutcomes=pgTable("operator_staff_outcomes",{
+  id:id(),action:text("action").notNull(),staffId:uuid("staff_id").notNull().references(()=>staffIdentities.id,{onDelete:"restrict"}),
+  credentialId:uuid("credential_id").references(()=>accessCredentials.id,{onDelete:"restrict"}),
+  replacementSessionId:uuid("replacement_session_id").references(()=>staffSessions.id,{onDelete:"restrict"}),
+  expectedRevision:bigint("expected_revision",{mode:"bigint"}).notNull(),fingerprint:bytes("fingerprint").notNull(),
+  operator:text("operator").notNull(),osUser:text("os_user").notNull(),verification:text("verification").notNull(),reason:text("reason").notNull(),recordedAt:instant("recorded_at").notNull(),
+  beforeState:jsonb("before_state"),afterState:jsonb("after_state").notNull(),
+},t=>[check("operator_staff_shape",sql`${t.action} in ('CREATE','ROTATE','DISABLE') and ${t.expectedRevision}>=0 and octet_length(${t.fingerprint})=32
+  and octet_length(${t.operator}) between 1 and 120 and length(btrim(${t.operator}))>0
+  and octet_length(${t.osUser}) between 1 and 120 and length(btrim(${t.osUser}))>0
+  and octet_length(${t.verification}) between 1 and 1024 and length(btrim(${t.verification}))>0
+  and octet_length(${t.reason}) between 1 and 1024 and length(btrim(${t.reason}))>0
+  and ((${t.action}='CREATE' and ${t.beforeState} is null and ${t.credentialId} is not null and ${t.replacementSessionId} is null)
+    or (${t.action}='ROTATE' and ${t.beforeState} is not null and ${t.credentialId} is not null and ${t.replacementSessionId} is null)
+    or (${t.action}='DISABLE' and ${t.beforeState} is not null and ${t.credentialId} is null and ${t.replacementSessionId} is not null))
+  and (${t.beforeState} is null or (jsonb_typeof(${t.beforeState})='object' and octet_length(${t.beforeState}::text)<=1024))
+  and jsonb_typeof(${t.afterState})='object' and octet_length(${t.afterState}::text)<=1024`)]);

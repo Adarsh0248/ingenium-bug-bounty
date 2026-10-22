@@ -20,12 +20,15 @@ export interface StaffSession {
 const manager = (role: string) => role === "OWNER" || role === "SUPER_ADMIN";
 function reversed(clock: ClockGuard): never { clock.fault("CLOCK_REVERSED"); throw new AccessError("CLOCK_UNTRUSTED"); }
 function timeAfter(clock: ClockGuard, now: Date, ...values: Date[]) { if (values.some((value) => now < value)) reversed(clock); }
-export async function staffOutcomeCapacity(client: PoolClient) {
+export async function staffOutcomeCapacity(client: PoolClient, extra = 1) {
   const row=await first<{ n: number }>(client,`SELECT ((SELECT count(*) FROM staff_entry_outcomes)+(SELECT count(*) FROM staff_keep_alive_outcomes)
     +(SELECT count(*) FROM clock_clearances)+(SELECT count(*) FROM staff_management_outcomes)+(SELECT count(*) FROM replacement_decisions)+(SELECT count(*) FROM arena_setup_outcomes)
     +(SELECT count(*) FROM content_outcomes)+(SELECT count(*) FROM content_read_audits)
     +(SELECT count(*) FROM validation_preparation_outcomes)+(SELECT count(*) FROM validation_snapshot_audits)
-    +(SELECT count(*) FROM validation_run_outcomes)+(SELECT count(*) FROM validation_run_audits)+1)::integer AS n`);
+    +(SELECT count(*) FROM validation_run_outcomes)+(SELECT count(*) FROM validation_run_audits)+(SELECT count(*) FROM validation_diagnostic_audits)
+    +(SELECT count(*) FROM competition_outcomes WHERE staff_session_id IS NOT NULL)+(SELECT count(*) FROM competition_publications)
+    +(SELECT count(*) FROM content_publication_outcomes)+(SELECT count(*) FROM team_management_outcomes)
+    +(SELECT count(*) FROM registration_import_outcomes)+(SELECT count(*) FROM discipline_outcomes)+(SELECT count(*) FROM submission_review_audits)+operator_staff_outcome_count()+$1)::integer AS n`, [extra]);
   if (!row || row.n>=100000) throw new AccessError("AUDIT_CAPACITY_UNAVAILABLE");
 }
 function sessionView(s: StaffSession) {
@@ -34,9 +37,9 @@ function sessionView(s: StaffSession) {
     expires_at: new Date(expires).toISOString(), absolute_expires_at: s.absolute_expires_at.toISOString(), warning_at: new Date(expires-120000).toISOString() };
 }
 export async function confirmStaffCode(client:PoolClient,s:StaffSession,value:unknown) {
-  let code:string;try{code=canonicalCode(value);}catch{throw new AccessError("INVALID_CODE");}
+  let code:string;try{code=canonicalCode(value);}catch{throw new AccessError("STAFF_CONFIRMATION_REQUIRED");}
   const own=await first<{verifier:Buffer}>(client,"SELECT verifier FROM access_credentials WHERE id=$1 AND version=$2 AND staff_id=$3 AND revoked_at IS NULL",[s.credential_id,s.credential_version,s.staff_id]);
-  if(!own || !sameVerifier(own.verifier,sha256(code)))throw new AccessError("INVALID_CODE");
+  if(!own || !sameVerifier(own.verifier,sha256(code)))throw new AccessError("STAFF_CONFIRMATION_REQUIRED");
 }
 export function staffTimeValid(row: { created_at: Date; absolute_expires_at: Date; last_activity_at: Date }, now: Date) {
   if (now<row.created_at || now<row.last_activity_at) throw new AccessError("CLOCK_UNTRUSTED");
@@ -197,9 +200,22 @@ export function createStaffService(pool: Pool, clock: ClockGuard, delivery: Sess
       const guard=guardFor(true), actor=await service.inspect(cookie,true);
       await staffQuota(pool,guard,actor.staff_id,"READ_STAFF");
       return accessTransaction(pool,guard,async(client) => {
-        await sessionRow(client,cookie,await decisionTime(client,guard),guard,true);
+        const s=await sessionRow(client,cookie,await decisionTime(client,guard),guard,true);
         const h=await first<{ runtime_id: string; fault_generation: string; fault_latched: boolean; state: string; healthy_count: number }>(client,"SELECT runtime_id,fault_generation,fault_latched,state,healthy_count FROM clock_health WHERE id=1");
-        if (!h) throw new AccessError("CLOCK_UNTRUSTED"); return h;
+        if (!h) throw new AccessError("CLOCK_UNTRUSTED");
+        const lifetime=sessionView(s);
+        return {...h,expires_at:lifetime.expires_at,warning_at:lifetime.warning_at};
+      },"SHARED");
+    },
+    async clockOutcome(cookie: unknown, requestKey: string) {
+      uuid(requestKey);
+      const guard=guardFor(true), actor=await service.inspect(cookie,true);
+      await staffQuota(pool,guard,actor.staff_id,"READ_STAFF");
+      return accessTransaction(pool,guard,async client=>{
+        const s=await sessionRow(client,cookie,await decisionTime(client,guard),guard,true);
+        const row=await first<{clearance_id:string;generation:string}>(client,
+          "SELECT id AS clearance_id,generation FROM clock_clearances WHERE staff_id=$1 AND request_key=$2",[s.staff_id,requestKey]);
+        return {status:row?"OBSERVED":"NOT_OBSERVED",outcome:row?{...row,cleared:true}:null};
       },"SHARED");
     },
     async clearClock(cookie: unknown, input: { code: unknown; requestKey: string; runtimeId: string; generation: string; reason: string }) {

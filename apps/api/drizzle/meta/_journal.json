@@ -204,6 +204,265 @@
       "when": 1792477519774,
       "tag": "0028_authoring_poll_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792522584851,
+      "tag": "0029_competition_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792522615401,
+      "tag": "0030_competition_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792522877576,
+      "tag": "0031_competition_case_results",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792522933825,
+      "tag": "0032_competition_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792552890828,
+      "tag": "0033_green_killmonger",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792552902941,
+      "tag": "0034_participant_judging_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792553454609,
+      "tag": "0035_participant_recovery_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792553502711,
+      "tag": "0036_participant_judging_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792553854773,
+      "tag": "0037_participant_queue_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792554827638,
+      "tag": "0038_participant_terminal_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792556667870,
+      "tag": "0039_live_streams",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792556671479,
+      "tag": "0040_live_delivery_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792557097485,
+      "tag": "0041_live_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792558162525,
+      "tag": "0042_live_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792559470751,
+      "tag": "0043_workbench",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792559474633,
+      "tag": "0044_workbench_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792559599876,
+      "tag": "0045_draft_quota",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792559800030,
+      "tag": "0046_draft_live_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792559803803,
+      "tag": "0047_draft_live_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792598663740,
+      "tag": "0048_sharp_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792598673889,
+      "tag": "0049_reviewed_publication",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792600469729,
+      "tag": "0050_team_registration",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792600472236,
+      "tag": "0051_team_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792602312035,
+      "tag": "0052_registration_import",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792602316940,
+      "tag": "0053_registration_import_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792603420901,
+      "tag": "0054_registration_batch_limit",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792604279153,
+      "tag": "0055_discipline_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792604285418,
+      "tag": "0056_discipline_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792604373691,
+      "tag": "0057_discipline_shape",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792604946864,
+      "tag": "0058_discipline_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792606908933,
+      "tag": "0059_round_cancellation",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792606911422,
+      "tag": "0060_cancellation_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792648185292,
+      "tag": "0061_event_maintenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792649710587,
+      "tag": "0062_app_judging_runtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792652548625,
+      "tag": "0063_operator_staff_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792655271907,
+      "tag": "0064_submission_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792658723158,
+      "tag": "0065_validation_diagnostics",
+      "breakpoints": true
     }
   ]
 }

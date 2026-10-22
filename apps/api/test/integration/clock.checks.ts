@@ -13,6 +13,7 @@ import { migrateDatabase } from "../../src/db/migrate.js";
 import { createStaffService } from "../../src/access/staff-service.js";
 import { buildApp } from "../../src/app.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
+import { createWorkerClock } from "../../src/clock/worker-consumer.js";
 
 function syntheticSource() {
   let current = 100n * SECOND;
@@ -58,6 +59,42 @@ export async function clockChecks(t: TestContext, ownerConnection: string, apiCo
       if (index < 6) assert.throws(() => monitor.guard.assertHealthy(), clockDenied);
     }
     monitor.guard.assertHealthy();
+  }
+
+  await t.test("separate worker clock consumes fresh primary reports and persists one immutable fault outside gameplay rollback without clearance authority", async () => isolated(async(owner,_api,_monitorPool,make) => {
+    const {monitor,fake}=make(); await monitor.start(); await establish(monitor,fake);
+    const pool=new Pool({connectionString:owner.options.connectionString!,options:"-c role=ingenium_app_worker",max:2});
+    try {
+      const consumer=createWorkerClock(pool,fake.source);
+      for(let i=0;i<7;i++){if(i){fake.step();await monitor.pollOnce();}await consumer.pollOnce();if(i<6)assert.throws(()=>consumer.guard.assertHealthy(),clockDenied);}
+      await accessTransaction(pool,consumer.guard,async client=>{await client.query("SELECT 1");},"SHARED");
+      consumer.guard.fault("CLOCK_REVERSED"); await consumer.flush(); await consumer.flush();
+      const row=(await owner.query("SELECT runtime_id,fault_latched,fault_generation,fault_reason FROM clock_health WHERE id=1")).rows[0];
+      assert.equal(row.fault_latched,true);assert.equal(row.fault_generation,"1");assert.equal(row.fault_reason,"CLOCK_REVERSED");
+      const events=(await owner.query("SELECT id,reason FROM clock_events WHERE evidence->>'consumer'='APP_JUDGING'")).rows;
+      assert.equal(events.length,1);
+      assert.equal((await pool.query("SELECT record_worker_clock_fault($1,0,$2,$3) AS acknowledged",[row.runtime_id,events[0].id,events[0].reason])).rows[0].acknowledged,true);
+      await assert.rejects(pool.query("SELECT record_worker_clock_fault($1,0,$2,$3)",[row.runtime_id,events[0].id,"WALL_STEP"]),{code:"P0001"});
+      assert.equal((await pool.query("SELECT record_worker_clock_fault($1,0,$2,'WALL_STEP') AS acknowledged",[randomUUID(),randomUUID()])).rows[0].acknowledged,false);
+      await assert.rejects(pool.query("UPDATE clock_health SET fault_latched=false"),{code:"42501"});
+      await assert.rejects(_api.query("SELECT record_worker_clock_fault($1,0,$2,'WALL_STEP')",[row.runtime_id,randomUUID()]),{code:"42501"});
+      for(let i=0;i<7;i++){fake.step();await monitor.pollOnce();await consumer.pollOnce();}
+      assert.equal((await owner.query("SELECT healthy_count FROM clock_health WHERE id=1")).rows[0].healthy_count,7);
+      assert.equal((await pool.query("SELECT record_worker_clock_fault($1,0,$2,'WALL_STEP') AS acknowledged",[row.runtime_id,randomUUID()])).rows[0].acknowledged,false);
+      assert.equal((await owner.query("SELECT healthy_count FROM clock_health WHERE id=1")).rows[0].healthy_count,7);
+      assert.throws(()=>consumer.guard.assertHealthy(),clockDenied);
+      assert.equal((await owner.query("SELECT count(*)::int n FROM clock_events WHERE evidence->>'consumer'='APP_JUDGING'")).rows[0].n,1);
+    } finally {await pool.end();}
+  }));
+  if(process.env.INGENIUM_TEST_SUITE==="worker-clock")return;
+
+  if(process.env.INGENIUM_TEST_SUITE==="clock-browser") {
+    await t.test("restricted timing recovery preserves its incident, resolves lost clearance replies without replay and requires normal sign-in",()=>isolated(async(owner,api,_pool,make)=>{
+      const {monitor,fake}=make(); await monitor.start(); await establish(monitor,fake);
+      const {clockRecoveryBrowserChecks}=await import("./clock-recovery-browser.checks.js");
+      await clockRecoveryBrowserChecks({owner,api,monitor,fake});
+    }));
+    return;
   }
 
   await t.test("real clock guard permits entry only after fresh observations; round reversal persists independently of rollback", async () => isolated(async (owner, api, _pool, make) => {
@@ -240,15 +277,28 @@ export async function clockChecks(t: TestContext, ownerConnection: string, apiCo
       const status=await send("/api/v1/staff/recovery/clock"); assert.equal(status.statusCode,200);
       const state=status.json().data;
       const body={own_code:other.code,request_key:randomUUID(),runtime_id:state.runtime_id,generation:state.fault_generation,reason:"Synthetic operator confirmed restored primary time"};
-      assert.equal((await send("/api/v1/staff/recovery/clock/clear",body,token)).statusCode,401);
+      const outcomePath=`/api/v1/staff/recovery/clock/outcomes/${body.request_key}`;
+      assert.deepEqual((await send(outcomePath)).json().data,{status:"NOT_OBSERVED",outcome:null});
+      assert.equal((await send("/api/v1/staff/recovery/clock/outcomes/invalid")).statusCode,400);
+      const refused=await send("/api/v1/staff/recovery/clock/clear",body,token);
+      assert.equal(refused.statusCode,403); assert.equal(refused.json().error.code,"STAFF_CONFIRMATION_REQUIRED");
+      assert.equal((await staff.inspect(sessionCookie,true)).session_id,active.json().data.session.session_id);
       assert.equal((await owner.query("SELECT count(*)::integer AS n FROM clock_clearances")).rows[0].n,0);
       assert.equal((await send("/api/v1/staff/recovery/clock/clear",{...body,own_code:manager.code},verified.json().data.csrf_token)).statusCode,403);
       const valid={...body,own_code:manager.code};
+      const otherFlow=await staff.beginRecovery(other.code,{ip:"127.0.0.1",browserId:randomUUID()});
+      const otherSession=await staff.activate(otherFlow.proofCookie,randomUUID(),true);
       const cleared=await send("/api/v1/staff/recovery/clock/clear",valid,token); assert.equal(cleared.statusCode,200);
       const activity=(await owner.query("SELECT last_activity_at FROM staff_sessions WHERE id=$1",[active.json().data.session.session_id])).rows;
       const retry=await send("/api/v1/staff/recovery/clock/clear",valid,token); assert.equal(retry.statusCode,200); assert.deepEqual(retry.json().data,cleared.json().data);
       assert.deepEqual((await owner.query("SELECT last_activity_at FROM staff_sessions WHERE id=$1",[active.json().data.session.session_id])).rows,activity);
       assert.equal((await owner.query("SELECT count(*)::integer AS n FROM clock_clearances")).rows[0].n,1);
+      const recovered=await send(outcomePath); assert.equal(recovered.statusCode,200);
+      assert.deepEqual(recovered.json().data,{status:"OBSERVED",outcome:cleared.json().data});
+      assert.match(recovered.headers["cache-control"] as string,/no-store/);
+      assert.deepEqual((await owner.query("SELECT last_activity_at FROM staff_sessions WHERE id=$1",[active.json().data.session.session_id])).rows,activity);
+      assert.deepEqual(await staff.clockOutcome(otherSession.sessionCookie,body.request_key),{status:"NOT_OBSERVED",outcome:null});
+      assert.doesNotMatch(recovered.body,/own_code|Synthetic operator|verifier|ciphertext/);
       assert.deepEqual((await owner.query("SELECT * FROM rounds WHERE id=$1",[round])).rows,beforeRound);
       await assert.rejects(owner.query("UPDATE clock_clearances SET reason='rewrite'"),{code:"P0001"});
       assert.equal((await send("/ready")).statusCode,503);

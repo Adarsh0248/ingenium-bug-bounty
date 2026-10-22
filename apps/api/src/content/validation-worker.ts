@@ -9,8 +9,8 @@ import { judgeTransaction } from "./judge-transaction.js";
 export async function expireValidationRuns(pool:Pool,clock:ClockGuard){
   return judgeTransaction(pool,clock,async client=>{await client.query("SELECT * FROM lock_validation_judge()");await decisionTime(client,clock);await client.query("SELECT expire_validation_run()");});
 }
-export function createValidationWorker(pool:Pool,clock:ClockGuard,driver:TrustedAuthoringDriver){
-  const workerId=randomUUID();let generation:string|undefined,busy=false;
+export function createValidationWorker(pool:Pool,clock:ClockGuard,driver:TrustedAuthoringDriver,workerId=randomUUID()){
+  let generation:string|undefined,busy=false;
   async function payload(client:PoolClient,checkId:string,attemptId:string){
     const row=await first<{run_id:string;host_epoch_id:string;runtime_key:string;digest:Buffer;language:AuthoringPayload["language"];source_role:AuthoringPayload["sourceRole"];check_type:AuthoringPayload["checkType"];
       starter_code:Buffer;reference_code:Buffer;input_data:Buffer|null;expected_output:Buffer|null;cpu_ms:number;wall_ms:number;memory_kb:number;checker_mode:"TOKENS"|"EXACT_TEXT"}>(client,

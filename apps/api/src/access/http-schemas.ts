@@ -30,8 +30,9 @@ export const staffActivationBody = object({ request_key: id });
 export const clockClearBody = object({ own_code: verifyBody.properties.code, request_key: id, runtime_id: id,
   generation: { type: "string", pattern: "^[1-9][0-9]{0,18}$" }, reason: { type: "string", minLength: 1, maxLength: 1024 } });
 export const clockStatus = object({ runtime_id: id, fault_generation: { type: "string", maxLength: 19 }, fault_latched: { type: "boolean" },
-  state: { type: "string", enum: ["FAULT","HEALTHY","WARNING"] }, healthy_count: { type: "integer", const: 7 } });
+  state: { type: "string", enum: ["FAULT","HEALTHY","WARNING"] }, healthy_count: { type: "integer", const: 7 },expires_at:instant,warning_at:instant });
 export const clockClearData = object({ clearance_id: id, generation: { type: "string", maxLength: 19 }, cleared: { type: "boolean", const: true } });
+export const clockOutcomeData = object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[clockClearData,{type:"null"}]}});
 const error = object({ schema_version: { const: 1, type: "integer" }, trace_id: id,
   error: object({ code: { type: "string", maxLength: 64 }, outcome: { type: "string", enum: ["NOT_PROCESSED", "UNKNOWN"] } }) });
 export const envelope = (data: unknown) => object({ schema_version: { const: 1, type: "integer" }, trace_id: id, data });
@@ -83,6 +84,47 @@ export const staffManagementData=object({outcome:staffManagementReceipt,issued_c
 export const staffListData=object({control_revision:revision,items:{type:"array",maxItems:50,items:object({...staffStateProperties,has_active_code:{type:"boolean"}})},next_after:nullableId});
 export const staffOutcomeParams=object({action:{type:"string",enum:["CREATE","UPDATE","ROTATE"]},target:{anyOf:[id,{type:"string",const:"security"}]},request_key:id});
 export const staffOutcomeData=object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[staffManagementReceipt,{type:"null"}]}});
+export const teamCreateBody=object({...managementBase,team_name:name,member_one:name,member_two:name});
+const disciplineAction={type:"string",enum:["BLOCK","UNBLOCK","PENALISE","REVERSE"]};
+const nullableMinutes={anyOf:[{type:"integer",minimum:1,maximum:300},{type:"null"}]};
+export const disciplineBody=object({...managementBase,action:disciplineAction,arena_id:id,team_id:id,member_id:nullableId,
+  round_id:nullableId,block_id:nullableId,original_id:nullableId,minutes:nullableMinutes});
+export const disciplineQuery=object({arena_id:id,team_id:id,round_id:id,after:id},["arena_id","team_id","round_id"]);
+const disciplineProperties={outcome_id:id,request_key:id,action:disciplineAction,arena_id:id,team_id:id,member_id:nullableId,
+  round_id:nullableId,block_id:nullableId,original_id:nullableId,minutes:nullableMinutes,expected_revision:revision,
+  outcome:{type:"string",enum:["APPLIED","REJECTED"]},reason:{anyOf:[{type:"string",enum:["STALE_VERSION","ARENA_UNAVAILABLE","ROUND_UNAVAILABLE","ALREADY_BLOCKED","ALREADY_CLEARED","PENALTY_CAP","ALREADY_REVERSED"]},{type:"null"}]},recorded_at:instant};
+const disciplineReceipt=object(disciplineProperties);
+export const disciplineData=object({outcome:disciplineReceipt});
+export const disciplineOutcomeData=object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[disciplineReceipt,{type:"null"}]}});
+export const disciplineListData=object({current:{type:"boolean"},security_revision:revision,round_revision:revision,state:sessionSchema.properties.round_state,
+  enrolled:{type:"boolean"},manual_minutes:{type:"integer",minimum:0,maximum:300},
+  blocks:{type:"array",maxItems:3,items:object({block_id:id,member_id:nullableId,created_at:instant,reason})},
+  items:{type:"array",maxItems:50,items:object({...disciplineProperties,audit_reason:reason,actor_id:id,actor_name:name,reversed:{type:"boolean"}})},next_after:nullableId});
+export const teamTargetParams=object({team_id:id});
+export const teamManagementReceipt=object({outcome_id:id,request_key:id,action:{type:"string",enum:["CREATE","ROTATE"]},target_team_id:nullableId,
+  expected_revision:revision,outcome:{type:"string",enum:["APPLIED","REJECTED"]},reason:{anyOf:[{type:"string",enum:["STALE_VERSION","TEAM_CAPACITY","TEAM_INCOMPLETE"]},{type:"null"}]},
+  result_team_id:nullableId,code_version:{anyOf:[revision,{type:"null"}]},recorded_at:instant});
+export const teamManagementData=object({outcome:teamManagementReceipt,issued_code:{anyOf:[{type:"string",pattern:"^[A-Z2-7]{32}$"},{type:"null"}]}});
+export const teamOutcomeData=object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[teamManagementReceipt,{type:"null"}]}});
+export const teamListData=object({control_revision:revision,total:{type:"integer",minimum:0},items:{type:"array",maxItems:50,items:object({team_id:id,team_name:name,
+  registration_id:{anyOf:[{type:"string",maxLength:64},{type:"null"}]},members:{type:"array",maxItems:2,items:object({member_id:id,member_name:name,position:{type:"integer",enum:[1,2]}})},code_version:revision,has_active_code:{type:"boolean"}})},next_after:nullableId});
+const csvText={type:"string",minLength:1,maxLength:1048576};
+const csvDigest={type:"string",pattern:"^[0-9a-f]{64}$"};
+const registrationId={type:"string",pattern:"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"};
+const importItem=object({row:{type:"integer",minimum:2,maximum:101},registration_id:registrationId,team_id:nullableId,
+  status:{type:"string",enum:["NEW","CREATED","EXISTING","CONFLICT"]}});
+export const registrationPreviewBody=object({csv:csvText});
+export const registrationImportBody=object({...managementBase,csv:csvText,csv_digest:csvDigest});
+export const registrationPreviewData=object({csv_digest:{anyOf:[csvDigest,{type:"string",const:""}]},control_revision:revision,total:{type:"integer",minimum:0},
+  rows:{type:"array",maxItems:100,items:object({...importItem.properties,team_name:name,member_1_name:name,member_2_name:name})},
+  issues:{type:"array",maxItems:500,items:object({row:{type:"integer",minimum:0,maximum:101},field:{type:"string",maxLength:64},code:{type:"string",maxLength:64}})},
+  new_count:{type:"integer",minimum:0,maximum:100},existing_count:{type:"integer",minimum:0,maximum:100},can_import:{type:"boolean"},
+  reason:{anyOf:[{type:"string",enum:["INVALID_CSV","REGISTRATION_CONFLICT","TEAM_CAPACITY"]},{type:"null"}]}});
+export const registrationReceipt=object({outcome_id:id,request_key:id,expected_revision:revision,csv_digest:csvDigest,outcome:{type:"string",enum:["APPLIED","UNCHANGED","REJECTED"]},
+  reason:{anyOf:[{type:"string",enum:["STALE_VERSION","REGISTRATION_CONFLICT","TEAM_CAPACITY"]},{type:"null"}]},
+  items:{type:"array",minItems:1,maxItems:100,items:importItem},recorded_at:instant});
+export const registrationImportData=object({outcome:registrationReceipt,issued_codes:{type:"array",maxItems:100,items:object({registration_id:registrationId,team_id:id,code:{type:"string",pattern:"^[A-Z2-7]{32}$"}})}});
+export const registrationOutcomeData=object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[registrationReceipt,{type:"null"}]}});
 const duration = { type: "integer", minimum: 1, maximum: 18000000 };
 export const arenaSetupBody = object({ request_key: id, expected_revision: revision, duration_ms: duration,
   team_ids: { type: "array", maxItems: 100, uniqueItems: true, items: id }, reason });
@@ -145,6 +187,9 @@ export const validationOutcomeParams = object({ version_id:id,request_key:id });
 export const validationOutcomeData = object({ status:{ type:"string",enum:["OBSERVED","NOT_OBSERVED"] },outcome:{ anyOf:[validationPrepareReceipt,{ type:"null" }] } });
 export const validationSnapshotParams = object({ snapshot_id:id });
 export const validationRunParams = object({run_id:id});
+export const validationSnapshotsPage = object({items:{type:"array",maxItems:50,items:object({snapshot_id:id,content_revision:revision,fingerprint:{type:"string",pattern:"^[0-9a-f]{64}$"},created_at:instant})},next_after:nullableId});
+export const validationRunsPage = object({items:{type:"array",maxItems:50,items:object({run_id:id,status:{type:"string",enum:["QUEUED","RUNNING","PASSED","FAILED","INFRA_ERROR"]},created_at:instant,deadline_at:instant,finished_at:{anyOf:[instant,{type:"null"}]},physical_pending:{type:"boolean"}})},next_after:nullableId,
+  publication:{anyOf:[object({run_id:id,published_at:instant}),{type:"null"}]}});
 export const validationRunOutcomeParams = object({snapshot_id:id,request_key:id});
 export const validationRunReceipt = object({outcome_id:id,snapshot_id:id,request_key:id,expected_revision:revision,outcome:{type:"string",enum:["ADMITTED","REJECTED"]},
   reason:{anyOf:[{type:"string",enum:["STALE_VERSION","CONTENT_LOCKED","ARENA_ACTIVE"]},{type:"null"}]},recorded_at:instant,run_id:nullableId});
@@ -155,7 +200,7 @@ export const validationRunReport = object({run_id:id,snapshot_id:id,configuratio
   created_at:instant,deadline_at:instant,started_at:optionalInstant,finished_at:optionalInstant,physical_pending:{type:"boolean"},can_publish:{type:"boolean",const:false},
   checks:{type:"array",minItems:15,maxItems:115,items:object({check_id:id,language:lang,source_role:{type:"string",enum:["REFERENCE","STARTER"]},check_type:{type:"string",enum:["TEST_CASE","COMPILATION"]},case_id:nullableId,
     witness_position:{anyOf:[level,{type:"null"}]},expected_result:validationResult,result:{anyOf:[validationResult,{type:"null"}]},available_at:instant,completed_at:optionalInstant,
-    attempts:{type:"integer",minimum:0,maximum:3},physical_pending:{type:"boolean"}})}});
+    attempts:{type:"integer",minimum:0,maximum:3},physical_pending:{type:"boolean"},dispatches:{type:"array",maxItems:3,items:object({id,number:{type:"integer",minimum:1,maximum:3},result:{anyOf:[validationResult,{type:"null"}]},resolved_at:optionalInstant,physical_pending:{type:"boolean"}})}})}});
 export const validationSnapshotData = object({ snapshot_id:id,version_id:id,content_revision:revision,fingerprint:{ type:"string",pattern:"^[0-9a-f]{64}$" },
   created_at:instant,planned_checks:{ type:"integer",minimum:15,maximum:115 },validation_run_id:{ type:"null" },...notExecutable,
   checks:{ type:"array",maxItems:115,items:object({ check_id:id,position:{ type:"integer",minimum:1,maximum:115 },variant_id:id,language:lang,

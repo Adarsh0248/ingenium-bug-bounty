@@ -15,9 +15,14 @@ import { accessChecks } from "./access.checks.js";
 import { clockChecks } from "./clock.checks.js";
 import { staffChecks } from "./staff.checks.js";
 import { staffManagementChecks } from "./staff-management.checks.js";
+import { staffRecoveryChecks } from "./staff-recovery.checks.js";
+import { teamManagementChecks } from "./team-management.checks.js";
+import { registrationImportChecks } from "./registration-import.checks.js";
 import { arenaChecks } from "./arena.checks.js";
 import { contentChecks } from "./content.checks.js";
 import { validationChecks } from "./validation.checks.js";
+import { judgeGatewayChecks } from "./judge-gateway.checks.js";
+import { competitionChecks } from "./competition.checks.js";
 
 const exec = promisify(execFile);
 const IMAGE = "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826";
@@ -44,7 +49,7 @@ async function waitForDatabase(connectionString: string): Promise<void> {
   throw new Error("The disposable PostgreSQL test database did not become ready.");
 }
 
-test("registration migrations work on isolated PostgreSQL and preserve their constraints on repeat application", { timeout: 180000 }, async (t) => {
+test("registration migrations work on isolated PostgreSQL and preserve their constraints on repeat application", { timeout: 600000 }, async (t) => {
   assert.equal((await lstat(roleScript)).isFile(), true, "The reviewed role script must be a regular file before mounting it.");
   const nonce = randomUUID();
   const password = randomBytes(24).toString("hex");
@@ -86,6 +91,17 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     url.password = apiPassword;
     const apiUrl = url.toString();
     api = new Pool({ connectionString: apiUrl, max: 4, connectionTimeoutMillis: 2000 });
+    if(process.env.INGENIUM_TEST_SUITE==="staff-recovery"){await staffRecoveryChecks(t,ownerUrl,apiUrl,container);return;}
+    if(process.env.INGENIUM_TEST_SUITE==="staff-management"){await staffManagementChecks(t,ownerUrl,apiUrl);return;}
+    if (["clock","worker-clock","clock-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await clockChecks(t,ownerUrl,apiUrl); return; }
+    if(["worker-validation","diagnostics","diagnostics-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){await validationChecks(t,ownerUrl,apiUrl);return;}
+    if(process.env.INGENIUM_TEST_SUITE==="imports"){await registrationImportChecks(t,ownerUrl,apiUrl);return;}
+    if(process.env.INGENIUM_TEST_SUITE==="teams"){await teamManagementChecks(t,ownerUrl,apiUrl);return;}
+    if (["competition", "worker", "maintenance", "participant", "live", "workbench", "history", "history-browser", "judging", "judging-browser", "review", "review-browser", "browser", "registration-browser", "discipline", "discipline-browser", "cancellation", "cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await competitionChecks(t, ownerUrl, apiUrl); return; }
+    await teamManagementChecks(t,ownerUrl,apiUrl);
+    await registrationImportChecks(t,ownerUrl,apiUrl);
+    await judgeGatewayChecks(t, ownerUrl);
+    await competitionChecks(t, ownerUrl, apiUrl);
 
     await t.test("names are labels, members have stable UUIDs and exactly two distinct positions", async () => {
       const first = await db.insert(teams).values({ displayName: "Same team label" }).returning();
@@ -165,6 +181,7 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     await accessChecks(t, owner, api);
     await staffChecks(t, owner, api);
     await staffManagementChecks(t, ownerUrl, apiUrl);
+    await staffRecoveryChecks(t, ownerUrl, apiUrl,container);
     await arenaChecks(t, ownerUrl, apiUrl);
     await contentChecks(t, ownerUrl, apiUrl);
     await validationChecks(t, ownerUrl, apiUrl);

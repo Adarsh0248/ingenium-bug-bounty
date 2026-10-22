@@ -1,7 +1,8 @@
 # Staff-Approved Browser Replacement
 
-This is the protected backend flow, not a finished participant/staff interface
-or public deployment. It uses the existing cookie, CSRF, clock, PostgreSQL and
+This describes the protected backend flow. The [normal staff Access view](staff-access-ui.md)
+and participant request/restoration screens now connect it; this is not public
+deployment or completion of every recovery workflow. It uses cookie, CSRF, clock, PostgreSQL and
 encrypted-delivery components, with no new dependency or application Redis.
 
 ## One Fixed Window
@@ -90,8 +91,9 @@ physical cleanup. Scheduled bounded expiry/ciphertext/quota cleanup is still
 required; do not delete/reset histories, permits or database guards to clear a
 request. Fresh-request retirement is not a complete cleanup worker.
 
-Participant/staff screens, authorised live notifications, full outbox/audit
-delivery, other app features, real browser/host operation and event-capacity /
-recovery rehearsals remain unimplemented or unverified. Default local startup
+Authorised replacement live notifications, full outbox/audit delivery, other app
+features, actual host operation and event-capacity/recovery rehearsals remain
+unimplemented or unverified. The normal participant/staff browser flow is checked
+with a real API and disposable database. Default local startup
 still exposes health/readiness only without explicit protected Linux runtime
 wiring. These tests do not create real event access or prove launch readiness.

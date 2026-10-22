@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { bigint, check, customType, foreignKey, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { accessCredentials, staffIdentities } from "./access-schema.js";
 import { staffSessions } from "./staff-schema.js";
 import { runtimeManifests } from "./content-schema.js";
 import { validationSnapshots, validationSnapshotChecks } from "./validation-schema.js";
+import { participantAttempts } from "./participant-judge-schema.js";
 
 const bytes = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 const id = () => uuid("id").primaryKey().$defaultFn(randomUUID);
@@ -26,8 +27,10 @@ export const judgeControl = pgTable("judge_control", {
   or (num_nonnulls(${t.workerId},${t.leaseUntil},${t.hostEpochId})=3 and ${t.workerGeneration}>0))`)]);
 export const executionCapacitySlots = pgTable("execution_capacity_slots", {
   id:integer("id").primaryKey(),authoringAttemptId:uuid("authoring_attempt_id").references(():AnyPgColumn=>authoringAttempts.id,{onDelete:"restrict"}),
+  participantAttemptId:uuid("participant_attempt_id").references(():AnyPgColumn=>participantAttempts.id,{onDelete:"restrict"}),
   revision:bigint("revision",{mode:"bigint"}).notNull().default(sql`0`),
-},t=>[unique("slot_authoring_attempt_once").on(t.authoringAttemptId),check("development_slot_bounds",sql`${t.id} between 1 and 2 and ${t.revision}>=0`)]);
+},t=>[unique("slot_authoring_attempt_once").on(t.authoringAttemptId),unique("slot_participant_attempt_once").on(t.participantAttemptId),
+  check("slot_one_purpose",sql`num_nonnulls(${t.authoringAttemptId},${t.participantAttemptId})<=1`),check("development_slot_bounds",sql`${t.id} between 1 and 2 and ${t.revision}>=0`)]);
 export const validationRuns = pgTable("validation_runs", {
   id:id(),snapshotId:uuid("snapshot_id").notNull().references(()=>validationSnapshots.id,{onDelete:"restrict"}),configurationFingerprint:bytes("configuration_fingerprint").notNull(),
   hostEpochId:uuid("host_epoch_id").notNull().references(()=>judgeHostEpochs.id,{onDelete:"restrict"}),status:text("status").notNull(),
@@ -85,3 +88,12 @@ export const validationRunAudits = pgTable("validation_run_audits", {
   credentialId:uuid("credential_id").notNull(),credentialVersion:bigint("credential_version",{mode:"bigint"}).notNull(),recordedAt:instant("recorded_at").notNull(),
 },t=>[foreignKey({name:"validation_report_actor_session",columns:[t.sessionId,t.actorId],foreignColumns:[staffSessions.id,staffSessions.staffId]}).onDelete("restrict"),
   foreignKey({name:"validation_report_actor_code",columns:[t.credentialId,t.credentialVersion,t.actorId],foreignColumns:[accessCredentials.id,accessCredentials.version,accessCredentials.staffId]}).onDelete("restrict")]);
+
+export const validationDiagnosticAudits = pgTable("validation_diagnostic_audits", {
+  id:id(),runId:uuid("run_id").notNull().references(()=>validationRuns.id),attemptId:uuid("attempt_id").notNull().references(()=>authoringAttempts.id),
+  actorId:uuid("actor_id").notNull(),sessionId:uuid("session_id").notNull(),credentialId:uuid("credential_id").notNull(),credentialVersion:bigint("credential_version",{mode:"bigint"}).notNull(),
+  requestKey:uuid("request_key").notNull(),fingerprint:bytes("fingerprint").notNull(),reason:text("reason").notNull(),resultDigest:bytes("result_digest").notNull(),recordedAt:instant("recorded_at").notNull(),
+},t=>[foreignKey({name:"validation_diagnostic_session",columns:[t.sessionId,t.actorId],foreignColumns:[staffSessions.id,staffSessions.staffId]}),
+  foreignKey({name:"validation_diagnostic_credential",columns:[t.credentialId,t.credentialVersion,t.actorId],foreignColumns:[accessCredentials.id,accessCredentials.version,accessCredentials.staffId]}),
+  unique("validation_diagnostic_intent").on(t.actorId,t.runId,t.requestKey),index("validation_diagnostic_history").on(t.runId,t.recordedAt,t.id),
+  check("validation_diagnostic_shape",sql`octet_length(${t.fingerprint})=32 and octet_length(${t.resultDigest})=32 and octet_length(${t.reason}) between 1 and 1024 and length(btrim(${t.reason}))>0`)]);

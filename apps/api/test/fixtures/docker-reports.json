@@ -1,0 +1,47 @@
+{
+  "daemon": {
+    "ID": "00000000-0000-4000-8000-000000000001",
+    "Name": "synthetic-judge-host",
+    "ServerVersion": "29.9.1",
+    "KernelVersion": "6.8.0-synthetic",
+    "OSType": "linux",
+    "Architecture": "x86_64",
+    "CgroupVersion": "1",
+    "CgroupDriver": "cgroupfs",
+    "Driver": "overlayfs",
+    "DockerRootDir": "/var/lib/docker",
+    "DefaultRuntime": "runc",
+    "InitBinary": "docker-init",
+    "ExperimentalBuild": false,
+    "LiveRestoreEnabled": false,
+    "Swarm": { "LocalNodeState": "inactive" },
+    "MemoryLimit": true,
+    "SwapLimit": true,
+    "CpuCfsPeriod": true,
+    "CpuCfsQuota": true,
+    "PidsLimit": true,
+    "SecurityOptions": ["name=apparmor", "name=seccomp,profile=builtin"],
+    "Runtimes": { "runc": { "path": "runc", "runtimeArgs": [] }, "io.containerd.runc.v2": { "path": "runc", "runtimeArgs": [] } },
+    "ContainerdCommit": { "ID": "1111111111111111111111111111111111111111" },
+    "RuncCommit": { "ID": "2222222222222222222222222222222222222222" },
+    "InitCommit": { "ID": "3333333333333333333333333333333333333333" },
+    "Warnings": null
+  },
+  "image": {
+    "Id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "Os": "linux",
+    "Architecture": "amd64",
+    "Variant": "",
+    "RootFS": { "Type": "layers", "Layers": ["sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"] },
+    "Config": {
+      "User": "0:0",
+      "WorkingDir": "/",
+      "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C.UTF-8"],
+      "Entrypoint": null,
+      "Cmd": null,
+      "Volumes": null,
+      "Healthcheck": { "Test": ["NONE"] },
+      "Labels": { "ingenium.fixture": "synthetic-not-approved" }
+    }
+  }
+}

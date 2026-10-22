@@ -8,6 +8,7 @@
   },
   "packageManager": "npm@11.19.1",
   "overrides": {
+    "monaco-editor": {"dompurify": "3.4.17"},
     "@esbuild-kit/core-utils": {
       "esbuild": "0.25.12"
     }
@@ -15,12 +16,24 @@
   "scripts": {
     "setup:env": "node scripts/setup-env.mjs",
     "dev": "npm run dev --workspace @ingenium/api",
-    "build": "npm run build --workspace @ingenium/api",
+    "dev:web": "npm run dev --workspace @ingenium/web --",
+    "preview:participant": "npm run preview:participant --workspace @ingenium/web",
+    "test:browser": "npm run test:browser --workspace @ingenium/web --",
+    "test:browser:db": "node apps/web/test/real-backend.mjs",
+    "build": "npm run build --workspaces --if-present",
     "start": "npm run start --workspace @ingenium/api",
-    "typecheck": "npm run typecheck --workspace @ingenium/api",
-    "test": "npm run test --workspace @ingenium/api",
+    "start:judging": "npm run start:judging --workspace @ingenium/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "test:db": "npm run test:db --workspace @ingenium/api",
     "test:db:schema": "npm run test:db:schema --workspace @ingenium/api",
+    "test:worker:runtime": "npm run test:worker:runtime --workspace @ingenium/api",
+    "test:judge:launcher": "npm run test:judge:launcher --workspace @ingenium/api",
+    "test:judge:installation": "npm run test:judge:installation --workspace @ingenium/api",
+    "test:judge:capsule": "npm run test:judge:capsule --workspace @ingenium/api",
+    "test:judge:storage": "npm run test:judge:storage --workspace @ingenium/api",
+    "test:judge:phase": "npm run test:judge:phase --workspace @ingenium/api",
+    "test:judge:workspace": "npm run test:judge:workspace --workspace @ingenium/api",
     "db:generate": "npm run db:generate --workspace @ingenium/api",
     "db:migrate": "npm run db:migrate --workspace @ingenium/api",
     "db:up": "docker compose --env-file .env.database up -d --wait postgres",

@@ -1,0 +1,6 @@
+ALTER TABLE "registration_import_outcomes" DROP CONSTRAINT "registration_import_shape";--> statement-breakpoint
+ALTER TABLE "registration_import_outcomes" ADD CONSTRAINT "registration_import_shape" CHECK ("registration_import_outcomes"."expected_revision">=0 and octet_length("registration_import_outcomes"."csv_digest")=32 and octet_length("registration_import_outcomes"."fingerprint")=32
+    and octet_length("registration_import_outcomes"."reason") between 1 and 1024 and btrim("registration_import_outcomes"."reason")<>''
+    and jsonb_typeof("registration_import_outcomes"."items")='array' and jsonb_array_length("registration_import_outcomes"."items") between 1 and 100 and octet_length("registration_import_outcomes"."items"::text)<=524288
+    and (("registration_import_outcomes"."outcome" in ('APPLIED','UNCHANGED') and "registration_import_outcomes"."denial_reason" is null) or ("registration_import_outcomes"."outcome"='REJECTED' and "registration_import_outcomes"."denial_reason" is not null
+      and "registration_import_outcomes"."denial_reason" in ('STALE_VERSION','REGISTRATION_CONFLICT','TEAM_CAPACITY'))));

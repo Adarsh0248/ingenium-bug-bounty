@@ -1,6 +1,6 @@
-import { constants } from "node:fs";
-import { open } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { privateRuntimeJson } from "../runtime/private-file.js";
+import { parseCompetitionRuntime } from "../worker/config.js";
+import { competitionRuntime } from "../worker/readiness.js";
 import type { Pool } from "pg";
 import { browserPolicy } from "./browser-policy.js";
 import { sessionDelivery } from "./credentials.js";
@@ -20,21 +20,13 @@ export function parseEntrySecrets(value: unknown) {
 }
 
 async function readSecrets(path: string) {
-  if (!isAbsolute(path)) throw new Error("Entry runtime file must be an absolute private path.");
-  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try {
-    const stat = await file.stat();
-    if (!stat.isFile() || stat.size < 1 || stat.size > 4096 || (stat.mode & 0o077) || ![0, process.getuid?.()].includes(stat.uid)) throw new Error("Entry runtime file must be a private service-owned regular file.");
-    const buffer = Buffer.alloc(4097);
-    const result = await file.read(buffer, 0, buffer.length, 0);
-    if (result.bytesRead > 4096) throw new Error("Oversized entry runtime file.");
-    return parseEntrySecrets(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, result.bytesRead))));
-  } finally { await file.close(); }
+  return parseEntrySecrets(await privateRuntimeJson(path, 4096));
 }
 
-export async function createEntryRuntime(pool: Pool, monitorPool: Pool, path: string) {
+export async function createEntryRuntime(pool: Pool, monitorPool: Pool, path: string, competitionPath?: string) {
   const source = await linuxClockSource();
   const secrets = await readSecrets(path);
+  const competition = competitionPath ? parseCompetitionRuntime(await privateRuntimeJson(competitionPath, 8192)) : undefined;
   const monitor = createClockMonitor(monitorPool, source);
   await monitor.start();
   let closing = false;
@@ -46,7 +38,8 @@ export async function createEntryRuntime(pool: Pool, monitorPool: Pool, path: st
     });
   };
   tick();
-  const options: EntryHttpOptions = { pool, clock: monitor.guard, recoveryClock: monitor.recoveryGuard, ...secrets };
+  const options: EntryHttpOptions = { pool, clock: monitor.guard, recoveryClock: monitor.recoveryGuard, ...secrets,
+    ...(competition ? { competition: competitionRuntime(pool, monitor.guard, competition) } : {}) };
   return { options,
     async close() {
       closing = true;

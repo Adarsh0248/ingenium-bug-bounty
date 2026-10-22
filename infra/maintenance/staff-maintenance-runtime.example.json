@@ -1,0 +1,4 @@
+{
+  "schema_version": 1,
+  "database_url": "postgresql://REPLACE_SCHEMA_OWNER:REPLACE_PRIVATE_PASSWORD@127.0.0.1:5432/REPLACE_DATABASE"
+}

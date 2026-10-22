@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes,randomUUID } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
 import type { TestContext } from "node:test";
-import type { Pool } from "pg";
+import { Pool } from "pg";
 import { LANGUAGES,sha256 } from "../../src/access/credentials.js";
 import type { SessionDelivery } from "../../src/access/credentials.js";
 import { AccessError } from "../../src/access/transaction.js";
@@ -11,10 +11,14 @@ import { createValidationRunService } from "../../src/content/validation-runs.js
 import { createValidationWorker,expireValidationRuns } from "../../src/content/validation-worker.js";
 import { authoringPayloadDigest } from "../../src/content/execution-policy.js";
 import type { AuthoringPayload,TrustedAuthoringDriver } from "../../src/content/execution-policy.js";
+import { acceptJudgeReply } from "../../src/content/judge-protocol.js";
+import { judgeReply } from "../fixtures/judge.js";
 import { buildApp } from "../../src/app.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
+import { assertWorkerDatabase,startJudgingWorker } from "../../src/worker/judging.js";
+import { validationDiagnosticChecks } from "./validation-diagnostic.checks.js";
 
-interface Person {id:string;sessionCookie:string;session:{session_id:string};}
+interface Person {id:string;code:string;sessionCookie:string;session:{session_id:string};}
 export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,clock:ClockGuard,delivery:SessionDelivery,person:(role?:string)=>Promise<Person>,snapshotId:string,expected:string){
   const service=createValidationRunService(api,clock,delivery),hostEpochId=randomUUID();
   const snapshot=(await owner.query("SELECT * FROM validation_snapshots WHERE id=$1",[snapshotId])).rows[0];
@@ -38,6 +42,15 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
       if(!targetCheck && ["INFRA","FAIL_REFERENCE"].includes(mode))targetCheck=p.checkId;
       const kind=mode==="INFRA" && targetCheck===p.checkId?"INFRA_ERROR":"NORMAL";
       const observation=result(p,kind,!(mode==="HOLD" && targetCheck===p.checkId));
+      if(mode==="DIAGNOSTIC"){
+        observation.stdout=Buffer.alloc(16385,120);
+        observation.stderr=Buffer.concat([Buffer.from('\ufeff<script>window.diagnosticExecuted=true</script>\0\r\n'),Buffer.alloc(65536,101)]).subarray(0,65536);
+        observation.compiler_output=Buffer.concat([Buffer.from('Synthetic private compiler diagnostic\r\n'),Buffer.alloc(65536,99)]).subarray(0,65536);
+        observation.stderr_truncated=true;observation.compiler_output_truncated=true;
+      }
+      if(mode==="WIRE"){
+        const nonce=randomUUID();return acceptJudgeReply(judgeReply(p,nonce,observation.stdout),p,nonce,201);
+      }
       if(mode==="FAIL_REFERENCE" && p.checkId===targetCheck)observation.stdout=Buffer.from("synthetic incorrect reference");
       saved.set(p.attemptId,observation);
       if(mode==="LOST_REPLY"){mode="NORMAL";throw new Error("Synthetic lost POST reply");}
@@ -164,6 +177,29 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
     assert.equal((await owner.query(`SELECT committed_bytes=(SELECT sum(n) FROM (SELECT content_bytes AS n FROM bug_versions UNION ALL SELECT content_bytes FROM validation_snapshots UNION ALL SELECT accounted_bytes FROM validation_runs) q) AS exact FROM catalogue_control`)).rows[0].exact,true);
     assert.equal((await owner.query("SELECT bool_and(accounted_bytes<524288+check_count::bigint*3*262144) AS released FROM validation_runs")).rows[0].released,true);
   });
+  await t.test("decoded synthetic wire evidence is retained privately through real worker settlement without exposing provider identity in reports",async()=>{
+    mode="WIRE";const run=await start();assert.equal(await finish(run),"PASSED");
+    const rows=(await owner.query("SELECT a.evidence FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1",[run])).rows;
+    assert.equal(rows.length,15);assert.ok(rows.every(r=>r.evidence.supervisor_evidence.protocol==="ingenium-authoring-v1"));
+    assert.ok(rows.every(r=>r.evidence.supervisor_evidence.metadata.run.tree_accounted===true));
+    const report=await service.report((await person()).sessionCookie,run);
+    assert.doesNotMatch(JSON.stringify(report),/provider_token|supervisor_evidence|payload_digest/);mode="NORMAL";
+  });
+  if([undefined,"worker-validation","diagnostics","diagnostics-browser"].includes(process.env.INGENIUM_TEST_SUITE)){
+    mode="DIAGNOSTIC";const run=await start();await finish(run);
+    mode="PENDING";const pendingRun=await start();await worker.tick();
+    const pendingAttempt=(await owner.query("SELECT a.id FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1",[pendingRun])).rows[0].id;
+    await validationDiagnosticChecks(t,{owner,api,clock,delivery,person,run,version:snapshot.version_id,pendingRun,pendingAttempt});
+    assert.equal(await worker.claim(),true);
+    await expireAtDeadline(pendingRun);
+    mode="NORMAL";
+    const pending=(await owner.query(`SELECT c.run_id,p.language,p.source_role,p.check_type,v.runtime_key,m.digest,v.starter_code,v.reference_code,v.cpu_ms,v.wall_ms,v.memory_kb,t.input_data,c.id AS check_id
+      FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id JOIN validation_snapshot_checks p ON p.id=c.snapshot_check_id JOIN validation_snapshot_variants v ON v.snapshot_id=c.snapshot_id AND v.variant_id=p.variant_id
+      JOIN runtime_manifests m ON m.key=v.runtime_key AND m.language=v.language LEFT JOIN validation_snapshot_cases t ON t.snapshot_id=c.snapshot_id AND t.case_id=p.case_id WHERE a.id=$1`,[pendingAttempt])).rows[0];
+    const p:AuthoringPayload={attemptId:pendingAttempt,hostEpochId,runId:pending.run_id,checkId:pending.check_id,runtimeKey:pending.runtime_key,runtimeDigest:pending.digest.toString("hex"),language:pending.language,sourceRole:pending.source_role,checkType:pending.check_type,
+      source:pending.source_role==="REFERENCE"?pending.reference_code:pending.starter_code,stdin:pending.input_data??Buffer.alloc(0),cpuMs:pending.cpu_ms,wallMs:pending.wall_ms,memoryKb:pending.memory_kb};
+    saved.set(pendingAttempt,result(p));await observeTick();sendHook=undefined;
+  }
   await t.test("judge clock reversal latches a fault and expiry maintenance needs no connected runner",async()=>{
     ready=false;await expireValidationRuns(api,clock);ready=true;
     const previous=(await owner.query("SELECT trusted_time_at FROM judge_control WHERE id=1")).rows[0].trusted_time_at;
@@ -196,4 +232,21 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
     assert.equal((await organiser.send(url,body,organiser.token)).statusCode,403);
     assert.equal((await owner.query("SELECT count(*)::integer AS n FROM validation_run_audits WHERE run_id=$1",[run])).rows[0].n,1);
   });}finally{await app.close();}
+  await t.test("separate restricted automatic worker completes all five-language validation checks without manual ticks",async()=>{
+    mode="NORMAL";ready=true;sendHook=undefined;
+    await owner.query("UPDATE judge_control SET lease_until=date_trunc('milliseconds',clock_timestamp())-interval '1 millisecond' WHERE id=1");
+    const pool=new Pool({connectionString:owner.options.connectionString!,options:"-c role=ingenium_app_worker",max:4});
+    await assertWorkerDatabase(pool);
+    let failure=false;
+    const runtime=startJudgingWorker(pool,clock,driver,()=>{failure=true;});
+    try{
+      const deadline=Date.now()+20000;
+      while((await owner.query("SELECT worker_id FROM judge_control WHERE id=1")).rows[0].worker_id!==runtime.workerId){assert.ok(Date.now()<deadline);await setTimeout(50);}
+      const run=await start();
+      while((await owner.query("SELECT status FROM validation_runs WHERE id=$1",[run])).rows[0].status!=="PASSED"){assert.ok(Date.now()<deadline);await setTimeout(50);}
+      assert.equal(failure,false);
+      assert.equal((await owner.query("SELECT count(*)::int n FROM authoring_checks WHERE run_id=$1 AND result IS NOT NULL",[run])).rows[0].n,15);
+      assert.equal((await owner.query("SELECT count(*)::int n FROM execution_capacity_slots WHERE authoring_attempt_id IS NOT NULL")).rows[0].n,0);
+    }finally{await runtime.close();await pool.end();}
+  });
 }

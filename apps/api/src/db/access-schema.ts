@@ -175,5 +175,5 @@ export const quotaControl = pgTable("quota_control", { id: integer("id").primary
 export const quotaBuckets = pgTable("quota_buckets", {
   kind: text("kind").notNull(), keyHash: bytes("key_hash").notNull(), rate: integer("rate").notNull(), burst: integer("burst").notNull(),
   credits: bigint("credits", { mode: "bigint" }).notNull(), refilledAt: instant("refilled_at").notNull(), seenAt: instant("seen_at").notNull(),
-}, (t) => [primaryKey({ columns: [t.kind, t.keyHash] }), check("quota_bucket_shape", sql`${t.kind} in ('AUTH_GLOBAL','AUTH_IP','AUTH_BROWSER','AUTH_CODE','HTTP_GLOBAL','HTTP_IP','READ_MEMBER','MEMBER_COMMAND','READ_STAFF','STAFF_CONFIRM','STAFF_COMMAND')
+}, (t) => [primaryKey({ columns: [t.kind, t.keyHash] }), check("quota_bucket_shape", sql`${t.kind} in ('AUTH_GLOBAL','AUTH_IP','AUTH_BROWSER','AUTH_CODE','HTTP_GLOBAL','HTTP_IP','READ_MEMBER','MEMBER_COMMAND','DRAFT_SAVE','READ_STAFF','STAFF_CONFIRM','STAFF_COMMAND')
   and octet_length(${t.keyHash}) = 32 and ${t.rate} > 0 and ${t.burst} > 0 and ${t.credits} between 0 and ${t.burst}::bigint * 60000 and ${t.seenAt} >= ${t.refilledAt}`)]);

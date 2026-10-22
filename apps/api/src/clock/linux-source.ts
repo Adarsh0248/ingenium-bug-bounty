@@ -31,15 +31,19 @@ export function parseUptime(text: string): bigint {
   return value;
 }
 
-export async function linuxClockSource(): Promise<ClockSource> {
+export function linuxClockReference() {
   if (process.platform !== "linux" || process.getuid?.() === 0) throw new Error("Event entry requires a restricted Linux service account and the primary-host clock probe.");
+  return { bootId: uuid(readFileSync("/proc/sys/kernel/random/boot_id", "ascii").trim()), resolutionNs: 10000000n,
+    nowNs: () => parseUptime(readFileSync("/proc/uptime", "ascii")) };
+}
+
+export async function linuxClockSource(): Promise<ClockSource> {
+  const reference = linuxClockReference();
   const python = await protectedFile("/usr/bin/python3");
   const probe = await protectedFile(fileURLToPath(new URL("../../../../infra/clock-agent/probe.py", import.meta.url)));
   await protectedFile("/usr/bin/chronyc");
-  const bootId = uuid(readFileSync("/proc/sys/kernel/random/boot_id", "ascii").trim());
   return {
-    bootId, resolutionNs: 10000000n,
-    nowNs: () => parseUptime(readFileSync("/proc/uptime", "ascii")),
+    ...reference,
     async sample(nonce, sequence) {
       const result = await execute(python, ["-I", "-B", probe, nonce, sequence.toString()], {
         timeout: 1800, killSignal: "SIGKILL", maxBuffer: 4096, encoding: "buffer", env: { PATH: "/usr/bin:/bin", LC_ALL: "C" },

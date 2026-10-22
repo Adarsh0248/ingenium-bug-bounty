@@ -1,5 +1,10 @@
 # Challenge Draft Authoring
 
+Current UI: the normal Owner/Super Admin [Bug Library](content-authoring-ui.md)
+now connects these draft commands and validation preparation. The original backend
+batch below remains non-executing; the subsequent [validation/review view](content-validation-ui.md)
+now connects run history, progress and confirmed publication without changing preparation's semantics.
+
 This backend batch stores editable challenge drafts. It runs no participant or
 reference code, publishes nothing and does not make an arena launchable.
 

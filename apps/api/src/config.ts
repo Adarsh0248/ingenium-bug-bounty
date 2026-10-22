@@ -5,6 +5,7 @@ export interface Config {
   port: number;
   databaseUrl: string;
   entryRuntimeFile?: string;
+  competitionRuntimeFile?: string;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv): Config {
@@ -44,5 +45,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv): Config {
   const entryRuntimeFile = environment.ENTRY_RUNTIME_FILE;
   if (entryRuntimeFile !== undefined && (!entryRuntimeFile || !isAbsolute(entryRuntimeFile)
       || !["127.0.0.1", "[::1]", "localhost"].includes(parsed.hostname))) throw new Error("ENTRY_RUNTIME_FILE requires an absolute private path and primary-host loopback PostgreSQL.");
-  return { host, port, databaseUrl, ...(entryRuntimeFile !== undefined ? { entryRuntimeFile } : {}) };
+  const competitionRuntimeFile = environment.COMPETITION_RUNTIME_FILE;
+  if (competitionRuntimeFile !== undefined && (!entryRuntimeFile || !competitionRuntimeFile || !isAbsolute(competitionRuntimeFile))) throw new Error("COMPETITION_RUNTIME_FILE requires protected entry and an absolute private path.");
+  return { host, port, databaseUrl, ...(entryRuntimeFile !== undefined ? { entryRuntimeFile } : {}), ...(competitionRuntimeFile !== undefined ? { competitionRuntimeFile } : {}) };
 }

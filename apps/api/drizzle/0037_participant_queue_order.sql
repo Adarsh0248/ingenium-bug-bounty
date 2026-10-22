@@ -1,0 +1,2 @@
+ALTER TABLE "participant_judging" ADD COLUMN "queue_order" bigint NOT NULL GENERATED ALWAYS AS IDENTITY (sequence name "participant_judging_queue_order_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1);--> statement-breakpoint
+ALTER TABLE "participant_judging" ADD CONSTRAINT "participant_queue_order" UNIQUE("queue_order");

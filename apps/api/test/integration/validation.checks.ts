@@ -32,7 +32,7 @@ export async function validationChecks(t:TestContext,ownerConnection:string,apiC
     await owner.query("INSERT INTO staff_identities(id,display_name,role) VALUES($1,'Synthetic validator',$2)",[id,role]);
     await owner.query("INSERT INTO access_credentials(id,staff_id,verifier,version,issued_at) VALUES($1,$2,$3,1,date_trunc('milliseconds',clock_timestamp()))",[randomUUID(),id,code.verifier]);
     const flow=await entry.begin(code.code,{ip:"127.0.0.1",browserId:randomUUID()});if(flow.audience!=="STAFF")throw new Error("Synthetic staff routing failed");
-    return {id,...await staff.activate(flow.proofCookie,randomUUID())};
+    return {id,code:code.code,...await staff.activate(flow.proofCookie,randomUUID())};
   }
   type Person=Awaited<ReturnType<typeof person>>;
   async function command(actor:Person,action:ContentCommand["action"],targetId:string|null,payload:unknown) {

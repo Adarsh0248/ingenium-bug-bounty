@@ -1,0 +1,2 @@
+CREATE INDEX "live_unpublished" ON "live_deliveries" USING btree ("created_at","stream_id","sequence") WHERE "live_deliveries"."published_at" is null;--> statement-breakpoint
+CREATE INDEX "live_effect_age" ON "live_effects" USING btree ("created_at");

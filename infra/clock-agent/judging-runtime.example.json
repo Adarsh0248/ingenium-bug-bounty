@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "database_url": "postgresql://replace_worker_login:replace_password@127.0.0.1/replace_event_database",
+  "judge": {
+    "host_epoch_id": "replace-with-the-reviewed-active-epoch-uuid",
+    "endpoint_ref": "event-judge-v1",
+    "runtimes": {
+      "c": { "key": "replace-c-runtime", "digest": "replace-with-sha256" },
+      "cpp": { "key": "replace-cpp-runtime", "digest": "replace-with-sha256" },
+      "java": {
+        "key": "replace-java-runtime",
+        "digest": "replace-with-sha256"
+      },
+      "python": {
+        "key": "replace-python-runtime",
+        "digest": "replace-with-sha256"
+      },
+      "javascript": {
+        "key": "replace-javascript-runtime",
+        "digest": "replace-with-sha256"
+      }
+    }
+  },
+  "tls": {
+    "address": "10.42.0.5",
+    "port": 9443,
+    "server_name": "judge.internal.example",
+    "server_certificate_sha256": "replace-with-reviewed-leaf-certificate-sha256",
+    "ca_pem": "replace-with-private-CA-PEM",
+    "certificate_pem": "replace-with-authorised-client-certificate-PEM",
+    "private_key_pem": "replace-with-private-client-key-PEM"
+  }
+}

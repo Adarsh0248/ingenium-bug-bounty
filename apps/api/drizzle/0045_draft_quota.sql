@@ -1,0 +1,3 @@
+ALTER TABLE "quota_buckets" DROP CONSTRAINT "quota_bucket_shape";--> statement-breakpoint
+ALTER TABLE "quota_buckets" ADD CONSTRAINT "quota_bucket_shape" CHECK ("quota_buckets"."kind" in ('AUTH_GLOBAL','AUTH_IP','AUTH_BROWSER','AUTH_CODE','HTTP_GLOBAL','HTTP_IP','READ_MEMBER','MEMBER_COMMAND','DRAFT_SAVE','READ_STAFF','STAFF_CONFIRM','STAFF_COMMAND')
+  and octet_length("quota_buckets"."key_hash") = 32 and "quota_buckets"."rate" > 0 and "quota_buckets"."burst" > 0 and "quota_buckets"."credits" between 0 and "quota_buckets"."burst"::bigint * 60000 and "quota_buckets"."seen_at" >= "quota_buckets"."refilled_at");

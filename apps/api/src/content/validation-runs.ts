@@ -53,6 +53,23 @@ export function createValidationRunService(pool:Pool,clock:ClockGuard,delivery:S
         return {status:row?"OBSERVED" as const:"NOT_OBSERVED" as const,outcome:row?receipt(row):null};
       },"SHARED");
     },
+    async list(cookie:unknown,snapshotId:string,after?:string){
+      identifier(snapshotId);if(after)identifier(after);await budget(cookie);
+      return judgeTransaction(pool,clock,async client=>{
+        await client.query("SELECT * FROM lock_validation_judge()");
+        const now=await decisionTime(client,clock),actor=await principal(client,cookie,now);
+        if(!await first(client,"SELECT id FROM validation_snapshots WHERE id=$1",[snapshotId]))throw new AccessError("CONTENT_UNAVAILABLE");
+        await client.query("SELECT expire_validation_run()");
+        const rows=(await client.query<{run_id:string;status:string;created_at:Date;deadline_at:Date;finished_at:Date|null;physical_pending:boolean}>(`SELECT r.id AS run_id,r.status,r.created_at,r.deadline_at,r.finished_at,
+          EXISTS(SELECT 1 FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=r.id AND a.released_at IS NULL) AS physical_pending
+          FROM validation_runs r WHERE r.snapshot_id=$1 AND ($2::uuid IS NULL OR r.id>$2) ORDER BY r.id LIMIT 51`,[snapshotId,after??null])).rows;
+        const items=rows.slice(0,50);await staffOutcomeCapacity(client,Math.max(1,items.length));
+        for(const r of items)await client.query("INSERT INTO validation_run_audits(id,run_id,actor_id,session_id,credential_id,credential_version,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7)",[randomUUID(),r.run_id,actor.staff_id,actor.id,actor.credential_id,actor.credential_version,now]);
+        const publication=await first<{run_id:string;published_at:Date}>(client,"SELECT run_id,published_at FROM competition_publications WHERE snapshot_id=$1",[snapshotId]);
+        return {items:items.map(r=>({...r,created_at:r.created_at.toISOString(),deadline_at:r.deadline_at.toISOString(),finished_at:r.finished_at?.toISOString()??null})),next_after:rows.length>50?items.at(-1)!.run_id:null,
+          publication:publication?{run_id:publication.run_id,published_at:publication.published_at.toISOString()}:null};
+      });
+    },
     async report(cookie:unknown,runId:string){
       identifier(runId);await budget(cookie);
       return judgeTransaction(pool,clock,async client=>{
@@ -67,9 +84,11 @@ export function createValidationRunService(pool:Pool,clock:ClockGuard,delivery:S
           (SELECT count(*)::integer FROM authoring_attempts a WHERE a.check_id=c.id) AS attempts,
           EXISTS(SELECT 1 FROM authoring_attempts a WHERE a.check_id=c.id AND a.released_at IS NULL) AS physical_pending
           FROM authoring_checks c JOIN validation_snapshot_checks p ON p.id=c.snapshot_check_id WHERE c.run_id=$1 ORDER BY p.position`,[runId])).rows;
+        const dispatches=(await client.query<{id:string;check_id:string;number:number;result:string|null;resolved_at:Date|null;released_at:Date|null}>(`SELECT a.id,a.check_id,a.number,a.result,a.resolved_at,a.released_at FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1 ORDER BY a.number,a.id`,[runId])).rows;
         return {run_id:r.id,snapshot_id:r.snapshot_id,configuration_fingerprint:r.configuration_fingerprint.toString("hex"),status:r.status,created_at:r.created_at.toISOString(),deadline_at:r.deadline_at.toISOString(),
           started_at:r.started_at?.toISOString()??null,finished_at:r.finished_at?.toISOString()??null,physical_pending:checks.some(c=>c.physical_pending),can_publish:false as const,
-          checks:checks.map(c=>({...c,available_at:c.available_at.toISOString(),completed_at:c.completed_at?.toISOString()??null}))};
+          checks:checks.map(c=>({...c,available_at:c.available_at.toISOString(),completed_at:c.completed_at?.toISOString()??null,
+            dispatches:dispatches.filter(a=>a.check_id===c.check_id).map(a=>({id:a.id,number:a.number,result:a.result,resolved_at:a.resolved_at?.toISOString()??null,physical_pending:a.released_at===null}))}))};
       });
     },
   };

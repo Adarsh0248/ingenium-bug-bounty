@@ -5,7 +5,7 @@ import type { CodeResult } from "./validation-policy.js";
 
 export interface AuthoringPayload {
   attemptId:string;hostEpochId:string;runId:string;checkId:string;runtimeKey:string;runtimeDigest:string;language:Language;
-  sourceRole:"REFERENCE"|"STARTER";checkType:"TEST_CASE"|"COMPILATION";source:Buffer;stdin:Buffer;cpuMs:number;wallMs:number;memoryKb:number;
+  sourceRole:"REFERENCE"|"STARTER"|"OFFICIAL"|"SAMPLE";checkType:"TEST_CASE"|"COMPILATION";source:Buffer;stdin:Buffer;cpuMs:number;wallMs:number;memoryKb:number;
 }
 // Implementations must authenticate and verify supervisor evidence, not translate stock Judge0 status labels.
 export interface TrustedAuthoringDriver {
@@ -30,7 +30,13 @@ export function acceptAuthoringObservation(p:AuthoringPayload,observation:unknow
   if(v.state==="PENDING" && Object.keys(v).length===1)return null;
   const fields=["state","attempt_id","host_epoch_id","payload_digest","runtime_digest","source_sha256","stdin_sha256","evidence_digest","execution_result",
     "stdout","stdout_complete","stderr","stderr_truncated","compiler_output","compiler_output_truncated","cpu_ns","peak_bytes","drain"];
-  if(Object.keys(v).length!==fields.length || Object.keys(v).some(k=>!fields.includes(k)) || v.state!=="FINISHED" || v.attempt_id!==p.attemptId || v.host_epoch_id!==p.hostEpochId
+  const supporting=v.supervisor_evidence;
+  if(supporting!==undefined){
+    record(supporting);
+    const encoded=JSON.stringify(supporting);
+    if(Buffer.byteLength(encoded)>32768)throw new Error("Oversized supervisor evidence.");
+  }
+  if(Object.keys(v).length!==fields.length+(supporting===undefined?0:1) || Object.keys(v).some(k=>!fields.includes(k) && k!=="supervisor_evidence") || v.state!=="FINISHED" || v.attempt_id!==p.attemptId || v.host_epoch_id!==p.hostEpochId
     || v.payload_digest!==authoringPayloadDigest(p).toString("hex") || v.runtime_digest!==p.runtimeDigest || v.source_sha256!==sha256(p.source).toString("hex") || v.stdin_sha256!==sha256(p.stdin).toString("hex")
     || typeof v.evidence_digest!=="string" || !hex.test(v.evidence_digest) || typeof v.execution_result!=="string" || !kinds.includes(v.execution_result)
     || !Buffer.isBuffer(v.stdout) || v.stdout.length>1048577 || typeof v.stdout_complete!=="boolean" || !Buffer.isBuffer(v.stderr) || v.stderr.length>65536
@@ -48,5 +54,5 @@ export function acceptAuthoringObservation(p:AuthoringPayload,observation:unknow
     metadata:{schema_version:1,attempt_id:p.attemptId,host_epoch_id:p.hostEpochId,payload_digest:v.payload_digest,result,runtime_digest:p.runtimeDigest,
       source_sha256:v.source_sha256,stdin_sha256:v.stdin_sha256,provider_evidence_digest:v.evidence_digest,execution_result:v.execution_result,
       stdout_sha256:sha256(v.stdout).toString("hex"),stdout_bytes:v.stdout.length,stdout_complete:v.stdout_complete,stderr_truncated:v.stderr_truncated,
-      compiler_output_truncated:v.compiler_output_truncated,cpu_ns:v.cpu_ns,peak_bytes:v.peak_bytes} };
+      compiler_output_truncated:v.compiler_output_truncated,cpu_ns:v.cpu_ns,peak_bytes:v.peak_bytes,...(supporting===undefined?{}:{supervisor_evidence:supporting})} };
 }

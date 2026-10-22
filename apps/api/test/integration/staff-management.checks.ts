@@ -112,7 +112,7 @@ export async function staffManagementChecks(t:TestContext,ownerConnection:string
       const actor=await person(),other=await person(),ordinary=await person("OWNER"),organiser=await person("ORGANISER");
       await assert.rejects(service.command(ordinary.sessionCookie,await input(ordinary.code)),denied("ACCESS_UNAVAILABLE"));
       await assert.rejects(service.list(organiser.sessionCookie),denied("ACCESS_UNAVAILABLE"));
-      await assert.rejects(service.command(actor.sessionCookie,await input(other.code)),denied("INVALID_CODE"));
+      await assert.rejects(service.command(actor.sessionCookie,await input(other.code)),denied("STAFF_CONFIRMATION_REQUIRED"));
       await assert.rejects(service.command(actor.sessionCookie,await input(actor.code,{role:"SUPER_ADMIN" as never})),denied("INVALID_CONTEXT"));
       await assert.rejects(service.command(actor.sessionCookie,await input(actor.code,{action:"ROTATE",targetId:other.id,expectedRevision:"0",displayName:null,role:null,enabled:null})),denied("STAFF_TARGET_UNAVAILABLE"));
       healthy=false;try{await assert.rejects(service.list(actor.sessionCookie),denied("CLOCK_UNTRUSTED"));}finally{healthy=true;}

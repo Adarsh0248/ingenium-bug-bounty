@@ -1,0 +1,26 @@
+# Candidate per-capsule policy. Do not load or grant host readiness before VM/security rehearsal.
+abi <abi/3.0>,
+#include <tunables/global>
+
+profile ingenium-isolate-executor-v1 flags=(attach_disconnected,mediate_deleted) {
+  file,
+  network unix stream,
+  capability chown,
+  capability dac_override,
+  capability kill,
+  capability setgid,
+  capability setuid,
+  capability sys_admin,
+  capability sys_chroot,
+  capability sys_ptrace,
+  signal (send,receive) peer=ingenium-isolate-executor-v1,
+  signal (receive) peer=unconfined,
+  signal (receive) peer=runc,
+  signal (receive) peer=crun,
+  ptrace (read,readby) peer=ingenium-isolate-executor-v1,
+  deny /proc/** wklx,
+  deny /sys/** wklx,
+  mount options=(rw,rprivate) -> /,
+  mount fstype=tmpfs -> /var/local/lib/isolate/0/root/,
+  mount options in (rw,ro,bind,rbind,remount,nosuid,nodev) -> /var/local/lib/isolate/0/root/{box,usr,lib,lib64}/,
+}

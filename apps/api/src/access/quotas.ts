@@ -80,6 +80,10 @@ export async function memberCommandQuota(pool: Pool, clock: ClockGuard, memberRo
   await sharedQuota(pool, clock, [{ kind: "MEMBER_COMMAND", key: sha256(uuid(memberRoundId)), rate: 60, burst: 6 }]);
 }
 
+export async function draftSaveQuota(pool:Pool,clock:ClockGuard,memberRoundId:string):Promise<void>{
+  await sharedQuota(pool,clock,[{kind:"DRAFT_SAVE",key:sha256(uuid(memberRoundId)),rate:120,burst:4}]);
+}
+
 export async function staffQuota(pool: Pool, clock: ClockGuard, id: string, kind: "READ_STAFF" | "STAFF_CONFIRM" | "STAFF_COMMAND"): Promise<void> {
   const [rate, burst] = kind === "READ_STAFF" ? [600, 30] : kind === "STAFF_CONFIRM" ? [10, 3] : [120, 10];
   await sharedQuota(pool, clock, [{ kind, key: sha256(uuid(id)), rate: rate!, burst: burst! }]);

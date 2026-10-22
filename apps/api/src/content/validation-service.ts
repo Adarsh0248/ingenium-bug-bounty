@@ -119,6 +119,19 @@ export function createValidationService(pool: Pool, clock: ClockGuard, delivery:
         return { status:row ? "OBSERVED" as const : "NOT_OBSERVED" as const, outcome:row ? receiptView(row) : null };
       },"SHARED");
     },
+    async snapshots(cookie: unknown, versionId: string, after?: string) {
+      identifier(versionId); if (after) identifier(after); await budget(cookie);
+      return accessTransaction(pool, clock, async client => {
+        const now = await decisionTime(client, clock), actor = await principal(client, cookie, now);
+        if (!await first(client, "SELECT id FROM bug_versions WHERE id=$1", [versionId])) throw new AccessError("CONTENT_UNAVAILABLE");
+        const rows = (await client.query<{ snapshot_id: string; content_revision: string; fingerprint: Buffer; created_at: Date }>(
+          "SELECT id AS snapshot_id,content_revision,fingerprint,created_at FROM validation_snapshots WHERE version_id=$1 AND ($2::uuid IS NULL OR id>$2) ORDER BY id LIMIT 51", [versionId, after ?? null])).rows;
+        const items = rows.slice(0, 50); await staffOutcomeCapacity(client, Math.max(1, items.length));
+        for (const s of items) await client.query(`INSERT INTO validation_snapshot_audits(id,version_id,snapshot_id,actor_id,session_id,credential_id,credential_version,section,recorded_at)
+          VALUES($1,$2,$3,$4,$5,$6,$7,'SUMMARY',$8)`, [randomUUID(), versionId, s.snapshot_id, actor.staff_id, actor.id, actor.credential_id, actor.credential_version, now]);
+        return { items: items.map(s => ({ ...s, fingerprint: s.fingerprint.toString("hex"), created_at: s.created_at.toISOString() })), next_after: rows.length > 50 ? items.at(-1)!.snapshot_id : null };
+      }, "EXCLUSIVE");
+    },
     async describe(cookie: unknown, snapshotId: string, section: "SUMMARY" | "CHECKS") {
       identifier(snapshotId); if (!["SUMMARY","CHECKS"].includes(section)) throw new AccessError("INVALID_CONTEXT"); await budget(cookie);
       return accessTransaction(pool,clock,async client => {

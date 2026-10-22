@@ -90,7 +90,8 @@ function sessionReceipt(row: SessionOutcome) {
 
 export async function participantOutcomeCapacity(client: PoolClient) {
   const count = await first<{ n: number }>(client, `SELECT ((SELECT count(*) FROM entry_outcomes)
-    +(SELECT count(*) FROM participant_session_outcomes))::integer AS n`);
+    +(SELECT count(*) FROM participant_session_outcomes)+(SELECT count(*) FROM competition_outcomes WHERE participant_session_id IS NOT NULL)
+    +(SELECT count(*) FROM draft_save_outcomes)+(SELECT count(*) FROM workbench_activities WHERE request_key IS NOT NULL))::integer AS n`);
   if (!count || count.n >= 4000000) throw new AccessError("OUTCOME_CAPACITY_UNAVAILABLE");
 }
 

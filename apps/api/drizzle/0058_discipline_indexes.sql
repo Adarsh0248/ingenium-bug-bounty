@@ -1,0 +1,2 @@
+CREATE INDEX "discipline_team_history" ON "discipline_outcomes" USING btree ("arena_id","team_id","recorded_at","id");--> statement-breakpoint
+CREATE INDEX "discipline_manual_total" ON "discipline_outcomes" USING btree ("team_round_id") WHERE "discipline_outcomes"."action"='PENALISE' and "discipline_outcomes"."outcome"='APPLIED';

@@ -3,6 +3,7 @@ import { loadConfig } from "./config.js";
 import { createDatabase } from "./database.js";
 import { createEntryRuntime } from "./access/runtime.js";
 import { Pool } from "pg";
+import { startEventMaintenance } from "./maintenance/runtime.js";
 
 async function start() {
   let config;
@@ -23,14 +24,20 @@ async function start() {
   if (config.entryRuntimeFile) {
     monitorPool = new Pool({ connectionString: config.databaseUrl, application_name: "ingenium-clock-monitor", max: 2, connectionTimeoutMillis: 1000 });
     monitorPool.on("error", () => { if (!closing) entry?.options.clock.fault("DATABASE_UNAVAILABLE"); });
-    try { entry = await createEntryRuntime(database.pool, monitorPool, config.entryRuntimeFile); }
+    try { entry = await createEntryRuntime(database.pool, monitorPool, config.entryRuntimeFile, config.competitionRuntimeFile); }
     catch {
       console.error("Event entry could not start. Review the private runtime file, Linux probe ownership and reviewed migrations.");
       await monitorPool.end(); await database.close(); process.exitCode = 1; return;
     }
   }
   const app = buildApp({ database, logger: true, ...(entry ? { entry: entry.options } : {}) });
+  let maintenance: ReturnType<typeof startEventMaintenance> | undefined;
+  if (entry) app.addHook("onListen", async () => {
+    maintenance = startEventMaintenance(monitorPool!, entry!.options.clock,
+      task => app.log.warn({ event: "maintenance_unavailable", task }, "Background maintenance will retry without changing safety gates."));
+  });
   if (entry) app.addHook("preClose", async () => {
+    await maintenance?.close();
     try { await entry!.close(); }
     catch { console.error("Clock shutdown was not acknowledged; preserve its durable runtime for review."); process.exitCode = 1; }
   });

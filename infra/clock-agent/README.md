@@ -77,6 +77,14 @@ uses separate development cookies. Unknown fields and clock-bypass options fail.
 Keep the real `entry-runtime.json` outside the repository; its name is ignored as
 additional protection, not a secret-management substitute.
 
+The shared loader now also requires protected real parent directories, a
+single-link regular file and unchanged opened-file identity. FIFOs/devices and
+symlinks are rejected before reading. Competition and the separate app-side
+judging process use distinct private files; see
+[judging runtime](../../docs/judging-runtime.md). The API owns this monitor;
+the worker consumes its reports with independent freshness and cannot clear
+faults or replace this monitor's runtime.
+
 The deployed API code, probe, interpreter and their resolved parent directories
 must be root-owned and not group/other-writable. The probe runs as the API's
 restricted UID and cannot configure chrony through its selected monitor channel.

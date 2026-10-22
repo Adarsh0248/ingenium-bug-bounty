@@ -1,5 +1,11 @@
 # Validation Run Queue
 
+Current UI: [validation runs and publication review](content-validation-ui.md)
+now connects bounded snapshot/run history, progress, human review and confirmed
+publication. The non-executable preparation contract and report's `can_publish:
+false` field remain unchanged: they never bypass the separate publication command.
+Normal startup still installs no production judge/worker.
+
 The backend now has durable validation runs, complete typed check jobs, execution
 attempts, worker ownership, private progress reports and bounded recovery. This
 extends [snapshot preparation](content-validation.md). It is not the production
@@ -36,8 +42,25 @@ for asserting runner readiness, injecting a result or marking a question passed.
 `createValidationWorker` is an internal orchestration component, not a participant
 endpoint. A `TrustedAuthoringDriver` implementation must authenticate/verify the
 general supervisor protocol and its evidence before returning an observation.
-Stock Judge0 status JSON cannot satisfy that trust contract. The remaining live
-adapter, supervisor verification and deployment wiring are explicit launch gates.
+Stock Judge0 status JSON cannot satisfy that trust contract. The application-side
+[pinned mutual-TLS client and strict protocol decoder](judge-protocol.md) now
+implement this interface. A separate [gateway/registry](../infra/judge-gateway/README.md)
+now provides transactional registration, private lookup and once-only permit
+bookkeeping. Its judge-only Redis publisher and guarded receiver now reconcile
+duplicate/lost deliveries through those permits, including reconstruction after
+Redis loses acknowledged messages. The [execution/recovery handoff](judge-executor.md)
+now connects that receiver to a fixed protected-launcher client with strict result
+validation and no fresh launch during recovery. The launcher control core also
+requires a separate committed once-only backend start and seals validated evidence
+before reply. Protected disk checkpoints now retain validated results across a
+producer crash or failed database seal; recovery never repeats execution. Fixed
+language plans, result storage, native handoff, bounded phase I/O, once-only source
+workspace preparation and cgroup-v1 accounting are connected by a per-capsule
+Isolate backend and private one-job entry point. Results and physical capsule
+identities are retained before reply; recovery never repeats a phase. Raw phase
+capture still grants no verdict or release on its own. Actual VM enforcement,
+outer host provisioning/retirement, complete runtime/security calibration and
+service/deployment wiring remain gates. No production host is certified here.
 
 The worker uses a persisted 30-second lease with increasing generation. Every
 state-changing tick renews/rechecks current ownership. A successor can reconcile
@@ -85,7 +108,8 @@ deadline or parent completion is insufficient. The original barrier remains
 reserved even after logical completion if physical uncertainty remains. A later
 matching drain observation can release capacity without rewriting the result.
 This requires verified supervisor proof; booleans in untrusted HTTP JSON are not
-proof and no live decoder is installed here.
+proof. The new decoder accepts only the pinned authenticated service's strict
+bound contract; default startup still installs no driver or host.
 
 Every reference must pass every case; at least one declared witness per starter
 must match. Every required check is accounted for before final aggregation.
@@ -116,7 +140,9 @@ Only the narrow worker functions can change run/job/attempt/slot state through
 the application database role. Staff reports are authenticated, typed, source-free
 and audited. They show each check's expected/observed category, attempts, progress
 and physical-pending state, never hidden I/O, code, provider addresses or raw
-diagnostics. A detailed authorised evidence viewer remains UI/reporting work.
+diagnostics. A separate [authorised diagnostic viewer](validation-diagnostics.md)
+now exposes one deliberately selected resolved dispatch's bounded output and
+accounting, with reason-required audit and original-session receipt recovery.
 No award, wallet entry, penalty, participant receipt or Run allowance is created.
 `can_publish` remains false; human review/publication are separate required work.
 
@@ -145,8 +171,13 @@ They do not compile fixtures or certify a real execution host. Owner-only helper
 calls exercise exact deadline boundaries without changing the host clock or
 exposing a production time-override setting.
 
-Still required: general authenticated provider association/evidence transport,
-production sandbox/supervisor validation, actual runtime compatibility, worker
+The protected execution layer now includes a per-capsule Isolate producer and
+outer durable Docker lifecycle/backend. It is not installed or certified: no
+real host preparation authority currently enables it. Checkpoint results and
+container removal do not imply full physical retirement or capacity release.
+
+Still required: production sandbox/supervisor validation, real host resource/
+config provisioning and full parent/storage retirement, actual runtime compatibility, worker
 process/startup/heartbeat/maintenance scheduling, adversarial isolation and host
 retirement/restore checks, participant queue integration, full-app resource/outbox
 budgets, review/publication and authoring UI. The later arena-start service must

@@ -7,10 +7,19 @@
     "dev": "node --env-file-if-exists=../../.env --watch --import tsx src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=../../.env dist/server.js",
+    "start:judging": "node dist/worker/server.js",
+    "staff:recover": "node dist/access/staff-recovery-cli.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --import tsx --test \"test/*.test.ts\"",
     "test:db": "node --env-file=../../.env --import tsx --test test/integration/database.test.ts",
     "test:db:schema": "node --import tsx --test test/integration/schema.test.ts",
+    "test:worker:runtime": "node --import tsx --test test/integration/app-runtime-linux.test.ts",
+    "test:judge:launcher": "node --import tsx --test test/integration/executor-linux.test.ts",
+    "test:judge:installation": "node --import tsx --test test/integration/installation-linux.test.ts",
+    "test:judge:capsule": "node --import tsx --test test/integration/capsule-docker.test.ts",
+    "test:judge:storage": "node --import tsx --test test/integration/storage-linux.test.ts",
+    "test:judge:phase": "node --import tsx --test test/integration/phase-linux.test.ts",
+    "test:judge:workspace": "node --import tsx --test test/integration/workspace-linux.test.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "node --env-file-if-exists=../../.env.migration --import tsx src/db/migrate-cli.ts",
     "staff:bootstrap": "node --env-file-if-exists=../../.env.staff-maintenance --import tsx src/access/staff-bootstrap-cli.ts"
@@ -19,16 +28,20 @@
     "@fastify/cookie": "11.1.3",
     "@fastify/csrf-protection": "8.0.2",
     "@fastify/helmet": "13.2.0",
+    "@redis/client": "6.3.0",
     "@scure/base": "2.4.0",
+    "csv-parse": "7.0.3",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.7",
     "jose": "6.2.12",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "socket.io": "4.8.4"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
     "drizzle-kit": "0.31.11",
+    "socket.io-client": "4.8.4",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
   }

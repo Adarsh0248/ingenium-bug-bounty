@@ -11,11 +11,28 @@ import { createEntryService } from "./entry-service.js";
 import { browserHttpQuota, memberReadQuota, staffQuota } from "./quotas.js";
 import { createStaffService } from "./staff-service.js";
 import { createStaffManagement } from "./staff-management.js";
+import { createTeamManagement } from "./team-management.js";
+import { createRegistrationImport } from "./registration-import.js";
+import { createDisciplineService } from "./discipline.js";
 import { createReplacementService } from "./replacement-service.js";
 import { createArenaService } from "./arena-service.js";
+import { createCompetitionService } from "../competition/service.js";
+import type { CompetitionDependencies, CompetitionCommand } from "../competition/service.js";
+import * as competitionSchema from "../competition/http-schemas.js";
+import { installLive } from "../live/server.js";
+import {createWorkbenchService} from "../workbench/service.js";
+import * as workbenchSchema from "../workbench/http-schemas.js";
+import {createHistoryService} from "../workbench/history.js";
+import * as historySchema from "../workbench/history-schemas.js";
+import type { JudgingFilters } from "../competition/staff-judging.js";
+import { createSubmissionReviewService } from "../competition/submission-review.js";
+import * as reviewSchema from "../competition/submission-review-schemas.js";
 import { createContentService } from "../content/service.js";
 import { createValidationService } from "../content/validation-service.js";
 import { createValidationRunService } from "../content/validation-runs.js";
+import { createValidationDiagnosticService } from "../content/validation-diagnostics.js";
+import * as diagnosticSchema from "../content/validation-diagnostic-schemas.js";
+import { createPublicationService } from "../content/publication-service.js";
 import type { ContentAction } from "../content/policy.js";
 import type { StaffAction } from "./staff-management.js";
 import { AccessError } from "./transaction.js";
@@ -24,9 +41,9 @@ import * as schema from "./http-schemas.js";
 
 declare module "fastify" {
   interface FastifyRequest { entryCsrfContext: string; }
-  interface FastifyContextConfig { clockRecovery?: boolean; largeContent?: boolean; }
+  interface FastifyContextConfig { clockRecovery?: boolean; largeContent?: boolean; participantSource?: boolean; }
 }
-export interface EntryHttpOptions { pool: Pool; clock: ClockGuard; recoveryClock?: ClockGuard; delivery: SessionDelivery; browser: BrowserSettings; }
+export interface EntryHttpOptions { pool: Pool; clock: ClockGuard; recoveryClock?: ClockGuard; delivery: SessionDelivery; browser: BrowserSettings; competition?: CompetitionDependencies; }
 
 function sessionView(session: Awaited<ReturnType<ReturnType<typeof createEntryService>["inspect"]>>) {
   return { session_id: session.sessionId, member_id: session.memberId, member_round_id: session.memberRoundId,
@@ -43,11 +60,20 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   const service = createEntryService(options.pool, options.clock, options.delivery);
   const staff = createStaffService(options.pool, options.clock, options.delivery, options.recoveryClock);
   const management=createStaffManagement(options.pool,options.clock,options.delivery);
+  const teamManagement=createTeamManagement(options.pool,options.clock,options.delivery);
+  const registrations=createRegistrationImport(options.pool,options.clock,options.delivery);
+  const discipline=createDisciplineService(options.pool,options.clock,options.delivery);
   const replacements = createReplacementService(options.pool, options.clock, options.delivery);
   const arenas = createArenaService(options.pool, options.clock, options.delivery);
+  const competition = createCompetitionService(options.pool, options.clock, options.delivery, options.competition);
+  const submissionReviews = createSubmissionReviewService(options.pool, options.clock, options.delivery);
+  const workbench=createWorkbenchService(options.pool,options.clock);
+  const history=createHistoryService(options.pool,options.clock);
   const content = createContentService(options.pool, options.clock, options.delivery);
   const validation = createValidationService(options.pool, options.clock, options.delivery);
   const validationRuns = createValidationRunService(options.pool, options.clock, options.delivery);
+  const diagnostics = createValidationDiagnosticService(options.pool, options.clock, options.delivery);
+  const publications = createPublicationService(options.pool, options.clock, options.delivery);
   function recoveryClock() { if (!options.recoveryClock) throw new AccessError("CLOCK_RECOVERY_UNAVAILABLE"); return options.recoveryClock; }
   function entryClock() {
     try { options.clock.assertHealthy(); return options.clock; }
@@ -91,7 +117,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     const bootstrapAudience = request.routeOptions.url === "/api/v1/bootstrap" ? new URL(request.url,"http://local").searchParams.get("audience") : null;
     const quotaClock = request.routeOptions.config.clockRecovery ? recoveryClock() :
       request.routeOptions.url === "/api/v1/entry/verify" || bootstrapAudience === "ANONYMOUS" ? entryClock() :
-      bootstrapAudience?.startsWith("STAFF_RECOVERY") ? recoveryClock() : options.clock;
+      bootstrapAudience?.startsWith("STAFF_RECOVERY") ? (options.recoveryClock ?? options.clock) : options.clock;
     try { await browserHttpQuota(options.pool, quotaClock, request.ip); }
     finally { if (request.raw.aborted) release(request); }
     waitingBody.add(request);
@@ -102,6 +128,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
       largeContent.add(request);
       reply.raw.once("close", () => { if (!pending.has(request)) largeContent.delete(request); });
     }
+    if (request.routeOptions.config.participantSource) await service.inspect(request.cookies[policy.names.participant]);
   });
 
   app.removeContentTypeParser("application/json");
@@ -121,8 +148,10 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     let status = 503, code = "UNAVAILABLE", outcome = "UNKNOWN";
     if (error instanceof AccessError) {
       if (["INVALID_CODE", "INVALID_FLOW", "INVALID_SESSION", "INVALID_AUTHORITY", "BROWSER_CONTEXT_REQUIRED"].includes(error.code)) { status = 401; code = "AUTHORITY_REQUIRED"; }
+      else if (error.code === "STAFF_CONFIRMATION_REQUIRED") { status = 403; code = "STAFF_CONFIRMATION_REQUIRED"; }
+      else if (error.code === "CLOCK_UNTRUSTED") { code = "CLOCK_UNTRUSTED"; }
       else if (["ORIGIN_DENIED", "ACCESS_UNAVAILABLE"].includes(error.code)) { status = 403; code = "ACCESS_DENIED"; }
-      else if (["ROUND_OR_MEMBER_UNAVAILABLE","STAFF_TARGET_UNAVAILABLE","REPLACEMENT_UNAVAILABLE","ARENA_UNAVAILABLE","CONTENT_UNAVAILABLE"].includes(error.code)) { status = 404; code = "SCOPE_UNAVAILABLE"; }
+      else if (["ROUND_OR_MEMBER_UNAVAILABLE","STAFF_TARGET_UNAVAILABLE","REPLACEMENT_UNAVAILABLE","ARENA_UNAVAILABLE","CONTENT_UNAVAILABLE","WORKBENCH_UNAVAILABLE"].includes(error.code)) { status = 404; code = "SCOPE_UNAVAILABLE"; }
       else if (["INVALID_HEADERS", "INVALID_CONTEXT"].includes(error.code)) { status = 400; code = "INVALID_REQUEST"; }
       else if (error.code === "CONTENT_LIMIT_EXCEEDED") { status = 400; code = "CONTENT_LIMIT_EXCEEDED"; }
       else if (["UNSUPPORTED_ENCODING", "JSON_REQUIRED"].includes(error.code)) { status = 415; code = "JSON_REQUIRED"; }
@@ -131,7 +160,11 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
       else if (error.code === "HANDOFF_NOT_READY") { status = 409; code = "HANDOFF_NOT_READY"; }
       else if (error.code === "REQUEST_CAPACITY_UNAVAILABLE") { code = "CAPACITY_UNAVAILABLE"; outcome = "NOT_PROCESSED"; }
       if (status !== 503) outcome = "NOT_PROCESSED";
-    } else if (failure?.code?.startsWith("FST_CSRF_")) { status = 403; code = "CSRF_DENIED"; outcome = "NOT_PROCESSED"; }
+    } else if (failure?.code === "P0002") { status = 409; code = "INTENT_KEY_REUSED"; outcome = "NOT_PROCESSED"; }
+    else if (failure?.code === "P0003") { status = 429; code = "JUDGING_COOLDOWN"; outcome = "NOT_PROCESSED"; reply.header("Retry-After", "5"); }
+    else if (failure?.code === "54000") { status = 503; code = "JUDGING_CAPACITY"; outcome = "NOT_PROCESSED"; reply.header("Retry-After", "5"); }
+    else if (failure?.code === "55000") { status = 503; code = "JUDGE_UNAVAILABLE"; outcome = "NOT_PROCESSED"; reply.header("Retry-After", "5"); }
+    else if (failure?.code?.startsWith("FST_CSRF_")) { status = 403; code = "CSRF_DENIED"; outcome = "NOT_PROCESSED"; }
     else if (failure?.validation || failure?.statusCode === 400 || failure?.statusCode === 413 || failure?.statusCode === 415) {
       status = failure.statusCode === 413 ? 413 : failure.statusCode === 415 ? 415 : 400;
       code = status === 413 ? "BODY_TOO_LARGE" : "INVALID_REQUEST"; outcome = "NOT_PROCESSED";
@@ -154,6 +187,130 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   const protect = (audience: Audience) => async (request: FastifyRequest) => { request.entryCsrfContext = context(request, audience); };
   const writeHooks = (audience: Audience) => [protect(audience), app.csrfProtection];
 
+  const workbenchPath="/competition/rounds/:round_id/bounties/:bounty_id";
+  const boundedResponse=(limit:number)=>async(_request:FastifyRequest,_reply:FastifyReply,payload:unknown)=>{
+    if(Buffer.byteLength(JSON.stringify(payload))>limit)throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");return payload;
+  };
+  app.get("/competition/history/rounds",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,response:schema.responses(historySchema.rounds)}},
+    async request=>wrap(request,await history.rounds(request.cookies[policy.names.participant])));
+  app.get<{Params:{round_id:string}}>("/competition/rounds/:round_id/history",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:competitionSchema.roundParams,response:schema.responses(historySchema.overview)}},
+    async request=>wrap(request,await history.overview(request.cookies[policy.names.participant],request.params.round_id)));
+  for(const [suffix,view,response] of [["attempts",history.attempts,historySchema.attempts],["wallet",history.wallet,historySchema.wallet]] as const){
+    app.get<{Params:{round_id:string};Querystring:{after?:string}}>(`/competition/rounds/:round_id/history/${suffix}`,{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:historySchema.query,params:competitionSchema.roundParams,response:schema.responses(response)}},
+      async request=>wrap(request,await view(request.cookies[policy.names.participant],request.params.round_id,request.query.after)));
+  }
+  app.get<{Params:{round_id:string;parent_id:string}}>("/competition/rounds/:round_id/history/judging/:parent_id",{exposeHeadRoute:false,preSerialization:boundedResponse(8388608),schema:{querystring:schema.empty,params:competitionSchema.judgingParams,response:schema.responses(competitionSchema.judging)}},
+    async request=>wrap(request,await history.execution(request.cookies[policy.names.participant],request.params.round_id,request.params.parent_id)));
+  app.get<{Params:BugParams}>("/competition/rounds/:round_id/history/hints/:bounty_id",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:competitionSchema.bountyParams,response:schema.responses(competitionSchema.hints)}},
+    async request=>wrap(request,await history.hints(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id)));
+  type BugParams={round_id:string;bounty_id:string};
+  for(const [suffix,view,response] of [["",workbench.metadata,workbenchSchema.metadata],["/statement",workbench.statement,workbenchSchema.statement],
+    ["/starter",workbench.starter,workbenchSchema.starter],["/draft",workbench.draft,workbenchSchema.draft]] as const){
+    app.get<{Params:BugParams}>(`${workbenchPath}${suffix}`,{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:workbenchSchema.params,response:schema.responses(response)}},
+      async request=>wrap(request,await view(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id)));
+  }
+  app.get<{Params:BugParams&{sample_number:string;field:"input"|"expected_output"}}>(`${workbenchPath}/samples/:sample_number/:field`,{exposeHeadRoute:false,preSerialization:boundedResponse(8388608),schema:{querystring:schema.empty,params:workbenchSchema.sampleParams,response:schema.responses(workbenchSchema.sample)}},
+    async request=>wrap(request,await workbench.sample(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id,Number(request.params.sample_number),request.params.field)));
+  app.post<{Params:BugParams;Body:{request_key:string}}>(`${workbenchPath}/open`,{onRequest:writeHooks("PARTICIPANT"),schema:{querystring:schema.empty,params:workbenchSchema.params,body:workbenchSchema.openBody,response:schema.responses(workbenchSchema.opening)}},
+    async request=>wrap(request,await workbench.open(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id,request.body.request_key)));
+  app.post<{Params:BugParams;Body:{request_key:string;base_revision:string;source:string}}>(`${workbenchPath}/draft`,{bodyLimit:1048576,config:{participantSource:true},onRequest:writeHooks("PARTICIPANT"),preSerialization:boundedResponse(1048576),
+    schema:{querystring:schema.empty,params:workbenchSchema.params,body:workbenchSchema.saveBody,response:{...schema.responses(workbenchSchema.receipt),409:schema.envelope(workbenchSchema.receipt)}}},
+    async(request,reply)=>{const result=await workbench.save(request.cookies[policy.names.participant],{roundId:request.params.round_id,bountyId:request.params.bounty_id,requestKey:request.body.request_key,baseRevision:request.body.base_revision,source:request.body.source});
+      if(result.outcome==="REJECTED"||result.outcome==="CONFLICT")reply.code(409);return wrap(request,result);});
+  app.get<{Params:BugParams&{request_key:string}}>(`${workbenchPath}/draft/outcomes/:request_key`,{exposeHeadRoute:false,schema:{querystring:schema.empty,params:workbenchSchema.outcomeParams,response:schema.responses(workbenchSchema.outcome)}},
+    async request=>wrap(request,await workbench.outcome(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id,request.params.request_key)));
+  app.get<{Params:BugParams&{submission_id:string}}>(`${workbenchPath}/submissions/:submission_id/source`,{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:workbenchSchema.sourceParams,response:schema.responses(workbenchSchema.submittedSource)}},
+    async request=>wrap(request,await workbench.officialSource(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id,request.params.submission_id)));
+  app.get<{Params:BugParams;Querystring:{after?:string}}>(`${workbenchPath}/submissions`,{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:workbenchSchema.historyQuery,params:workbenchSchema.params,response:schema.responses(workbenchSchema.submissions)}},
+    async request=>wrap(request,await workbench.submissions(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id,request.query.after)));
+
+  const live=installLive(app,options,policy);
+  for(const audience of ["PARTICIPANT","STAFF"] as const){
+    const prefix=audience==="STAFF"?"/staff/live":"/live";
+    const id={type:"string",format:"uuid"} as const;
+    app.post<{Body:{round_id?:string|null}}>(`${prefix}/tickets`,{onRequest:writeHooks(audience),schema:{querystring:schema.empty,
+      body:{type:"object",additionalProperties:false,properties:audience==="STAFF"?{round_id:{anyOf:[id,{type:"null"}]}}:{}}}},
+    async request=>wrap(request,await live.ticket(request,audience,request.body.round_id??null)));
+    app.post<{Body:{sync_id:string}}>(`${prefix}/snapshot`,{onRequest:writeHooks(audience),schema:{querystring:schema.empty,
+      body:{type:"object",additionalProperties:false,required:["sync_id"],properties:{sync_id:id}}}},
+    async request=>wrap(request,await live.snapshot(request,audience,request.body.sync_id)));
+    app.post<{Body:{sync_id:string}}>(`${prefix}/projection`,{onRequest:writeHooks(audience),schema:{querystring:schema.empty,
+      body:{type:"object",additionalProperties:false,required:["sync_id"],properties:{sync_id:id}}}},
+    async request=>wrap(request,await live.projection(request,audience,request.body.sync_id)));
+    app.post<{Body:{sync_id:string;stream_id:string;after:string}}>(`${prefix}/replay`,{onRequest:writeHooks(audience),schema:{querystring:schema.empty,
+      body:{type:"object",additionalProperties:false,required:["sync_id","stream_id","after"],properties:{sync_id:id,stream_id:id,after:{type:"string",pattern:"^(0|[1-9][0-9]{0,18})$"}}}}},
+    async request=>wrap(request,await live.replay(request,audience,request.body)));
+  }
+
+  app.get<{Querystring:{arena_id?:string}}>("/staff/competition/control-room",{exposeHeadRoute:false,
+    schema:{querystring:competitionSchema.controlQuery,response:schema.responses(competitionSchema.controlRoom)}},async request=>
+      wrap(request,await competition.controlRoom(request.cookies[policy.names.staff],request.query.arena_id)));
+  app.get<{Params:{round_id:string}}>("/staff/competition/rounds/:round_id/cancellation",{exposeHeadRoute:false,
+    schema:{params:competitionSchema.roundParams,querystring:schema.empty,response:schema.responses(competitionSchema.cancellation)}},async request=>
+    wrap(request,await competition.cancellation(request.cookies[policy.names.staff],request.params.round_id)));
+  app.get<{Querystring:{kind:string;after?:string}}>("/staff/competition/published",{exposeHeadRoute:false,
+    schema:{querystring:competitionSchema.publishedQuery,response:schema.responses(competitionSchema.publishedPage)}},async request=>
+      wrap(request,await competition.published(request.cookies[policy.names.staff],Number(request.query.kind),request.query.after)));
+  app.post<{ Params: { round_id: string }; Body: { action: CompetitionCommand["action"]; request_key: string; expected_revision: string; reason: string; payload: Record<string, unknown>; own_code?: string } }>("/staff/competition/rounds/:round_id/commands", {
+    bodyLimit: 16384, onRequest: writeHooks("STAFF"), schema: { querystring: schema.empty, params: competitionSchema.roundParams, body: competitionSchema.commandBody, response: schema.responses(competitionSchema.receipt) },
+  }, async request => wrap(request, await competition.command(request.cookies[policy.names.staff], { action: request.body.action, roundId: request.params.round_id, requestKey: request.body.request_key,
+    expectedRevision: request.body.expected_revision, reason: request.body.reason, payload: request.body.payload, ...(request.body.own_code === undefined ? {} : { ownCode: request.body.own_code }) })));
+  app.post<{ Params: { snapshot_id: string }; Body: { run_id: string; review: string;request_key:string;expected_revision:string;own_code:string } }>("/staff/competition/publications/:snapshot_id", {
+    bodyLimit:16384,onRequest: writeHooks("STAFF"), schema: { querystring: schema.empty, params: schema.validationSnapshotParams, body: competitionSchema.publishBody,
+      response:{...schema.responses(competitionSchema.publication),409:{anyOf:[schema.envelope(competitionSchema.publication),schema.responses(competitionSchema.publication).default]}} },
+  }, async (request,reply) => {
+    const b=request.body,result=await publications.publish(request.cookies[policy.names.staff],{snapshotId:request.params.snapshot_id,runId:b.run_id,requestKey:b.request_key,expectedRevision:b.expected_revision,review:b.review,ownCode:b.own_code});
+    if(result.outcome==="REJECTED")reply.code(409);return wrap(request,result);
+  });
+  app.get<{Params:{snapshot_id:string;request_key:string}}>("/staff/outcomes/publication/:snapshot_id/:request_key",{exposeHeadRoute:false,
+    schema:{querystring:schema.empty,params:competitionSchema.publicationOutcomeParams,response:schema.responses(competitionSchema.publicationOutcome)}},async request=>wrap(request,await publications.outcome(request.cookies[policy.names.staff],request.params.snapshot_id,request.params.request_key)));
+  for (const audience of ["STAFF", "PARTICIPANT"] as const) {
+    const prefix = audience === "STAFF" ? "/staff/competition" : "/competition", cookieName = audience === "STAFF" ? policy.names.staff : policy.names.participant;
+    app.get<{ Params: { round_id: string } }>(`${prefix}/rounds/:round_id`, { exposeHeadRoute: false, schema: { querystring: schema.empty, params: competitionSchema.roundParams, response: schema.responses(competitionSchema.state) } },
+      async request => wrap(request, await competition.state(request.cookies[cookieName], request.params.round_id, audience)));
+    app.get<{ Params: { round_id: string } }>(`${prefix}/rounds/:round_id/standings`, { exposeHeadRoute: false, schema: { querystring: schema.empty, params: competitionSchema.roundParams, response: schema.responses(competitionSchema.standings) } },
+      async request => wrap(request, await competition.standings(request.cookies[cookieName], request.params.round_id, audience)));
+    app.get<{ Params: { round_id: string; request_key: string } }>(`${prefix}/rounds/:round_id/outcomes/:request_key`, { exposeHeadRoute: false,
+      schema: { querystring: schema.empty, params: competitionSchema.outcomeParams, response: schema.responses(competitionSchema.outcome) } },
+    async request => wrap(request, await competition.outcome(request.cookies[cookieName], request.params.round_id, request.params.request_key, audience)));
+  }
+  app.post<{ Params: { round_id: string; bounty_id: string }; Body: { request_key: string; level: number } }>("/competition/rounds/:round_id/bounties/:bounty_id/hints", {
+    onRequest: writeHooks("PARTICIPANT"), schema: { querystring: schema.empty, params: competitionSchema.bountyParams, body: competitionSchema.hintBody, response: schema.responses(competitionSchema.receipt) },
+  }, async request => wrap(request, await competition.buyHint(request.cookies[policy.names.participant], request.params.round_id, request.params.bounty_id, request.body.level, request.body.request_key)));
+  app.get<{ Params: { round_id: string; bounty_id: string } }>("/competition/rounds/:round_id/bounties/:bounty_id/hints", { exposeHeadRoute: false,
+    schema: { querystring: schema.empty, params: competitionSchema.bountyParams, response: schema.responses(competitionSchema.hints) } },
+  async request => wrap(request, await competition.hints(request.cookies[policy.names.participant], request.params.round_id, request.params.bounty_id)));
+  app.post<{ Params: { round_id: string; bounty_id: string }; Body: { request_key: string; source: string } }>("/competition/rounds/:round_id/bounties/:bounty_id/submissions", {
+    bodyLimit: 1048576, config: { participantSource: true }, onRequest: writeHooks("PARTICIPANT"),
+    schema: { querystring: schema.empty, params: competitionSchema.bountyParams, body: competitionSchema.submitBody, response: schema.responses(competitionSchema.receipt) },
+  }, async request => wrap(request, await competition.submit(request.cookies[policy.names.participant], request.params.round_id, request.params.bounty_id, request.body.source, request.body.request_key)));
+  app.post<{ Params: { round_id: string; bounty_id: string }; Body: { request_key: string; source: string } }>("/competition/rounds/:round_id/bounties/:bounty_id/runs", {
+    bodyLimit: 1048576, config: { participantSource: true }, onRequest: writeHooks("PARTICIPANT"),
+    schema: { querystring: schema.empty, params: competitionSchema.bountyParams, body: competitionSchema.submitBody, response: schema.responses(competitionSchema.receipt) },
+  }, async request => wrap(request, await competition.run(request.cookies[policy.names.participant], request.params.round_id, request.params.bounty_id, request.body.source, request.body.request_key)));
+  app.get<{ Params: { round_id: string; parent_id: string } }>("/competition/rounds/:round_id/judging/:parent_id", { exposeHeadRoute: false,
+    schema: { querystring: schema.empty, params: competitionSchema.judgingParams, response: schema.responses(competitionSchema.judging) } },
+  async request => wrap(request, await competition.judging(request.cookies[policy.names.participant], request.params.round_id, request.params.parent_id)));
+  app.post<{ Params: { round_id: string; job_id: string }; Body: { request_key: string; reason: string; own_code: string } }>("/staff/competition/rounds/:round_id/jobs/:job_id/retry", {
+    bodyLimit: 16384, onRequest: writeHooks("STAFF"), schema: { querystring: schema.empty, params: competitionSchema.retryParams, body: competitionSchema.retryBody, response: schema.responses(competitionSchema.receipt) },
+  }, async request => wrap(request, await competition.retryJob(request.cookies[policy.names.staff], request.params.round_id, request.params.job_id, request.body.request_key, request.body.reason, request.body.own_code)));
+  app.get<{ Params: { round_id: string }; Querystring: JudgingFilters & { after?: string } }>("/staff/competition/rounds/:round_id/judging", { exposeHeadRoute: false,preSerialization:boundedResponse(1048576),
+    schema: { querystring: competitionSchema.queueQuery, params: competitionSchema.roundParams, response: schema.responses(competitionSchema.queue) } },
+  async request => wrap(request, await competition.judgeQueue(request.cookies[policy.names.staff], request.params.round_id, request.query.after,request.query)));
+  app.get<{Params:{round_id:string;parent_id:string}}>("/staff/competition/rounds/:round_id/judging/:parent_id",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:competitionSchema.judgingParams,response:schema.responses(competitionSchema.judgeDetail)}},
+    async request=>wrap(request,await competition.judgeDetail(request.cookies[policy.names.staff],request.params.round_id,request.params.parent_id)));
+  app.get<{Params:{round_id:string;job_id:string};Querystring:{after?:string}}>("/staff/competition/rounds/:round_id/jobs/:job_id/recovery-history",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:competitionSchema.recoveryAuditQuery,params:competitionSchema.retryParams,response:schema.responses(competitionSchema.recoveryAudit)}},
+    async request=>wrap(request,await competition.recoveryAudit(request.cookies[policy.names.staff],request.params.round_id,request.params.job_id,request.query.after)));
+  app.post<{Params:{round_id:string;parent_id:string};Body:{request_key:string;confirm_parent_id:string;attempt_id:string|null;reason:string}}>("/staff/competition/rounds/:round_id/judging/:parent_id/reviews",{
+    bodyLimit:16384,onRequest:writeHooks("STAFF"),preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:competitionSchema.judgingParams,body:reviewSchema.reviewBody,response:schema.responses(reviewSchema.review)}},
+    async request=>wrap(request,await submissionReviews.open(request.cookies[policy.names.staff],request.params.round_id,request.params.parent_id,{requestKey:request.body.request_key,confirmParentId:request.body.confirm_parent_id,attemptId:request.body.attempt_id,reason:request.body.reason})));
+  app.get<{Params:{round_id:string;parent_id:string;request_key:string}}>("/staff/competition/rounds/:round_id/judging/:parent_id/reviews/:request_key",{
+    exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:reviewSchema.reviewOutcomeParams,response:schema.responses(reviewSchema.reviewOutcome)}},
+    async request=>wrap(request,await submissionReviews.outcome(request.cookies[policy.names.staff],request.params.round_id,request.params.parent_id,request.params.request_key)));
+  app.get<{Params:{round_id:string;parent_id:string};Querystring:{after?:string}}>("/staff/competition/rounds/:round_id/judging/:parent_id/reviews",{
+    exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:competitionSchema.recoveryAuditQuery,params:competitionSchema.judgingParams,response:schema.responses(reviewSchema.reviewHistory)}},
+    async request=>wrap(request,await submissionReviews.history(request.cookies[policy.names.staff],request.params.round_id,request.params.parent_id,request.query.after)));
+
   app.get<{ Querystring: { audience: Audience } }>("/bootstrap", { exposeHeadRoute: false,
     schema: { querystring: schema.bootstrapQuery, response: schema.responses(schema.bootstrapData) } }, async (request, reply) => {
     const audience = request.query.audience;
@@ -161,6 +318,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     if (!id && audience !== "ANONYMOUS") throw new AccessError("BROWSER_CONTEXT_REQUIRED");
     if (!id) { id = randomUUID(); reply.setCookie(policy.names.browser, id, { ...policy.cookie, signed: true, maxAge: 28800 }); }
     if (audience === "ANONYMOUS") return wrap(request, { audience, csrf_token: reply.generateCsrf({ userInfo: csrfContext(policy, audience, id) }) });
+    if (!request.cookies[credentialName(audience)]) throw new AccessError("INVALID_SESSION");
     if (audience === "ENTRY") {
       const flow = await service.describe(request.cookies[policy.names.entry]);
       return wrap(request, { audience, flow: flowView(flow), csrf_token: reply.generateCsrf({ userInfo: context(request, audience) }) });
@@ -275,10 +433,56 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     wrap(request,{session:await staff.keepAlive(request.cookies[policy.names.staff],request.body.request_key)}));
   app.get("/staff/recovery/clock",{config:{clockRecovery:true},exposeHeadRoute:false,
     schema:{querystring:schema.empty,response:schema.responses(schema.clockStatus)}},async(request) => wrap(request,await staff.clockStatus(request.cookies[policy.names.staffRecovery])));
+  app.get<{Params:{request_key:string}}>("/staff/recovery/clock/outcomes/:request_key",{config:{clockRecovery:true},exposeHeadRoute:false,
+    schema:{querystring:schema.empty,params:schema.replacementOutcomeParams,response:schema.responses(schema.clockOutcomeData)}},async request=>
+    wrap(request,await staff.clockOutcome(request.cookies[policy.names.staffRecovery],request.params.request_key)));
   app.post<{Body:{own_code:string;request_key:string;runtime_id:string;generation:string;reason:string}}>("/staff/recovery/clock/clear",{
     config:{clockRecovery:true},onRequest:writeHooks("STAFF_RECOVERY"),schema:{querystring:schema.empty,body:schema.clockClearBody,response:schema.responses(schema.clockClearData)}},async(request) =>
     wrap(request,await staff.clearClock(request.cookies[policy.names.staffRecovery],{code:request.body.own_code,requestKey:request.body.request_key,
       runtimeId:request.body.runtime_id,generation:request.body.generation,reason:request.body.reason})));
+
+  app.post<{Body:{action:"BLOCK"|"UNBLOCK"|"PENALISE"|"REVERSE";arena_id:string;team_id:string;member_id:string|null;round_id:string|null;
+    block_id:string|null;original_id:string|null;minutes:number|null;expected_revision:string;request_key:string;reason:string;own_code:string}}>("/staff/discipline",{
+    onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,body:schema.disciplineBody,response:schema.responses(schema.disciplineData)}},async request=>{
+      const b=request.body;return wrap(request,await discipline.command(request.cookies[policy.names.staff],{action:b.action,arenaId:b.arena_id,teamId:b.team_id,
+        memberId:b.member_id,roundId:b.round_id,blockId:b.block_id,originalId:b.original_id,minutes:b.minutes,expectedRevision:b.expected_revision,
+        requestKey:b.request_key,reason:b.reason,ownCode:b.own_code}));
+    });
+  app.get<{Querystring:{arena_id:string;team_id:string;round_id:string;after?:string}}>("/staff/discipline",{exposeHeadRoute:false,
+    schema:{querystring:schema.disciplineQuery,response:schema.responses(schema.disciplineListData)}},async request=>{
+      const q=request.query;return wrap(request,await discipline.inspect(request.cookies[policy.names.staff],q.arena_id,q.team_id,q.round_id,q.after));
+    });
+  app.get<{Params:{request_key:string}}>("/staff/outcomes/discipline/:request_key",{exposeHeadRoute:false,
+    schema:{params:schema.replacementOutcomeParams,querystring:schema.empty,response:schema.responses(schema.disciplineOutcomeData)}},async request=>
+    wrap(request,await discipline.outcome(request.cookies[policy.names.staff],request.params.request_key)));
+
+  app.post<{Body:{csv:string}}>("/staff/registrations/preview",{bodyLimit:2097152,config:{largeContent:true},onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,
+    body:schema.registrationPreviewBody,response:schema.responses(schema.registrationPreviewData)}},async request=>
+    wrap(request,await registrations.preview(request.cookies[policy.names.staff],request.body.csv)));
+  app.post<{Body:{csv:string;csv_digest:string;expected_revision:string;request_key:string;own_code:string;reason:string}}>("/staff/registrations/import",{
+    bodyLimit:2097152,config:{largeContent:true},onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,body:schema.registrationImportBody,response:schema.responses(schema.registrationImportData)}},async request=>{
+      const b=request.body;return wrap(request,await registrations.commit(request.cookies[policy.names.staff],{csv:b.csv,csvDigest:b.csv_digest,expectedRevision:b.expected_revision,
+        requestKey:b.request_key,ownCode:b.own_code,reason:b.reason}));
+    });
+  app.get<{Params:{request_key:string}}>("/staff/outcomes/registrations/:request_key",{exposeHeadRoute:false,
+    schema:{querystring:schema.empty,params:schema.replacementOutcomeParams,response:schema.responses(schema.registrationOutcomeData)}},async request=>
+    wrap(request,await registrations.outcome(request.cookies[policy.names.staff],request.params.request_key)));
+
+  type TeamBody={request_key:string;expected_revision:string;own_code:string;reason:string;team_name?:string;member_one?:string;member_two?:string};
+  for(const action of ["CREATE","ROTATE"] as const) {
+    app.post<{Body:TeamBody;Params:{team_id?:string}}>(action==="CREATE"?"/staff/teams":"/staff/teams/:team_id/rotate-code",{
+      bodyLimit:16384,onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,...(action==="CREATE"?{}:{params:schema.teamTargetParams}),
+        body:action==="CREATE"?schema.teamCreateBody:schema.staffRotateBody,response:schema.responses(schema.teamManagementData)}},async request=>{
+      const b=request.body;
+      return wrap(request,await teamManagement.command(request.cookies[policy.names.staff],{action,targetId:request.params.team_id??null,
+        requestKey:b.request_key,expectedRevision:b.expected_revision,ownCode:b.own_code,reason:b.reason,teamName:b.team_name??null,memberOne:b.member_one??null,memberTwo:b.member_two??null}));
+    });
+  }
+  app.get<{Querystring:{after?:string}}>("/staff/teams",{exposeHeadRoute:false,schema:{querystring:schema.staffListQuery,response:schema.responses(schema.teamListData)}},async request=>
+    wrap(request,await teamManagement.list(request.cookies[policy.names.staff],request.query.after)));
+  app.get<{Params:{request_key:string}}>("/staff/outcomes/teams/:request_key",{exposeHeadRoute:false,
+    schema:{querystring:schema.empty,params:schema.replacementOutcomeParams,response:schema.responses(schema.teamOutcomeData)}},async request=>
+    wrap(request,await teamManagement.outcome(request.cookies[policy.names.staff],request.params.request_key)));
 
   type StaffBody={request_key:string;expected_revision:string;own_code:string;reason:string;display_name?:string;role?:"OWNER"|"ORGANISER";enabled?:boolean};
   const managedResponses={...schema.responses(schema.staffManagementData),409:{anyOf:[schema.envelope(schema.staffManagementData),schema.responses(schema.staffManagementData).default]}};
@@ -392,8 +596,21 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     const result=await validationRuns.admit(request.cookies[policy.names.staff],{snapshotId:request.params.snapshot_id,expectedRevision:request.body.expected_revision,requestKey:request.body.request_key,reason:request.body.reason});
     if(result.outcome==="REJECTED")reply.code(409);return wrap(request,result);
   });
+  app.get<{Params:{version_id:string};Querystring:{after?:string}}>("/staff/content/versions/:version_id/validation-snapshots",{exposeHeadRoute:false,
+    schema:{querystring:schema.staffListQuery,params:schema.contentVersionParams,response:schema.responses(schema.validationSnapshotsPage)}},async request=>wrap(request,await validation.snapshots(request.cookies[policy.names.staff],request.params.version_id,request.query.after)));
+  app.get<{Params:{snapshot_id:string};Querystring:{after?:string}}>("/staff/content/validation-snapshots/:snapshot_id/runs",{exposeHeadRoute:false,
+    schema:{querystring:schema.staffListQuery,params:schema.validationSnapshotParams,response:schema.responses(schema.validationRunsPage)}},async request=>wrap(request,await validationRuns.list(request.cookies[policy.names.staff],request.params.snapshot_id,request.query.after)));
   app.get<{Params:{run_id:string}}>("/staff/content/validation-runs/:run_id",{exposeHeadRoute:false,
     schema:{querystring:schema.empty,params:schema.validationRunParams,response:schema.responses(schema.validationRunReport)}},async request=>wrap(request,await validationRuns.report(request.cookies[policy.names.staff],request.params.run_id)));
+  app.post<{Params:{run_id:string};Body:{request_key:string;confirm_run_id:string;attempt_id:string;reason:string}}>("/staff/content/validation-runs/:run_id/diagnostics",{
+    bodyLimit:16384,onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:schema.validationRunParams,body:diagnosticSchema.diagnosticBody,response:schema.responses(diagnosticSchema.diagnostic)},
+  },async request=>wrap(request,await diagnostics.open(request.cookies[policy.names.staff],request.params.run_id,{requestKey:request.body.request_key,confirmRunId:request.body.confirm_run_id,attemptId:request.body.attempt_id,reason:request.body.reason})));
+  app.get<{Params:{run_id:string;request_key:string}}>("/staff/content/validation-runs/:run_id/diagnostics/:request_key",{exposeHeadRoute:false,
+    schema:{querystring:schema.empty,params:diagnosticSchema.diagnosticOutcomeParams,response:schema.responses(diagnosticSchema.diagnosticOutcome)},
+  },async request=>wrap(request,await diagnostics.outcome(request.cookies[policy.names.staff],request.params.run_id,request.params.request_key)));
+  app.get<{Params:{run_id:string};Querystring:{after?:string}}>("/staff/content/validation-runs/:run_id/diagnostics",{exposeHeadRoute:false,
+    schema:{querystring:schema.staffListQuery,params:schema.validationRunParams,response:schema.responses(diagnosticSchema.diagnosticHistory)},
+  },async request=>wrap(request,await diagnostics.history(request.cookies[policy.names.staff],request.params.run_id,request.query.after)));
   app.get<{Params:{snapshot_id:string;request_key:string}}>("/staff/outcomes/validation-run/:snapshot_id/:request_key",{exposeHeadRoute:false,
     schema:{querystring:schema.empty,params:schema.validationRunOutcomeParams,response:schema.responses(schema.validationRunOutcomeData)}},async request=>wrap(request,await validationRuns.outcome(request.cookies[policy.names.staff],request.params.snapshot_id,request.params.request_key)));
 };

@@ -2,8 +2,11 @@
 
 This is an implementation/operator handoff, not approval to provision live staff,
 apply migrations to an existing database or open event traffic. No real staff
-credential has been created by this batch. The browser admin interface is still
-required; the routes below are the tested backend for it.
+credential has been created by these implementation tests. The normal
+[browser staff-management view](staff-access-ui.md) now connects the routes below;
+the separate [operator recovery command](staff-operator-recovery.md) now covers
+backup/replacement Super Admin access. Actual host installation and deployment
+rehearsal remain required.
 
 ## Authority Boundaries
 
@@ -18,7 +21,7 @@ required; the routes below are the tested backend for it.
 - Browser management cannot create, promote, disable, demote, rename or rotate a
   Super Admin. The list may show their safe identity/status metadata, not codes.
   Additional/replacement Super Admins and compromised/total-loss access recovery
-  remain a separate protected operator workflow, not a browser workaround.
+  use the separate protected operator workflow, not a browser workaround.
 - Database guards preserve the last enabled Super Admin with an unrevoked code
   through coordinated concurrent changes. A credential rotation can revoke and
   replace its old verifier atomically; normal logout/expiry is never prohibited.
@@ -123,8 +126,8 @@ targets and requires a real bound source/current normal Super Admin actor.
 
 ## Remaining Launch Work
 
-The operator CLI was not run against the actual Linux host. Browser controls,
-additional/replacement Super Admin and compromise/total-loss recovery tooling,
-full role-filtered audit views, live revocation/outbox/cleanup and event-load /
-backup/restore rehearsals remain required. There is no supported SQL/master-code
-shortcut for those unfinished gates. This backend batch is not event readiness.
+The first-setup and recovery tools have not been run against the actual primary
+Linux host. Recovery now has disposable PostgreSQL and real restricted Linux CLI
+coverage, not a live operator deployment. Full role-filtered audit views,
+production revocation/delivery rehearsal, event-load and backup/restore checks
+remain required. There is no supported SQL/master-code shortcut for those gates.

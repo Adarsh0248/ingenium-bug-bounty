@@ -9,18 +9,205 @@ no additional features are silently dropped. See the current
 [build and launch checklist](docs/build-status.md). The target is not a readiness
 guarantee, and required security/capacity/recovery gates still apply.
 
-Latest implementation batch: durable validation runs, full check admission,
-leased workers, once-only send permission, bounded evidence/retries/polling and
-deadline/physical-drain accounting. A synthetic driver exercises the real database
-flow; the production cloud adapter/supervisor is not connected. No registered
-compatible worker means no new admission. Publication remains blocked.
+Latest implementation batch: [private validation diagnostics](docs/validation-diagnostics.md)
+adds reason-required Owner/Super Admin review of one resolved authoring dispatch,
+bounded output/accounting, immutable access history and original-session GET-only
+receipt recovery. It never reruns code, changes a result or bypasses publication
+and physical-cleanup gates. Overall completion is roughly **68%**, not an
+event-readiness score. Production hosting and event-load rehearsal remain open.
+
+Earlier implementation batch: [restricted submission review](docs/submission-review.md)
+adds reason-required Owner/Super Admin review of admitted source and one resolved
+dispatch's retained feedback, with immutable access history, original-session
+receipt recovery and stale/revoked browser-data clearing. It cannot read working
+drafts, change verdicts or grant Organiser private-source access. Overall completion
+is roughly **67%**, not an event-readiness score.
+
+Earlier implementation batch: [operator-only Super Admin recovery](docs/staff-operator-recovery.md)
+adds backup administrators, lost/compromised-code rotation and verified retirement,
+with private candidate delivery, original-key recovery and immutable audit. No
+public recovery endpoint or master code exists. Real operator deployment and the
+remaining hosting/security/load gates are still required. Overall completion is
+roughly **66%** for that batch, not an event-readiness score.
+
+Earlier implementation batch: [separate app-side judging service](docs/judging-runtime.md)
+connects the existing validation/participant schedulers to automatic, non-overlapping
+worker turns, restricted database credentials, private mutual TLS, independent
+clock freshness and graceful shutdown. API competition wiring uses the live worker
+lease and frozen manifests without receiving its TLS key. Judge-VM installation,
+retention, deployment and event-sized testing remain required. Overall completion
+for that batch was roughly **65%**, not an event-readiness score.
+
+Earlier implementation batch: [automatic event maintenance](docs/event-maintenance.md)
+connects timer closure, sample/validation expiry, bounded cancellation progress,
+expired encrypted handoff cleanup and shared quota cleanup to protected server
+startup/shutdown. It preserves physical holds and staff-only finalisation.
+Production judging daemons, payload retention and deployment gates remain open.
+That batch's completion estimate was roughly **64%**, not an event-readiness score.
+
+Earlier implementation batch: [staff judging and recovery](docs/staff-judging.md)
+adds filtered queues, safe dispatch timelines, physical-hold visibility and
+paged recovery decisions. Owner/Super Admin confirmation reuses the existing
+extra-dispatch command; it never sets a verdict or bypasses the worker's safety
+checks. Organisers can monitor but cannot authorise recovery. Overall completion
+is roughly **64%**, not an event-readiness score.
+
+Earlier implementation batch: [participant results and history](docs/participant-history.md)
+adds round standings, paged private Runs/team submissions, original source and
+feedback, wallet entries, saved drafts and purchased hints. Current Round 2
+access can read authorised Round 1 history without reviving its old credential.
+Live updates preserve provisional/final/cancelled distinctions. No schema,
+permission or deployment change was needed.
+
+Earlier implementation batch: [restricted timing recovery](docs/clock-recovery-ui.md)
+connects incident review, own-code clearance, original GET-only receipt recovery,
+safe sign-out and explicit fresh normal sign-in. Recovery grants never become
+normal admin grants. The clock-monitor policy and transaction limits are unchanged.
+
+Earlier implementation batch: [whole-round cancellation](docs/round-cancellation.md)
+adds confirmed Owner/Super Admin incident controls, immediate gameplay fencing,
+bounded logical cleanup and a drain-gated archive. Cancelled work has no invented
+verdict; existing evidence and balances are retained. Participants receive live
+read-only feedback. Lost replies use original GET-only recovery.
+No development/cloud migration or deployment was performed.
+
+Earlier implementation batch: [staff discipline](docs/staff-discipline.md) adds
+instance-scoped team/member blocking, exact unblocking, reversible ranking-time
+penalties, the 300-minute team-round cap and private audit/recovery controls.
+Admitted judging and earned points/bounty survive access blocks. Locked results
+are not editable. Tests use disposable synthetic data, not development/cloud data.
+
+Earlier implementation batch: [CSV registration import](docs/team-registration.md#csv-import)
+adds upload/preview, stable external registration IDs, duplicate/conflict checks,
+confirmed atomic saves and private one-time JSON code export. Each file supports
+up to 100 teams; the pool remains capped at 1,000. Repeated imports do not replace
+names, enrollments or codes, and lost replies use original GET-only recovery.
+No real registrations or development/cloud database were changed.
+
+Earlier implementation batch: [team registration and code management](docs/team-registration.md)
+adds the Owner/Super Admin Teams screen, atomic two-member registration, one-time
+codes, deliberate rotation and original-receipt recovery. Rotation revokes old
+access without resetting languages or competition history. The CSV column format
+is now implemented in the batch above. No real registrations,
+credentials or development/cloud database were changed.
+
+Earlier implementation batch: [validation runs and publication review](docs/content-validation-ui.md)
+adds saved snapshot/run history, live progress polling, cleanup-aware publication
+locks, explicit human review and own-code confirmation. Run/publication response
+loss uses original GET-only receipt recovery. New reviewed migrations are tested
+only in disposable databases; no development/cloud migration was applied.
+
+Earlier implementation batch: the [Bug Library and draft editor](docs/content-authoring-ui.md)
+connects five-language private variants, metadata, samples/hidden cases, starter
+failure declarations, hints, versioning and immutable validation preparation.
+Exact UTF-8 file import/export, stale-edit protection and original-receipt recovery
+are covered by real-browser checks. Preparation does not run code or publish a
+question. Production installation and launch verification remain open.
+
+Earlier implementation batch: [Staff and Access screens](docs/staff-access-ui.md)
+connect Super Admin management of Owners/Organisers, one-time code delivery and
+revocation, plus normal staff approval/rejection of browser replacements. Lost
+replies recover the original receipt without another write. Real browser checks
+also corrected cold-session discovery and confirmation-vs-expiry handling.
+Remaining staff controls, production runtime and launch verification remain unfinished.
+
+Earlier implementation batch: the normal [staff control room](docs/staff-console.md)
+connects registered team/duration setup, published bugs, both round lifecycles,
+qualification, all three pause scopes, live monitoring and audited commands.
+Organisers monitor read-only. Lost replies use original-receipt recovery without
+replaying writes; concurrent edits are rejected. Remaining staff screens and the
+production runtime are unfinished. Further visual polish is deferred while
+functional delivery continues, without removing approved requirements.
+
+Earlier implementation batch: `apps/web` adds the React participant interface:
+code/member/language entry, a full-screen Three.js field, live/minimisable HUD,
+standings, Monaco/plain-text editing, private autosave, sample runs, submission
+recovery and sequential hints. The labelled synthetic visual preview is separate
+from the normal protected API. The full staff console and production installation
+remain required. See [participant interface and local preview](docs/participant-ui.md).
+
+Earlier implementation batch: the participant workbench now loads the locked
+language's challenge/starter/public samples, stores member-private conditional
+drafts with durable save recovery, and exposes team official source read-only.
+A tested browser-independent autosave controller preserves local text on
+conflicts, response loss, pauses and reconnects. Own draft live notices carry
+revisions, never source. The visible editor and retention/deployment work remain.
+See [participant workbench](docs/workbench.md).
+
+Earlier implementation batch: protected Socket.IO delivery now connects committed
+claims, scores, hints, judging and control changes to scoped live streams, with
+consistent snapshot/replay, reconnect recovery and temporary teammate editor
+presence. A tested client controller refreshes coherent projections without a
+page reload. The participant/admin screens and real deployment remain required.
+See [live state](docs/realtime.md).
+
+Earlier implementation batch: participant Run/Submit now create durable frozen
+case jobs with 3:1 fair scheduling, guarded once-only sends, checked results,
+bounded recovery, sample expiry and private result APIs. Official results feed the
+existing atomic scoring/claim path; staff can monitor and safely authorise the one
+extra recovery dispatch. This remains a backend tested with synthetic runner
+observations, not an installed event judge. See [participant judging](docs/participant-judging.md).
+
+Earlier implementation batch: the normal two-round competition backend now has
+protected lifecycle commands, published-snapshot selection, atomic bounty/hint
+ledgers, receipt-order R2 claims, exact standings, a committed cutoff draw and
+once-only wallet carryover. Real PostgreSQL/HTTP tests cover both rounds and
+concurrent/recovered effects. This is not the finished game: the installed
+worker runtime, live delivery, cancellation/discipline integration and UI remain
+required. Normal startup still refuses new live starts/submissions without an
+explicit verified readiness dependency. See the [competition engine](docs/competition-engine.md).
+
+Earlier implementation batch: every installation-backed Docker command now runs
+through a native Linux socket-peer wrapper. It holds a kernel-provided peer handle,
+checks the listener's exact reviewed executable/root identity/namespaces, and
+refuses a peer that exits or changes executable while the command runs. Cancelling
+the wrapper stops its owned CLI child, never the daemon. Fixed endpoint/config and
+reported daemon/image pins remain. The version-3 release pins the CLI, daemon and
+wrapper executables; versions 1/2 are refused, not silently upgraded. Socket
+activation/proxy peers and missing kernel support fail closed. This does not prove
+initial-host visibility, loaded policies, full dependency closure, genuine
+readiness or retirement. No cloud daemon is changed or certified, and no installer,
+judging activation, drain or registry slot is granted.
+See [installation integrity](docs/judge-executor.md#installation-integrity).
+
+The earlier authority-gated retirement handoff saves one
+immutable cleanup certificate before appending drain proof to the original result.
+Lost replies and duplicate completion attempts recover that certificate without
+rerunning code or changing result bytes. PostgreSQL integration checks that proof
+releases only its original physical slot. Docker absence now checks both the full
+original ID and exact name, so renaming cannot masquerade as removal. The earlier
+phase/storage records, reference checks and guarded resource cleanup remain.
+Read-only result recovery still cannot invoke Docker, host probes or source.
+No resource receipt or proc observation alone releases the parent reservation or
+invents full drain; full host visibility and no-future-start authority remain gates.
+The new handoff requires a separate trusted kernel-backed retirement authority.
+**Its production implementation and installation do not exist yet.** Tests use
+explicit synthetic authorities; normal startup does not grant this power.
+Real disposable Docker tests execute only hardcoded trusted Node fixtures; Linux
+disk/recovery tests use explicitly synthetic five-language evidence. The earlier
+per-capsule Isolate producer, native C/C++/Node checks and syscall filter remain.
+The actual general cgroup-v1 path has not been exercised on the VM. Native
+preparation/recorded-empty-group/config cleanup and reference checks are implemented
+but unverified there; complete host visibility/drain authority, real interrupted-child and cross-boot
+recovery, immutable image/security installation, runtime calibration and cloud/
+load rehearsal remain required. This code is not an installed event-ready judge.
+At that earlier judge batch, completion was estimated at **51%**; the current
+whole-project estimate is in Status above. Neither estimate is an event-readiness
+score or deadline guarantee.
+No participant/authoring source is executed and no live sandbox is certified.
+No registered
+compatible worker means no new validation admission. Publication requires its
+exact successful, drained validation and authorised review; no live bypass is installed.
 Existing immutable snapshots, draft authoring, reserved arena setup, browser replacement,
 logout/keep-alive and staff management remain supported.
 Tests use real disposable PostgreSQL with synthetic clock observations, not a
 certified live cloud clock. Default Windows/local startup stays health/readiness
-only. Exceptional operator recovery, participant/admin screens, live notifications and
+only. Exceptional operator recovery, the full admin console, remaining history/recovery UI and
 actual host/browser/deployment checks remain. No existing database is migrated
-on startup. See [validation runs](docs/validation-runs.md),
+on startup. See [judge gateway/registry](infra/judge-gateway/README.md),
+[protected execution handoff](docs/judge-executor.md),
+[private judge protocol](docs/judge-protocol.md),
+[validation runs](docs/validation-runs.md),
 [validation preparation](docs/content-validation.md),
 [content authoring](docs/content-authoring.md),
 [arena setup](docs/arena-setup.md),
@@ -37,9 +224,11 @@ is enabled. Preserve the completed `admission-fix-v1`; do not rerun it. This is
 synthetic lab evidence, not production judge or event-readiness sign-off.
 
 The architecture is approved. Without explicit reviewed runtime wiring, the API
-still exposes only health/readiness checks. Registration and entry now have migrations and tests;
-the frontend, gameplay, production judge connection and full-app deployment are
-not implemented yet. The following judge notes are historical checkpoints;
+still exposes only health/readiness checks. Registration, competition, judging
+orchestration and workbench APIs now have migrations and tests; the first
+participant frontend is implemented, while the full staff console, production
+judge installation and full-app deployment remain unfinished.
+The following judge notes are historical checkpoints;
 the latest completed result above supersedes their then-pending status.
 
 Current milestone: [Judge0 feasibility](docs/judge-feasibility.md). The isolated cloud lab has passed the fixed C++ API/queue/result flow, eight failure/output cases, all five pinned language profiles, scoped retained-result/permit recovery, the [private HTTP/queue association experiment](infra/judge-spike/HTTP-LAB.md), a fixed [active worker crash/drain test](infra/judge-spike/CRASH-LAB.md), the fifty-case [bounded output/shared checker suite](infra/judge-spike/STREAMS-LAB.md), the fixed [five-profile HTTP/bounded evidence integration](infra/judge-spike/TRANSPORT-LAB.md), three fixed [shared sandbox boundary probes](infra/judge-spike/ISOLATION-LAB.md), the guarded seal of [protected-output evidence](infra/judge-spike/OUTPUT-LAB.md) and eighteen fixed [protected verdict cases](infra/judge-spike/VERDICTS-LAB.md). Fifteen provider records are retained, including all ten earlier records unchanged. These are synthetic checks, not a participant-ready deployment. End-to-end protected failure evidence, arbitrary compiler-failure attribution, broader crash/retirement recovery, adversarial isolation, dependency review, runtime-budget calibration and load verification remain open. Preserve completed evidence and the earlier intentionally held lab reservation; do not repeat completed experiments or historical nine/ten-row probes. Any additional cloud resources or budget changes need separate approval.

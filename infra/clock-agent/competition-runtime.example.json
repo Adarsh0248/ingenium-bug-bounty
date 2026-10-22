@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "draw_key": "replace-with-an-independent-32-byte-lowercase-hex-key",
+  "draw_key_id": "event-draw-v1",
+  "judge": {
+    "host_epoch_id": "replace-with-the-reviewed-active-epoch-uuid",
+    "endpoint_ref": "event-judge-v1",
+    "runtimes": {
+      "c": { "key": "replace-c-runtime", "digest": "replace-with-sha256" },
+      "cpp": { "key": "replace-cpp-runtime", "digest": "replace-with-sha256" },
+      "java": {
+        "key": "replace-java-runtime",
+        "digest": "replace-with-sha256"
+      },
+      "python": {
+        "key": "replace-python-runtime",
+        "digest": "replace-with-sha256"
+      },
+      "javascript": {
+        "key": "replace-javascript-runtime",
+        "digest": "replace-with-sha256"
+      }
+    }
+  }
+}
