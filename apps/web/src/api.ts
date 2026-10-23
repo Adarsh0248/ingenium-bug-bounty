@@ -21,6 +21,8 @@ const messages: Record<string, string> = {
   CLOCK_UNTRUSTED:
     "Competition time is being checked. Actions are temporarily unavailable.",
   JUDGE_UNAVAILABLE: "Judging is temporarily unavailable.",
+  RESTORE_QUARANTINED: "The event is offline for recovery checks. Actions remain unavailable.",
+  PAYLOAD_EXPIRED: "This code or diagnostic payload is no longer retained. Results and history are still available.",
   DRAFT_TOO_LARGE:
     "The draft exceeds 128 KiB. Your text has not been truncated.",
   DIRTY_BUFFER_CAPACITY:

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { standingsParity } from "./standings-parity.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { TestContext } from "node:test";
 import type { Pool } from "pg";
@@ -15,6 +16,7 @@ import type {
 } from "../../src/competition/service.js";
 import { buildApp } from "../../src/app.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
+import { createLiveService } from "../../src/live/service.js";
 
 interface Context {
   owner: Pool;
@@ -41,6 +43,7 @@ interface Context {
 export async function disciplineChecks(t: TestContext, c: Context) {
   const raw = createDisciplineService(c.api, c.clock, c.delivery),
     entry = createEntryService(c.api, c.clock, c.delivery);
+  const live = createLiveService(c.api, c.clock, c.delivery);
   const query = async (sql: string, p: unknown[] = []) =>
     (await c.owner.query(sql, p)).rows;
   const team = c.teams[0]!;
@@ -69,9 +72,20 @@ export async function disciplineChecks(t: TestContext, c: Context) {
     await c.budgets();
     return raw.command(c.staff.sessionCookie, p);
   };
-  const standing = async (r: string) =>
-    (await query("SELECT competition_standings($1) AS rows", [r]))[0]
-      .rows as Record<string, any>[];
+  const standing = async (r: string) => {
+    const rows = (
+      await query("SELECT competition_standings($1) AS rows", [r])
+    )[0].rows as Record<string, any>[];
+    const view = await live.guarded(
+      { audience: "STAFF", cookie: c.staff.sessionCookie, roundId: r },
+      live.snapshot,
+    );
+    assert.deepEqual(
+      view.standings,
+      rows.map(({ wallet: _wallet, ...row }) => row),
+    );
+    return rows;
+  };
   const control = async (
     round: string,
     action: "PAUSE" | "CLOSE" | "FINALISE",
@@ -651,5 +665,9 @@ export async function disciplineChecks(t: TestContext, c: Context) {
         await app.close();
       }
     },
+  );
+  await t.test(
+    "aggregate standings preserve all manual penalties/reversals and both-round sporting fields",
+    () => standingsParity(c.owner),
   );
 }

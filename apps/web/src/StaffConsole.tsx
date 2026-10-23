@@ -32,9 +32,14 @@ import StaffTeams from "./StaffTeams";
 import StaffDiscipline from "./StaffDiscipline";
 import StaffIncidents from "./StaffIncidents";
 import StaffJudging from "./StaffJudging";
+import StaffAudit from "./StaffAudit";
+import StaffAnnouncements from "./StaffAnnouncements";
+import StaffResultsExport from "./StaffResultsExport";
+import StaffMaintenance from "./StaffMaintenance";
+import StaffOperations from "./StaffOperations";
 
 type Tab =
-  "SETUP" | "BOUNTIES" | "MONITOR" | "JUDGING" | "ACCESS" | "STAFF" | "LIBRARY" | "TEAMS" | "DISCIPLINE" | "INCIDENTS";
+  "SETUP" | "BOUNTIES" | "MONITOR" | "JUDGING" | "ACCESS" | "STAFF" | "LIBRARY" | "TEAMS" | "DISCIPLINE" | "INCIDENTS" | "AUDIT" | "ANNOUNCEMENTS" | "MAINTENANCE";
 type Draft = {
   minutes: string;
   teams: string[];
@@ -164,7 +169,7 @@ export default function StaffConsole({
       setData(value);
       if (!value.rounds.length)
         setTab((old) =>
-          ["ACCESS", "STAFF", "LIBRARY", "TEAMS"].includes(old) ? old : "SETUP",
+          ["ACCESS", "STAFF", "LIBRARY", "TEAMS", "AUDIT", "MAINTENANCE"].includes(old) ? old : "SETUP",
         );
       setActive((old) =>
         value.rounds.some((r) => r.round_id === old)
@@ -716,7 +721,7 @@ export default function StaffConsole({
           <strong>{round?.selected.length ?? 0}</strong>
         </div>
       </section>
-      {manager && !["STAFF", "ACCESS", "LIBRARY", "TEAMS"].includes(tab) && (
+      {manager && !["STAFF", "ACCESS", "LIBRARY", "TEAMS", "AUDIT", "ANNOUNCEMENTS", "MAINTENANCE"].includes(tab) && (
         <div className="staff-controls">
           {round && editable && (
             <>
@@ -795,7 +800,8 @@ export default function StaffConsole({
             "MONITOR",
             ...(round ? ["JUDGING"] : []),
             "ACCESS",
-            ...(manager ? ["LIBRARY", "TEAMS", ...(round && data?.instance ? ["DISCIPLINE", "INCIDENTS"] : [])] : []),
+            ...(data?.instance ? ["ANNOUNCEMENTS"] : []),
+            ...(manager ? ["LIBRARY", "TEAMS", "AUDIT", "MAINTENANCE", ...(round && data?.instance ? ["DISCIPLINE", "INCIDENTS"] : [])] : []),
             ...(superAdmin ? ["STAFF"] : []),
           ] as Tab[]
         ).map((name) => (
@@ -820,6 +826,10 @@ export default function StaffConsole({
       {tab === "JUDGING" && round && <StaffJudging key={round.round_id} api={api} round={round}
         available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved}
         version={JSON.stringify([view?.judging,view?.round?.state])} blockNavigation={setAccessBlocked} />}
+      {tab === "AUDIT" && manager && <StaffAudit key={data?.instance?.instance_id??"global"} api={api} arenaId={data?.instance?.instance_id??null}
+        superAdmin={superAdmin} available={ready&&!!data&&!busy&&!sessionUnknown&&!command.current.unresolved}/>}
+      {tab === "ANNOUNCEMENTS" && data?.instance && <StaffAnnouncements key={data.instance.instance_id} api={api} room={data}
+        available={ready&&!busy&&!sessionUnknown&&!command.current.unresolved} version={view?.announcement_head??null} blockNavigation={setAccessBlocked}/>}
       {tab === "INCIDENTS" && manager && round && data?.instance && (
         <StaffIncidents key={round.round_id} api={api} roundId={round.round_id}
           available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved}
@@ -830,6 +840,7 @@ export default function StaffConsole({
           liveRevision={view?.round?.revision} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved}
           blockNavigation={setAccessBlocked} />
       )}
+      {tab === "MAINTENANCE" && manager && <><StaffOperations api={api} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} /><StaffMaintenance api={api} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} /></>}
       {tab === "TEAMS" && manager && (
         <StaffTeams
           api={api}
@@ -1189,7 +1200,11 @@ export default function StaffConsole({
             </div>
           </section>
           <section className="staff-section">
-            <h2>{round?.state.startsWith("CANCEL") ? "Cancelled round history" : view?.final ? "Final standings" : "Live standings"}</h2>
+            <div className="staff-section-heading">
+              <h2>{round?.state.startsWith("CANCEL") ? "Cancelled round history" : view?.final ? "Final standings" : "Live standings"}</h2>
+              {round && data?.instance && <StaffResultsExport api={api} arena={data.instance.instance_id} round={round.round_id} kind={round.kind}
+                available={!locked && !!view?.final && round.state === "CLOSED"} />}
+            </div>
             <div className="staff-table-wrap">
               <table>
                 <thead>

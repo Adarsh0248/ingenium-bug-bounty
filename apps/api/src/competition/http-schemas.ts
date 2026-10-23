@@ -41,6 +41,10 @@ export const receipt = object({ outcome_id: id, round_id: id, request_key: id, a
 export const outcome = object({ status: { type: "string", enum: ["OBSERVED", "NOT_OBSERVED"] }, outcome: nullable(receipt) });
 export const standings = object({ final: { type: "boolean" }, cancelled:{type:"boolean"}, standings: list(object({ team_round_id: id, team_id: id, team_name: text, points: number, solve_time_ms: number,
   penalty_ms: number, effective_time_ms: number, difficulties: list({ type: "integer", minimum: 1, maximum: 100 }, 40), rank: nullable({ type: "integer", minimum: 1, maximum: 100 }) }), 100) });
+export const finalResults = object({ format_version:{type:"integer",const:1},state:{type:"string",const:"FINAL"},arena_id:id,round_id:id,round_kind:{type:"integer",enum:[1,2]},
+  result_id:id,result_version:{type:"integer",const:1},finalised_at:time,standings_sha256:{type:"string",pattern:"^[0-9a-f]{64}$"},
+  qualification_status:{type:"string",enum:["PENDING","LOCKED","NOT_APPLICABLE"]},standings:list(object({team_round_id:id,team_id:id,team_name:text,rank:{type:"integer",minimum:1,maximum:100},
+    points:number,solve_time_ms:number,penalty_ms:number,effective_time_ms:number,difficulties:list({type:"integer",minimum:1,maximum:100},40),qualified:nullable({type:"boolean"})}),100) });
 export const cancellation = object({arena_id:id,round_id:id,revision:{type:"string",maxLength:19},state:{type:"string",maxLength:16},current:{type:"boolean"},held_executions:number,cancelled_work:number,pending_work:number,
   cancellation:nullable(object({cancellation_id:id,incident_ref:{type:"string",maxLength:120},reason:text,actor_name:text,started_at:time,finished_at:nullable(time)}))});
 export const hints = list(object({ level: { type: "integer", minimum: 1, maximum: 3 }, content: { type: "string", maxLength: 16384 }, recorded_at: time }), 3);

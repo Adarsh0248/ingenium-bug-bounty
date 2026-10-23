@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type { TestContext } from "node:test";
 import { promisify } from "node:util";
 
-export async function createTestTls(t: TestContext) {
+export async function createTestTls(t: TestContext, serverName: "judge.test" | "localhost" = "judge.test") {
   const directory = await mkdtemp(join(tmpdir(), "ingenium-test-tls-"));
   t.after(async () => {
     assert.equal(dirname(resolve(directory)), resolve(tmpdir())); assert.match(basename(directory), /^ingenium-test-tls-/);
@@ -17,8 +17,8 @@ export async function createTestTls(t: TestContext) {
   const run = (args: string[]) => promisify(execFile)(openssl, args, { cwd: directory, timeout: 10000, maxBuffer: 16384 });
   await run(["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "1", "-subj", "/CN=Ingenium Disposable Test CA", "-keyout", "ca.key", "-out", "ca.pem"]);
   for (const role of ["server", "client", "other"]) {
-    await run(["req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-subj", `/CN=${role === "server" ? "judge.test" : "worker.test"}`, "-keyout", `${role}.key`, "-out", `${role}.csr`]);
-    await writeFile(join(directory, `${role}.ext`), `basicConstraints=CA:FALSE\nextendedKeyUsage=${role === "server" ? "serverAuth" : "clientAuth"}\n${role === "server" ? "subjectAltName=DNS:judge.test\n" : ""}`);
+    await run(["req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-subj", `/CN=${role === "server" ? serverName : "worker.test"}`, "-keyout", `${role}.key`, "-out", `${role}.csr`]);
+    await writeFile(join(directory, `${role}.ext`), `basicConstraints=CA:FALSE\nextendedKeyUsage=${role === "server" ? "serverAuth" : "clientAuth"}\n${role === "server" ? `subjectAltName=DNS:${serverName}${serverName === "localhost" ? ",IP:127.0.0.1" : ""}\n` : ""}`);
     await run(["x509", "-req", "-in", `${role}.csr`, "-CA", "ca.pem", "-CAkey", "ca.key", "-set_serial", role === "server" ? "2" : role === "client" ? "3" : "4", "-days", "1", "-extfile", `${role}.ext`, "-out", `${role}.pem`]);
   }
   return { directory, ca: await readFile(join(directory, "ca.pem")), cert: await readFile(join(directory, "server.pem")), key: await readFile(join(directory, "server.key")),

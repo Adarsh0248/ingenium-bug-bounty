@@ -20,6 +20,63 @@ async function open(page: import("@playwright/test").Page) {
   ).toBeVisible();
 }
 
+test("keyboard target entry focuses the workbench and closing returns to the same bounty", async ({
+  page,
+}) => {
+  await enter(page);
+  const target = page.getByRole("button", { name: /01 The silent overflow/ });
+  await target.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "The silent overflow", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "Close workbench" }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".workbench")).toHaveCount(0);
+  await expect(target).toBeFocused();
+});
+
+test("team score and ranking remain visible in full and minimised HUDs at every viewport", async ({
+  page,
+}) => {
+  await enter(page);
+  const hud = page.getByRole("region", { name: "Team HUD" });
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1440, height: 1000 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const compact of [false, true]) {
+      if (compact)
+        await hud.getByRole("button", { name: "Minimise HUD" }).click();
+      await expect(
+        hud.getByText("Segfault Society", { exact: true }),
+      ).toBeInViewport();
+      await expect(hud.locator(".hud-score:not(.wallet) strong")).toHaveText(
+        "1,350",
+      );
+      await expect(hud.locator(".hud-rank strong")).toBeInViewport();
+      await expect(hud.locator(".hud-rank strong")).toHaveText("#2");
+      expect(
+        await hud.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth,
+        ),
+      ).toBe(true);
+      if (viewport.width === 390)
+        await page.screenshot({
+          path: `test-results/hud-${compact ? "compact" : "full"}-mobile.png`,
+        });
+      if (compact)
+        await hud.getByRole("button", { name: "Expand HUD" }).click();
+    }
+  }
+});
+
 test("synthetic preview history retains original attempts and purchased hints without changing the editor", async ({
   page,
 }) => {
@@ -429,6 +486,99 @@ test("3D canvas renders distinct nonblank pixels and moves on desktop and mobile
     const second = await pixels();
     expect(second.hash).not.toBe(first.hash);
   }
+});
+
+test("all forty bounties remain rendered, moving and keyboard reachable on desktop and mobile", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  await enter(page);
+  await page.request.post("/api/v1/_fixture", {
+    data: { action: "full-field" },
+  });
+  const targets = page.getByRole("complementary", { name: "Bounty targets" });
+  await expect(targets.getByRole("button")).toHaveCount(40);
+  const measurements = [];
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(1000);
+    const inspect = () =>
+      page.locator("canvas").evaluate((element) => {
+        const canvas = element as HTMLCanvasElement;
+        const gl = canvas.getContext("webgl2")!;
+        const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+        gl.readPixels(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          pixels,
+        );
+        let hash = 0,
+          bright = 0;
+        for (let i = 0; i < pixels.length; i += 16) {
+          const color =
+            (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2];
+          hash = (hash + Math.imul(color, i + 1)) | 0;
+          if (pixels[i] > 70 && pixels[i + 1] > 70) bright++;
+        }
+        return { hash, bright, contextLost: gl.isContextLost() };
+      });
+    const first = await inspect();
+    expect(first.contextLost).toBe(false);
+    expect(first.bright).toBeGreaterThan(100);
+    await page.waitForTimeout(700);
+    expect((await inspect()).hash).not.toBe(first.hash);
+    const frame = await page.evaluate(async () => {
+      const samples: number[] = [];
+      let previous = performance.now();
+      for (let i = 0; i < 12; i++) {
+        await new Promise(requestAnimationFrame);
+        const now = performance.now();
+        samples.push(now - previous);
+        previous = now;
+      }
+      return samples.sort((a, b) => a - b)[Math.floor(samples.length / 2)];
+    });
+    measurements.push({
+      ...viewport,
+      targets: 40,
+      median_frame_ms: frame,
+      renderer: "headless-software-test-only",
+    });
+    await page.screenshot({
+      path: `test-results/arena-40-${viewport.width}.png`,
+    });
+    const last = targets.getByRole("button").last();
+    await last.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { name: "Race condition / 40", exact: true }),
+    ).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByRole("button", { name: "Close workbench" }),
+    ).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(last).toBeFocused();
+    await expect(last).toBeInViewport();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await test
+    .info()
+    .attach("forty-target-frame-samples-not-device-calibration", {
+      body: Buffer.from(JSON.stringify(measurements)),
+      contentType: "application/json",
+    });
 });
 
 test("the actual Monaco editor accepts keyboard text and acknowledges its own snapshot without a page error", async ({

@@ -271,6 +271,15 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     if (b.action === "close") s.closed = true;
     if (b.action === "revoke") s.revoked = true;
     if (b.action === "drop") s.dropNext = true;
+    if (b.action === "full-field")
+      s.bugs = Array.from({ length: 40 }, (_, i) => ({
+        bounty_id: id(100 + i),
+        title: `${definitions[i % definitions.length].title} / ${i + 1}`,
+        difficulty: 1 + ((i * 17) % 100),
+        base_bounty: (1 + ((i * 17) % 100)) * 10,
+        claimed: false,
+        hint_tier: 0,
+      }));
     if (
       b.action === "judge-delay" &&
       Number.isInteger(b.ms) &&
@@ -367,19 +376,42 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       heads: s.heads,
     });
   }
-  if (p === "/api/v1/competition/history/rounds") return send([{ round_id: round, kind: 1, state: session(s).round_state }]);
+  if (p === "/api/v1/competition/history/rounds")
+    return send([{ round_id: round, kind: 1, state: session(s).round_state }]);
   const historyPath = `/api/v1/competition/rounds/${round}/history`;
-  if (p === historyPath) return send({
-    round: { round_id: round, kind: 1, state: session(s).round_state, language: s.language }, final: s.closed, cancelled: false,
-    wallet: s.wallet, standings: snapshot(s, randomUUID()).standings,
-    bounties: s.bugs.map(bug => ({ ...bug, draft_saved: s.drafts.has(bug.bounty_id), awarded_points: bug.claimed ? bug.base_bounty : null })),
-  });
-  if (p === `${historyPath}/attempts`) return send({
-    items: [...s.feedback.values()].map(f => ({ ...f, title: s.bugs.find(bug => bug.bounty_id === f.bounty_id)?.title,
-      member_round_id: id(5), award_id: f.lane === "OFFICIAL" && f.status === "COMPLETED" ? f.id : null })), next_after: null,
-  });
-  if (p === `${historyPath}/wallet`) return send({ items: s.walletEntries, next_after: null });
-  if (p.startsWith(`${historyPath}/hints/`)) return send(s.hints.get(p.split("/").at(-1)!) ?? []);
+  if (p === historyPath)
+    return send({
+      round: {
+        round_id: round,
+        kind: 1,
+        state: session(s).round_state,
+        language: s.language,
+      },
+      final: s.closed,
+      cancelled: false,
+      wallet: s.wallet,
+      standings: snapshot(s, randomUUID()).standings,
+      bounties: s.bugs.map((bug) => ({
+        ...bug,
+        draft_saved: s.drafts.has(bug.bounty_id),
+        awarded_points: bug.claimed ? bug.base_bounty : null,
+      })),
+    });
+  if (p === `${historyPath}/attempts`)
+    return send({
+      items: [...s.feedback.values()].map((f) => ({
+        ...f,
+        title: s.bugs.find((bug) => bug.bounty_id === f.bounty_id)?.title,
+        member_round_id: id(5),
+        award_id:
+          f.lane === "OFFICIAL" && f.status === "COMPLETED" ? f.id : null,
+      })),
+      next_after: null,
+    });
+  if (p === `${historyPath}/wallet`)
+    return send({ items: s.walletEntries, next_after: null });
+  if (p.startsWith(`${historyPath}/hints/`))
+    return send(s.hints.get(p.split("/").at(-1)!) ?? []);
   const outcome = p.match(/\/outcomes\/([^/]+)$/);
   if (outcome && !p.includes("/draft/"))
     return send({
@@ -491,7 +523,11 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     };
     s.outcomes.set(b.request_key, receipt);
     if (kind === "SAVED") {
-      s.drafts.set(bounty, { source: b.source, revision: rev, updated_at: new Date().toISOString() });
+      s.drafts.set(bounty, {
+        source: b.source,
+        revision: rev,
+        updated_at: new Date().toISOString(),
+      });
       emit(
         s,
         {
@@ -551,7 +587,15 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       const price = bug.difficulty * [1, 3, 4][b.level - 1];
       s.wallet -= price;
       s.points -= price;
-      s.walletEntries.push({ id: randomUUID(), kind: "HINT", title: bug.title, amount: -price, hint_level: b.level, awarded_points: null, recorded_at: new Date().toISOString() });
+      s.walletEntries.push({
+        id: randomUUID(),
+        kind: "HINT",
+        title: bug.title,
+        amount: -price,
+        hint_level: b.level,
+        awarded_points: null,
+        recorded_at: new Date().toISOString(),
+      });
       bug.hint_tier = b.level;
       s.hints.set(bounty, [
         ...(s.hints.get(bounty) ?? []),
@@ -619,7 +663,15 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
           bug.claimed = true;
           s.wallet += bug.base_bounty;
           s.points += bug.base_bounty;
-          s.walletEntries.push({ id: randomUUID(), kind: "AWARD", title: bug.title, amount: bug.base_bounty, hint_level: null, awarded_points: bug.base_bounty, recorded_at: new Date().toISOString() });
+          s.walletEntries.push({
+            id: randomUUID(),
+            kind: "AWARD",
+            title: bug.title,
+            amount: bug.base_bounty,
+            hint_level: null,
+            awarded_points: bug.base_bounty,
+            recorded_at: new Date().toISOString(),
+          });
           emit(
             s,
             {

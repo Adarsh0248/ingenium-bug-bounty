@@ -22,9 +22,34 @@ Organisers and participant sessions cannot use its registration or code routes.
   competition state, scores, pauses, drafts and judging history. Already enrolled
   members still need the normal staff-approved browser replacement after fresh
   entry; a new code does not bypass their locked enrollment.
-- An existing complete registration with no credential can receive its first code
-  through the same explicit code command, using observed code version zero.
+- An existing complete registration with no active credential uses **Issue team
+  code**, not Rotate. First issuance uses observed code version zero; reissuance
+  after revocation advances the previous credential version.
   Incomplete owner-created fixtures cannot receive a code through this route.
+- **Revoke team code** deliberately retires the current code, both members'
+  grants, entry proofs and browser handoffs without generating a replacement
+  secret. It needs the exact team, observed code version, your own current staff
+  code and an audited reason. The confirmation names the action and warns about
+  its access effects. This is global credential revocation, not an arena-scoped
+  block; neither action changes scores or pauses the arena.
+- A revoked code stays unavailable until a fresh explicit Issue command. That
+  command does not reactivate old sessions, clear disciplinary blocks, bypass
+  same-round organiser approval or change the selected language. Admitted work
+  continues under its original frozen source, settings and receipt priority.
+
+## Private Search
+
+Use **Find team** to search team names, registered member names or registration
+IDs. Matching is case-insensitive substring matching, with whitespace around the
+query trimmed. `%`, `_`, quotes and backslashes are literal characters, not SQL
+patterns. Search text is limited to 120 UTF-8 bytes. There is no public member
+directory, credential search or raw-code readback.
+
+Pages stay capped at 50 registrations; the response includes the filtered match
+count and total pool count. Cursors must belong to the current search result.
+Changing/clearing the search returns to page one; a late response from an older
+query cannot replace the current screen. Search/background refresh does not
+renew the staff session, and a draft/unknown command locks search navigation.
 
 Each issued code appears once in a masked private dialog. Reveal and Copy are
 explicit; clipboard failure leaves it available for private manual copying.
@@ -33,8 +58,11 @@ registration list. Do not distribute them through a public sheet or shared chat.
 
 ## Concurrent Changes and Recovery
 
-Creation uses the observed security-control revision; code rotation uses the
-observed team code version. Concurrent changes produce an immutable rejection
+Creation uses the observed security-control revision; code actions use the
+observed team code version and the action's required active/inactive state.
+Rotate/Revoke require an active code; Issue requires no active code. A stale
+rotation cannot silently issue a new code after revocation. Concurrent changes
+produce an immutable rejection
 instead of overwriting data. The editor keeps the unsent names and offers an
 explicit review of the latest state before a new command.
 
@@ -54,12 +82,18 @@ handle; it does not make replaying or recreating a registration safe.
 
 ## HTTP and Storage
 
-- `GET /api/v1/staff/teams?after=UUID`: at most 50 registrations, safe code-version
-  metadata, total pool count and the observed creation revision.
+- `GET /api/v1/staff/teams?search=TEXT&after=UUID`: at most 50 matching
+  registrations, safe code-version/active-state metadata, normalised query,
+  matched/total counts and the observed creation revision. Both parameters are
+  optional. The route remains Owner/Super-Admin-only and uncached.
 - `POST /api/v1/staff/teams`: strict team/member names, request key, expected
   revision, own-code confirmation and audit reason.
 - `POST /api/v1/staff/teams/:team_id/rotate-code`: strict observed code version,
   request key, own-code confirmation and audit reason.
+- `POST /api/v1/staff/teams/:team_id/revoke-code`: the same protected confirmation,
+  but no generated code or recoverable secret delivery.
+- `POST /api/v1/staff/teams/:team_id/issue-code`: deliberate new issuance only when
+  no code is currently active, with the observed version and confirmation.
 - `GET /api/v1/staff/outcomes/teams/:request_key`: original actor's receipt or
   `NOT_OBSERVED`, never raw code delivery.
 
@@ -74,6 +108,11 @@ confirmed database writer. The runtime role cannot directly provision teams,
 members or credentials, or insert/edit/delete these receipts. Existing
 registrations and credentials are not rewritten by migration. These migrations
 have only been applied to disposable test databases in this development batch.
+Migration `0068_team_search_revocation` extends the existing confirmed writer and
+immutable receipt shape. Revocations reference the affected credential; the
+issuance-only unique index still prevents issuing it twice. Existing records,
+verifiers and request-key fingerprints are preserved. No project/cloud database
+has been migrated by this work.
 
 ## CSV Import
 
@@ -165,6 +204,29 @@ The pinned server-only parser is `csv-parse` 7.0.3; the implementation follows i
 database code is shipped in the participant browser bundle.
 
 ## Verification
+
+The focused search/revocation flow runs against disposable PostgreSQL and real
+Chromium, not the project database:
+
+```powershell
+$env:INGENIUM_TEST_SUITE = 'team-access-browser'
+npm run test:db:schema
+Remove-Item Env:INGENIUM_TEST_SUITE
+```
+
+It exercises 58 synthetic imported registrations, literal/empty/member/ID search,
+50-row paging and scope rejection, read-only session activity, role/own-code/
+clock checks, once-only revoke receipts, stale and simultaneous revoke/rotate/
+issue commands, immutable history and strict uncached HTTP/CSRF boundaries.
+Live checks preserve both languages, drafts, round clocks, points and an admitted
+program; the original job still completes with its once-only award. Both browser
+grants, pending/approved handoffs and encrypted deliveries are invalidated. Fresh
+code issuance still cannot reenrol an already-entered member without approval.
+Real UI checks cover search/page reset, confirmation warnings, a lost committed
+revoke response with GET-only recovery, both participant browsers losing access,
+the other team staying connected, deliberate masked code issuance and mobile
+layout. The existing team-registration, CSV-import and both-round browser suites
+are separate regression checks, not evidence of full event-load readiness.
 
 Disposable PostgreSQL checks exercise duplicate requests, changed intents,
 owner-scoped recovery, normal role/own-code boundaries, UTF-8 limits, stale

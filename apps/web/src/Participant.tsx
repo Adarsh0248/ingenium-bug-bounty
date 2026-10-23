@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import {
   Bug,
+  Bell,
   Check,
   Crosshair,
   Expand,
@@ -24,6 +25,7 @@ import type { Presence, Session, Snapshot, Termination } from "./types";
 import { bugPath, languages, timeText } from "./types";
 import { createWorkspace } from "./workspace";
 import { Brand, IconButton, Modal } from "./ui";
+import Announcements from "./Announcements";
 const Arena = lazy(() => import("./Arena")),
   Workbench = lazy(() => import("./Workbench")),
   Results = lazy(() => import("./Results"));
@@ -45,6 +47,8 @@ export default function Participant({
     [compact, setCompact] = useState(false),
     [standings, setStandings] = useState(false),
     [history, setHistory] = useState(false),
+    [announcements, setAnnouncements] = useState(false),
+    [seenAnnouncement, setSeenAnnouncement] = useState<string | null>(null),
     [logout, setLogout] = useState(false),
     [error, setError] = useState(""),
     [terminations, setTerminations] = useState<Termination[]>([]),
@@ -66,7 +70,9 @@ export default function Participant({
     ),
     live = useRef<ReturnType<typeof connectLive> | null>(null),
     received = useRef(performance.now()),
-    snapshotRef = useRef<Snapshot | null>(null);
+    snapshotRef = useRef<Snapshot | null>(null),
+    targetDock = useRef<HTMLElement>(null),
+    returnTarget = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     const client = connectLive("PARTICIPANT", null, {
       now: () => performance.now(),
@@ -151,6 +157,10 @@ export default function Participant({
   }, [workspace]);
   const selectedBug = snapshot?.bounties.find((b) => b.bounty_id === selected);
   async function open(id: string) {
+    returnTarget.current =
+      targetDock.current?.querySelector<HTMLButtonElement>(
+        `[data-bounty-id="${CSS.escape(id)}"]`,
+      ) ?? null;
     setSelected(id);
     live.current?.edit(id);
     try {
@@ -164,6 +174,7 @@ export default function Participant({
   const close = () => {
     setSelected(null);
     live.current?.edit(null);
+    returnTarget.current?.focus();
   };
   async function signout() {
     await sessionAction("logout");
@@ -257,11 +268,27 @@ export default function Participant({
             ? "FINAL RESULTS"
             : round?.state === "CLOSING"
               ? "RESULTS FINALISING"
-            : round?.state === "RUNNING"
-              ? "LIVE ARENA"
-              : (round?.state.replaceAll("_", " ") ?? "SYNCING")}
+              : round?.state === "RUNNING"
+                ? "LIVE ARENA"
+                : (round?.state.replaceAll("_", " ") ?? "SYNCING")}
         </div>
         <div className="topbar-actions">
+          <span className="announcement-bell">
+            <IconButton
+              title="Announcements"
+              onClick={() => setAnnouncements(true)}
+            >
+              <Bell size={17} />
+            </IconButton>
+            {snapshot?.announcement_head &&
+              snapshot.announcement_head !== seenAnnouncement && (
+                <span
+                  className="announcement-new"
+                  role="status"
+                  aria-label="New announcement"
+                />
+              )}
+          </span>
           <span
             className={`connection ${ready ? "connected" : ""}`}
             role="status"
@@ -334,7 +361,11 @@ export default function Participant({
           </div>
         </>
       )}
-      <aside className="target-dock" aria-label="Bounty targets">
+      <aside
+        ref={targetDock}
+        className="target-dock"
+        aria-label="Bounty targets"
+      >
         <div className="dock-heading">
           <span>
             <Crosshair size={15} /> TARGETS
@@ -393,7 +424,10 @@ export default function Participant({
         </div>
       </aside>
       <div className="arena-tools">
-        <IconButton title="Results and history" onClick={() => setHistory(true)}>
+        <IconButton
+          title="Results and history"
+          onClick={() => setHistory(true)}
+        >
           <History size={19} />
         </IconButton>
         <IconButton
@@ -409,7 +443,11 @@ export default function Participant({
           {light ? <Bug size={19} /> : <VolumeX size={19} />}
         </IconButton>
       </div>
-      {round?.state.startsWith("CANCEL") && <div className="arena-status" role="status">Round cancelled. No competitive result or winner.</div>}
+      {round?.state.startsWith("CANCEL") && (
+        <div className="arena-status" role="status">
+          Round cancelled. No competitive result or winner.
+        </div>
+      )}
       {ownPause && !round?.state.startsWith("CANCEL") && (
         <div className="arena-status" role="status">
           <ShieldCheck size={16} /> Your actions are paused
@@ -462,7 +500,15 @@ export default function Participant({
       </footer>
       {standings && (
         <Modal
-          title={round?.state.startsWith("CANCEL") ? "Cancelled round history" : snapshot?.final ? "Final standings" : round?.state === "CLOSING" ? "Results finalising" : "Live standings"}
+          title={
+            round?.state.startsWith("CANCEL")
+              ? "Cancelled round history"
+              : snapshot?.final
+                ? "Final standings"
+                : round?.state === "CLOSING"
+                  ? "Results finalising"
+                  : "Live standings"
+          }
           close={() => setStandings(false)}
         >
           <div className="leaderboard">
@@ -477,7 +523,9 @@ export default function Participant({
                 key={s.team_round_id}
               >
                 <span>
-                  <b>{s.rank === null ? "--" : String(s.rank).padStart(2, "0")}</b>
+                  <b>
+                    {s.rank === null ? "--" : String(s.rank).padStart(2, "0")}
+                  </b>
                   {s.team_name}
                 </span>
                 <strong>{s.points.toLocaleString()}</strong>
@@ -487,7 +535,41 @@ export default function Participant({
           </div>
         </Modal>
       )}
-      {history && <Suspense fallback={<div className="sync-status" role="status">Loading history</div>}><Results api={api} session={session} version={JSON.stringify([snapshot?.round?.state,snapshot?.final,snapshot?.hud,snapshot?.standings,snapshot?.judging,snapshot?.drafts])} close={() => setHistory(false)} /></Suspense>}
+      {announcements && (
+        <Modal title="Announcements" close={() => setAnnouncements(false)}>
+          <Announcements
+            key={session.session_id}
+            api={api}
+            base="/api/v1/participant/announcements"
+            available={ready}
+            version={snapshot?.announcement_head ?? null}
+            loaded={setSeenAnnouncement}
+          />
+        </Modal>
+      )}
+      {history && (
+        <Suspense
+          fallback={
+            <div className="sync-status" role="status">
+              Loading history
+            </div>
+          }
+        >
+          <Results
+            api={api}
+            session={session}
+            version={JSON.stringify([
+              snapshot?.round?.state,
+              snapshot?.final,
+              snapshot?.hud,
+              snapshot?.standings,
+              snapshot?.judging,
+              snapshot?.drafts,
+            ])}
+            close={() => setHistory(false)}
+          />
+        </Suspense>
+      )}
       {logout && (
         <Modal title="Leave the arena?" close={() => setLogout(false)}>
           {workspace.dirty() ? (

@@ -87,6 +87,11 @@ export function createWorkerClock(
         ).rowCount !== 1
       )
         throw new Error("Missing clock authority.");
+      if (
+        (await client.query("SELECT restore_is_quarantined() AS quarantined"))
+          .rows[0]?.quarantined !== false
+      )
+        throw new AccessError("RESTORE_QUARANTINED");
       const result = await work(client);
       await client.query("COMMIT");
       return result;
@@ -247,6 +252,11 @@ export function createWorkerClock(
         previous = row;
         trusted = count === 7 && current - since >= 30n * SECOND;
       } catch (error) {
+        if (
+          error instanceof AccessError &&
+          error.code === "RESTORE_QUARANTINED"
+        )
+          reset();
         if (!(error instanceof AccessError))
           fault(reading ? "DATABASE_UNAVAILABLE" : "INVALID_REPORT");
         throw error;

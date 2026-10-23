@@ -1,6 +1,6 @@
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
-import { createDatabase } from "./database.js";
+import { assertApiDatabase, createDatabase } from "./database.js";
 import { createEntryRuntime } from "./access/runtime.js";
 import { Pool } from "pg";
 import { startEventMaintenance } from "./maintenance/runtime.js";
@@ -10,38 +10,96 @@ async function start() {
   try {
     config = loadConfig(process.env);
   } catch (error) {
-    console.error(error instanceof Error ? error.message : "Invalid API configuration.");
+    console.error(
+      error instanceof Error ? error.message : "Invalid API configuration.",
+    );
     process.exitCode = 1;
     return;
   }
 
-  const database = createDatabase(config.databaseUrl, () => {
-    console.error("An idle PostgreSQL connection failed; readiness will check again on request.");
-  }, config.entryRuntimeFile ? 12 : 4);
+  const database = createDatabase(
+    config.databaseUrl,
+    () => {
+      console.error(
+        "An idle PostgreSQL connection failed; readiness will check again on request.",
+      );
+    },
+    config.entryRuntimeFile ? 12 : 4,
+  );
   let closing = false;
   let entry: Awaited<ReturnType<typeof createEntryRuntime>> | undefined;
   let monitorPool: Pool | undefined;
   if (config.entryRuntimeFile) {
-    monitorPool = new Pool({ connectionString: config.databaseUrl, application_name: "ingenium-clock-monitor", max: 2, connectionTimeoutMillis: 1000 });
-    monitorPool.on("error", () => { if (!closing) entry?.options.clock.fault("DATABASE_UNAVAILABLE"); });
-    try { entry = await createEntryRuntime(database.pool, monitorPool, config.entryRuntimeFile, config.competitionRuntimeFile); }
-    catch {
-      console.error("Event entry could not start. Review the private runtime file, Linux probe ownership and reviewed migrations.");
-      await monitorPool.end(); await database.close(); process.exitCode = 1; return;
+    monitorPool = new Pool({
+      connectionString: config.databaseUrl,
+      application_name: "ingenium-clock-monitor",
+      max: 2,
+      connectionTimeoutMillis: 1000,
+    });
+    monitorPool.on("error", () => {
+      if (!closing) entry?.options.clock.fault("DATABASE_UNAVAILABLE");
+    });
+    try {
+      await assertApiDatabase(database.pool);
+      entry = await createEntryRuntime(
+        database.pool,
+        monitorPool,
+        config.entryRuntimeFile,
+        config.competitionRuntimeFile,
+      );
+    } catch {
+      console.error(
+        "Event entry could not start. Review the private runtime file, Linux probe ownership and reviewed migrations.",
+      );
+      await monitorPool.end();
+      await database.close();
+      process.exitCode = 1;
+      return;
     }
   }
-  const app = buildApp({ database, logger: true, ...(entry ? { entry: entry.options } : {}) });
+  const app = buildApp({
+    database,
+    logger: true,
+    ...(entry
+      ? {
+          entry: {
+            ...entry.options,
+            ...(entry.options.browser.mode === "production"
+              ? { proxy: "loopback" as const }
+              : {}),
+          },
+        }
+      : {}),
+  });
   let maintenance: ReturnType<typeof startEventMaintenance> | undefined;
-  if (entry) app.addHook("onListen", async () => {
-    maintenance = startEventMaintenance(monitorPool!, entry!.options.clock,
-      task => app.log.warn({ event: "maintenance_unavailable", task }, "Background maintenance will retry without changing safety gates."));
-  });
-  if (entry) app.addHook("preClose", async () => {
-    await maintenance?.close();
-    try { await entry!.close(); }
-    catch { console.error("Clock shutdown was not acknowledged; preserve its durable runtime for review."); process.exitCode = 1; }
-  });
-  if (monitorPool) app.addHook("onClose", async () => { await monitorPool!.end(); });
+  if (entry)
+    app.addHook("onListen", async () => {
+      maintenance = startEventMaintenance(
+        monitorPool!,
+        entry!.options.clock,
+        (task) =>
+          app.log.warn(
+            { event: "maintenance_unavailable", task },
+            "Background maintenance will retry without changing safety gates.",
+          ),
+      );
+    });
+  if (entry)
+    app.addHook("preClose", async () => {
+      await maintenance?.close();
+      try {
+        await entry!.close();
+      } catch {
+        console.error(
+          "Clock shutdown was not acknowledged; preserve its durable runtime for review.",
+        );
+        process.exitCode = 1;
+      }
+    });
+  if (monitorPool)
+    app.addHook("onClose", async () => {
+      await monitorPool!.end();
+    });
 
   const shutdown = async () => {
     if (closing) return;
@@ -54,13 +112,19 @@ async function start() {
     }
   };
 
-  process.once("SIGINT", () => { void shutdown(); });
-  process.once("SIGTERM", () => { void shutdown(); });
+  process.once("SIGINT", () => {
+    void shutdown();
+  });
+  process.once("SIGTERM", () => {
+    void shutdown();
+  });
 
   try {
     await app.listen({ host: config.host, port: config.port });
   } catch {
-    console.error("The API could not start. Check whether its local port is already in use.");
+    console.error(
+      "The API could not start. Check whether its local port is already in use.",
+    );
     process.exitCode = 1;
     await shutdown();
   }

@@ -6,6 +6,8 @@ import { createStaffService } from "../access/staff-service.js";
 import { AccessError, accessTransaction, decisionTime, first } from "../access/transaction.js";
 import type { ClockGuard } from "../access/transaction.js";
 import type { LiveEvent, StreamHead } from "./protocol.js";
+import { announcementHead } from "../access/announcements.js";
+import { createStandingsReader } from "./standings.js";
 
 export interface LiveAuth { audience: "PARTICIPANT" | "STAFF"; cookie: string; roundId: string | null; }
 export interface LiveActor {
@@ -18,6 +20,7 @@ export function scopeKey(actor: LiveActor, streams: StreamHead[]) {
 }
 export function createLiveService(pool: Pool, clock: ClockGuard, delivery: SessionDelivery) {
   const staff = createStaffService(pool,clock,delivery);
+  const readStandings = createStandingsReader();
   async function guarded<T>(auth: LiveAuth, read: (context: LiveContext) => Promise<T>): Promise<T> {
     return accessTransaction(pool,clock,async client=>{
       await client.query("SELECT * FROM lock_arena_control(false)");
@@ -30,9 +33,7 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
       let actor: LiveActor;
       if(participant) {
         if(!await sessionValid(client,participant,proof.verifier,now,clock)) throw new AccessError("INVALID_SESSION");
-        const member=await first<{team_round_id:string}>(client,"SELECT team_round_id FROM member_rounds WHERE id=$1",[participant.member_round_id]);
-        if(!member) throw new AccessError("INVALID_SESSION");
-        actor={audience:"PARTICIPANT",session_id:participant.id,round_id:round,team_round_id:member.team_round_id,member_round_id:participant.member_round_id,
+        actor={audience:"PARTICIPANT",session_id:participant.id,round_id:round,team_round_id:participant.team_round_id,member_round_id:participant.member_round_id,
           member_id:participant.member_id,staff_id:null,role:null,name:participant.member_name,team_name:participant.team_name,language:participant.language,expires_at:participantDeadlines(participant).expiresAt};
       } else {
         if(auth.audience!=="STAFF") throw new AccessError("INVALID_SESSION");
@@ -62,8 +63,7 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
       FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`,[roundId,team])).rows : [];
     const pauses=roundId ? (await client.query(`SELECT scope,team_round_id,member_round_id,started_at FROM competition_pauses WHERE round_id=$1 AND ended_at IS NULL
       AND ($2::uuid IS NULL OR scope='GLOBAL' OR team_round_id=$2 OR member_round_id IN(SELECT id FROM member_rounds WHERE team_round_id=$2))`,[roundId,team])).rows : [];
-    const rows=roundId ? (await first<{standings:Record<string,unknown>[],final:boolean}>(client,`SELECT COALESCE((SELECT standings FROM round_results WHERE round_id=$1),competition_standings($1)) standings,
-      EXISTS(SELECT 1 FROM round_results WHERE round_id=$1) final`,[roundId])) : null;
+    const rows=roundId ? await readStandings(client,roundId,streams) : null;
     const cancelled=round?.state==='CANCELLING'||round?.state==='CANCELLED';
     const standings:Record<string,unknown>[]=rows?.standings.map(({wallet:_wallet,...row})=>({...row,...(cancelled?{rank:null}:{})})) ?? [];
     const wallet=team ? (await first(client,"SELECT competition_balance($1) balance",[team]))?.balance : null;
@@ -73,7 +73,8 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
     const security=actor.role==="SUPER_ADMIN" ? (await client.query("SELECT id,display_name,role,disabled_at,revision FROM staff_identities ORDER BY id LIMIT 100")).rows : null;
     const drafts=actor.member_round_id?(await client.query("SELECT bounty_id,revision::text,updated_at FROM code_drafts WHERE member_round_id=$1 ORDER BY bounty_id",[actor.member_round_id])).rows:[];
     const result={schema_version:1,server_time:now.toISOString(),actor,streams,arena,round,bounties,pauses,standings,final:rows?.final??false,
-      hud:team ? {wallet:Number(wallet),standing:standings.find(s=>s.team_round_id===team)??null} : null,judging,security,drafts};
+      hud:team ? {wallet:Number(wallet),standing:standings.find(s=>s.team_round_id===team)??null} : null,judging,security,drafts,
+      announcement_head:await announcementHead(client,roundId,team,round?.arena_instance_id??arena?.current_instance_id??null)};
     if(Buffer.byteLength(JSON.stringify(result))>1048576) throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");
     return result;
   }

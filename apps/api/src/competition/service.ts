@@ -10,6 +10,7 @@ import { boundedStaffText, staffRevision } from "../access/staff-management.js";
 import { createDrawCipher, createDrawPlan, drawCommitment } from "./policy.js";
 import { judgingFeedback } from "./feedback.js";
 import { createStaffJudgingService } from "./staff-judging.js";
+import type { FinalResults } from "./results.js";
 
 export const STAFF_ACTIONS = ["CONFIGURE", "READY", "START", "PAUSE", "RESUME", "CLOSE", "FINALISE", "QUALIFY", "SETUP_R2", "DISCARD", "CANCEL_ROUND", "FINISH_CANCEL"] as const;
 export interface CompetitionCommand {
@@ -261,6 +262,32 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
     judgeQueue: judgingMonitor.queue,
     judgeDetail: judgingMonitor.detail,
     recoveryAudit: judgingMonitor.audit,
+    async results(cookie: unknown, roundId: string): Promise<FinalResults> {
+      uuid(roundId); await readBudget(cookie, "STAFF");
+      return accessTransaction(pool, clock, async client => {
+        await lockedRounds(client, [roundId], true);
+        await staff.authorize(client, cookie, await decisionTime(client, clock, [roundId]));
+        const row = await first<{ arena_id: string; round_kind: 1 | 2; result_id: string; result_version: number; finalised_at: Date;
+          standings: Omit<FinalResults["standings"][number], "qualified">[]; selected: string[] | null }>(client,
+          `SELECT r.arena_instance_id AS arena_id,r.kind AS round_kind,f.id AS result_id,f.version AS result_version,f.finalised_at,
+            f.standings,q.selected
+          FROM rounds r JOIN round_results f ON f.round_id=r.id LEFT JOIN qualification_decisions q ON q.result_id=f.id
+          WHERE r.id=$1 AND r.state='CLOSED'`, [roundId]);
+        if (!row) throw new AccessError("ACCESS_UNAVAILABLE");
+        const standings = row.standings.map(s => ({ team_round_id: s.team_round_id, team_id: s.team_id, team_name: s.team_name,
+          rank: s.rank, points: s.points, solve_time_ms: s.solve_time_ms, penalty_ms: s.penalty_ms, effective_time_ms: s.effective_time_ms, difficulties: s.difficulties }));
+        const value: FinalResults = {
+          format_version: 1, state: "FINAL", arena_id: row.arena_id, round_id: roundId, round_kind: row.round_kind,
+          result_id: row.result_id, result_version: row.result_version, finalised_at: row.finalised_at.toISOString(),
+          // Hash only the public projection, not the private snapshot's wallet fields.
+          standings_sha256: sha256(JSON.stringify(standings)).toString("hex"),
+          qualification_status: row.round_kind === 2 ? "NOT_APPLICABLE" : row.selected === null ? "PENDING" : "LOCKED",
+          standings: standings.map(s => ({ ...s, qualified: row.round_kind === 1 && row.selected !== null ? row.selected.includes(s.team_round_id) : null })),
+        };
+        if (value.standings.length > 100 || Buffer.byteLength(JSON.stringify(value)) > 262144) throw new AccessError("SECURITY_UNAVAILABLE");
+        return value;
+      }, "SHARED");
+    },
     async standings(cookie: unknown, roundId: string, audience: "STAFF" | "PARTICIPANT") {
       uuid(roundId);
       await readBudget(cookie, audience);

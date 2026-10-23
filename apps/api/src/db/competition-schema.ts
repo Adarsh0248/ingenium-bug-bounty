@@ -66,7 +66,7 @@ export const competitionPauses = pgTable("competition_pauses", {
 export const competitionSubmissions = pgTable("competition_submissions", {
   id: uuid("id").primaryKey(), roundId: uuid("round_id").notNull(), teamRoundId: uuid("team_round_id").notNull().references(() => teamRounds.id),
   memberRoundId: uuid("member_round_id").notNull().references(() => memberRounds.id), bountyId: uuid("bounty_id").notNull(),
-  source: bytes("source").notNull(), language: text("language").notNull(), receiptOrder: bigint("receipt_order", { mode: "bigint" }).notNull(),
+  source: bytes("source"), language: text("language").notNull(), receiptOrder: bigint("receipt_order", { mode: "bigint" }).notNull(),
   receivedAt: instant("received_at").notNull(), elapsedMs: bigint("elapsed_ms", { mode: "bigint" }).notNull(), hintTier: integer("hint_tier").notNull(),
   sourceId: uuid("source_id").notNull().references(() => competitionOutcomes.id),
 }, t => [foreignKey({ name: "competition_submission_bounty" , columns: [t.bountyId, t.roundId], foreignColumns: [bounties.id, bounties.roundId] }),

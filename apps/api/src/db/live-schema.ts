@@ -7,6 +7,7 @@ import { participantJudging } from "./participant-judge-schema.js";
 import { validationRuns } from "./judge-schema.js";
 import { bugVersions } from "./content-schema.js";
 import {draftSaveOutcomes} from "./workbench-schema.js";
+import { announcements } from "./announcement-schema.js";
 import { text } from "drizzle-orm/pg-core";
 const instant = (name: string) => timestamp(name, { withTimezone: true, precision: 3 });
 
@@ -36,8 +37,9 @@ export const liveEffects = pgTable("live_effects", {
   credentialId: uuid("credential_id").references(() => accessCredentials.id), blockId: uuid("block_id").references(() => accessBlocks.id),
   validationRunId: uuid("validation_run_id").references(() => validationRuns.id), versionId: uuid("version_id").references(() => bugVersions.id),
   draftOutcomeId:uuid("draft_outcome_id").references(()=>draftSaveOutcomes.id),
+  announcementId:uuid("announcement_id").references(()=>announcements.id),
   createdAt: instant("created_at").notNull().defaultNow(),
-}, t => [index("live_effect_age").on(t.createdAt),check("live_effect_source", sql`num_nonnulls(${t.competitionSequence},${t.parentId},${t.roundId},${t.arenaId},${t.participantSessionId},${t.staffSessionId},${t.staffId},${t.credentialId},${t.blockId},${t.validationRunId},${t.versionId},${t.draftOutcomeId})=1`)]);
+}, t => [index("live_effect_age").on(t.createdAt),check("live_effect_source", sql`num_nonnulls(${t.competitionSequence},${t.parentId},${t.roundId},${t.arenaId},${t.participantSessionId},${t.staffSessionId},${t.staffId},${t.credentialId},${t.blockId},${t.validationRunId},${t.versionId},${t.draftOutcomeId},${t.announcementId})=1`)]);
 export const liveDeliveries = pgTable("live_deliveries", {
   streamId: uuid("stream_id").notNull().references(() => liveStreams.id), sequence: bigint("sequence", { mode: "bigint" }).notNull(),
   effectId: uuid("effect_id").notNull().references(() => liveEffects.id), patch: jsonb("patch").notNull(),

@@ -8,6 +8,7 @@ import { SECOND } from "../src/clock/policy.js";
 function fixture() {
   let current = 100n * SECOND,
     fail = false,
+    quarantined = false,
     loseAck = false,
     sequence = 0;
   const boot = randomUUID(),
@@ -20,6 +21,8 @@ function fixture() {
     release() {},
     async query(sql: string, args?: unknown[]) {
       if (fail) throw new Error("Private database failure");
+      if (sql.includes("restore_is_quarantined"))
+        return { rows: [{ quarantined }], rowCount: 1 };
       if (sql.includes("FROM clock_health"))
         return { rows: [structuredClone(row)], rowCount: 1 };
       if (sql.includes("record_worker_clock_fault")) faults.push(args!);
@@ -92,11 +95,29 @@ function fixture() {
     fail(value: boolean) {
       fail = value;
     },
+    quarantine() {
+      quarantined = true;
+    },
     loseAck() {
       loseAck = true;
     },
   };
 }
+test("restore quarantine discards cached worker clock trust without clearing the independent gate", async () => {
+  const f = fixture();
+  await f.establish();
+  f.quarantine();
+  await assert.rejects(
+    f.clock.pollOnce(),
+    (error: any) => error.code === "RESTORE_QUARANTINED",
+  );
+  assert.throws(() => f.clock.guard.assertHealthy());
+  assert.equal(
+    f.faults.length,
+    0,
+    "Restore quarantine is not an invented clock incident.",
+  );
+});
 test("worker clock establishes its own seven fresh observations and cannot renew freshness from duplicate database reports", async () => {
   const f = fixture();
   assert.throws(() => f.clock.guard.assertHealthy());

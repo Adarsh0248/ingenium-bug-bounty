@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Eye, RefreshCw, X } from "lucide-react";
 import type { Api } from "./api";
-import { Command, errorText } from "./api";
+import { ApiError, Command, errorText } from "./api";
 import type { JudgeDetail } from "./judging-types";
 import { IconButton, Modal } from "./ui";
 import { displayOutput } from "./output";
@@ -194,6 +194,10 @@ export default function StaffSubmissionReview({
         else setError("Original review not observed yet.");
       }
     } catch (e) {
+      if (e instanceof ApiError && e.code === "PAYLOAD_EXPIRED") {
+        command.current = new Command(api, "", () => render(v => v + 1), "STAFF");
+        setReview(null);
+      }
       if (mounted.current) setError(errorText(e));
     } finally {
       if (mounted.current) setBusy(false);

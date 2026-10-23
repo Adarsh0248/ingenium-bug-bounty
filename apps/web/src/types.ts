@@ -113,6 +113,7 @@ export interface Snapshot {
     created_at: string;
   }[];
   drafts: { bounty_id: string; revision: string; updated_at: string }[];
+  announcement_head: string | null;
 }
 export interface Metadata extends Bounty {
   round_id: string;

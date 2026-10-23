@@ -1,0 +1,44 @@
+[Unit]
+Description=Ingenium competition API
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=exec
+User=ingenium-api
+Group=ingenium-api
+WorkingDirectory=/opt/ingenium/release/apps/api
+Environment=NODE_ENV=production API_HOST=127.0.0.1 API_PORT=3000 ENTRY_RUNTIME_FILE=/etc/ingenium/api/entry-runtime.json COMPETITION_RUNTIME_FILE=/etc/ingenium/api/competition-runtime.json
+EnvironmentFile=/etc/ingenium/api/process.env
+ExecStart=/usr/local/bin/node /opt/ingenium/release/apps/api/dist/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+InaccessiblePaths=-/etc/ingenium/judging -/run/docker.sock
+MemoryMax=768M
+TasksMax=128
+CPUQuota=100%
+LimitCORE=0
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ingenium-api
+
+[Install]
+WantedBy=multi-user.target

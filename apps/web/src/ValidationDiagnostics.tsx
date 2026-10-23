@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Eye, RefreshCw, X } from "lucide-react";
-import { Command, errorText } from "./api";
+import { ApiError, Command, errorText } from "./api";
 import type { Api } from "./api";
 import type { ValidationReport } from "./content-types";
 import { IconButton, Modal } from "./ui";
@@ -179,6 +179,10 @@ export default function ValidationDiagnostics({
         else setError("Original diagnostic review not observed yet.");
       }
     } catch (e) {
+      if (e instanceof ApiError && e.code === "PAYLOAD_EXPIRED") {
+        command.current = new Command(api, "", () => render(v => v + 1), "STAFF");
+        setValue(null);
+      }
       if (mounted.current) setError(errorText(e));
     } finally {
       if (mounted.current) setBusy(false);

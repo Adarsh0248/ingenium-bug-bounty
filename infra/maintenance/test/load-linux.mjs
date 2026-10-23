@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { competitionChecks } from "/workspace/test/integration/competition.checks.js";
+
+let input = "";
+for await (const chunk of process.stdin) {
+  input += chunk;
+  assert.ok(Buffer.byteLength(input) <= 8192);
+}
+const settings = JSON.parse(input);
+assert.ok(["load", "race-load"].includes(settings.suite));
+for (const [name, user] of [
+  ["owner", "ingenium_schema_owner"],
+  ["api", "ingenium_api"],
+]) {
+  const url = new URL(settings[name]);
+  assert.equal(url.hostname, "127.0.0.1");
+  assert.equal(url.port, "5432");
+  assert.equal(url.username, user);
+  assert.equal(url.pathname, "/ingenium_schema_test");
+}
+assert.equal(process.platform, "linux");
+assert.equal(process.getuid(), 1000);
+process.env.INGENIUM_TEST_SUITE = settings.suite;
+await test(
+  `${settings.suite} uses Linux loopback and disposable synthetic data`,
+  { timeout: 480000 },
+  async (t) => {
+    await competitionChecks(t, settings.owner, settings.api);
+  },
+);
+const report = await readFile(
+  `/workspace/test-results/${settings.suite === "load" ? "local-load" : "race-load"}.json`,
+);
+assert.ok(report.length <= 16384);
+console.log(`INGENIUM_LOAD_REPORT ${report.toString("base64")}`);

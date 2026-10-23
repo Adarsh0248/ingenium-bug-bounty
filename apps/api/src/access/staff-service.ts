@@ -9,11 +9,11 @@ import type { ClockGuard } from "./transaction.js";
 export type StaffMode = "NORMAL" | "CLOCK_RECOVERY";
 interface Credential { id: string; staff_id: string; version: string; issued_at: Date; }
 interface Flow {
-  id: string; staff_id: string; credential_id: string; credential_version: string; proof_verifier: Buffer;
+  id: string; staff_id: string; credential_id: string; credential_version: string; proof_verifier: Buffer | null;
   mode: StaffMode; generation: string; state: string; created_at: Date; expires_at: Date; session_id: string | null;
 }
 export interface StaffSession {
-  id: string; staff_id: string; flow_id: string; credential_id: string; credential_version: string; secret_verifier: Buffer;
+  id: string; staff_id: string; flow_id: string; credential_id: string; credential_version: string; secret_verifier: Buffer | null;
   mode: StaffMode; generation: string; created_at: Date; absolute_expires_at: Date; last_activity_at: Date; revoked_at: Date | null;
   display_name: string; role: "ORGANISER" | "OWNER" | "SUPER_ADMIN";
 }
@@ -28,7 +28,7 @@ export async function staffOutcomeCapacity(client: PoolClient, extra = 1) {
     +(SELECT count(*) FROM validation_run_outcomes)+(SELECT count(*) FROM validation_run_audits)+(SELECT count(*) FROM validation_diagnostic_audits)
     +(SELECT count(*) FROM competition_outcomes WHERE staff_session_id IS NOT NULL)+(SELECT count(*) FROM competition_publications)
     +(SELECT count(*) FROM content_publication_outcomes)+(SELECT count(*) FROM team_management_outcomes)
-    +(SELECT count(*) FROM registration_import_outcomes)+(SELECT count(*) FROM discipline_outcomes)+(SELECT count(*) FROM submission_review_audits)+operator_staff_outcome_count()+$1)::integer AS n`, [extra]);
+      +(SELECT count(*) FROM registration_import_outcomes)+(SELECT count(*) FROM discipline_outcomes)+(SELECT count(*) FROM submission_review_audits)+(SELECT count(*) FROM announcements)+operator_staff_outcome_count()+$1)::integer AS n`, [extra]);
   if (!row || row.n>=100000) throw new AccessError("AUDIT_CAPACITY_UNAVAILABLE");
 }
 function sessionView(s: StaffSession) {

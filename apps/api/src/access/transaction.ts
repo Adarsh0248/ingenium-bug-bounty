@@ -39,6 +39,7 @@ export async function accessTransaction<T>(pool: Pool, clock: ClockGuard, work: 
       const result = await client.query(`SELECT id FROM security_control WHERE id = 1 FOR ${security === "EXCLUSIVE" ? "UPDATE" : "SHARE"}`);
       if (result.rowCount !== 1) throw new AccessError("SECURITY_UNAVAILABLE");
     }
+    if ((await client.query("SELECT restore_is_quarantined() AS quarantined")).rows[0]?.quarantined !== false) throw new AccessError("RESTORE_QUARANTINED");
     await clock.verify(client);
     const value = await work(client);
     clock.assertHealthy();

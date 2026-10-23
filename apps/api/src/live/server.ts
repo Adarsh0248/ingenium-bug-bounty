@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import type { Socket } from "socket.io";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { browserId, boundedCookies } from "../access/browser-policy.js";
+import { clientAddress } from "../access/client-address.js";
 import type { BrowserPolicy } from "../access/browser-policy.js";
 import { browserHttpQuota, memberReadQuota, staffQuota } from "../access/quotas.js";
 import { AccessError } from "../access/transaction.js";
@@ -32,16 +33,18 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
     allowRequest:(request,done)=>{
       const query=new URL(request.url??"/","http://local").searchParams;
       if(handshakes>=128 || io.engine.clientsCount>=1152 || request.headers.origin!==policy.origin || [...query.keys()].some(k=>!["EIO","transport","sid","t","b64"].includes(k))){done(null,false);return;}
+      let address:string;
+      try { address=clientAddress(request,options.proxy); } catch { done(null,false); return; }
       handshakes++;
-      void browserHttpQuota(options.pool,options.clock,request.socket.remoteAddress??"unknown").then(()=>done(null,true),()=>done(null,false)).finally(()=>{handshakes--;});
+      void browserHttpQuota(options.pool,options.clock,address).then(()=>done(null,true),()=>done(null,false)).finally(()=>{handshakes--;});
     }});
   const namespace=io.of("/live");
   let timer:ReturnType<typeof setInterval>|undefined, polling=false, closed=false, maintenanceAt=0,reportedAt=-Infinity;
   const dirty=(p:Peer)=>{if(p.actor.team_round_id) presenceVersions.set(p.actor.team_round_id,(presenceVersions.get(p.actor.team_round_id)??0)+1);};
   const binding=(cookie:string,browser:string,audience:string)=>hash(JSON.stringify([cookie,browser,audience]));
-  function control(p:Peer,event:string,value:unknown){if(!p.socket.connected||!p.socket.conn.transport.writable)return false;p.socket.emit(event,value);return true;}
   function cleanTickets(){const now=performance.now();for(const [id,t] of tickets)if(t.expires<=now)tickets.delete(id);for(const[id,p]of pending)if(p.expires<=now)pending.delete(id);}
-  async function quota(auth:LiveAuth) { const actor=await service.guarded(auth,async c=>c.actor);
+  // The socket actor selects only a quota bucket; every protected read below revalidates durable authority.
+  async function quota(actor:LiveActor) {
     if(actor.audience==="PARTICIPANT") await memberReadQuota(options.pool,options.clock,actor.member_id!);
     else await staffQuota(options.pool,options.clock,actor.staff_id!,"READ_STAFF");
   }
@@ -49,7 +52,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
     cleanTickets(); if(tickets.size>=1024) throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");
     const cookie=request.cookies[audience==="STAFF"?policy.names.staff:policy.names.participant], browser=browserId(request,policy);
     if(!cookie || !browser)throw new AccessError("INVALID_SESSION");
-    const auth:LiveAuth={audience,cookie,roundId}; await quota(auth);
+    const auth:LiveAuth={audience,cookie,roundId}; await quota(await service.guarded(auth,async c=>c.actor));
     const id=randomUUID();tickets.set(id,{auth,binding:binding(cookie,browser,audience),expires:performance.now()+10000});
     return {ticket:id,expires_in_ms:10000,path:"/api/v1/live/socket",namespace:"/live",transports:["websocket"]};
   }
@@ -67,7 +70,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
     return p;
   }
   async function snapshot(request:FastifyRequest,audience:LiveAuth["audience"],sync:string) {
-    const p=peer(request,audience,sync);await quota(p.auth);
+    const p=peer(request,audience,sync);await quota(p.actor);
     const value=await service.guarded(p.auth,async c=>{ensure(p,c);return service.snapshot(c);});
     if(p.sync!==sync || p.expires<=performance.now())throw new AccessError("LIVE_RESYNC_REQUIRED");
     p.snapshot=heads(value.streams);p.cursor=new Map(p.snapshot);p.barrier=null;
@@ -75,7 +78,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
     return {...value,sync_id:sync};
   }
   async function replay(request:FastifyRequest,audience:LiveAuth["audience"],input:{sync_id:string;stream_id:string;after:string}) {
-    const p=peer(request,audience,input.sync_id);if(!p.snapshot)throw new AccessError("LIVE_RESYNC_REQUIRED");await quota(p.auth);
+    const p=peer(request,audience,input.sync_id);if(!p.snapshot)throw new AccessError("LIVE_RESYNC_REQUIRED");await quota(p.actor);
     return service.guarded(p.auth,async c=>{
       ensure(p,c);p.barrier??=c.streams;
       const target=p.barrier.find(s=>s.stream_id===input.stream_id), start=p.snapshot!.get(input.stream_id);
@@ -85,7 +88,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
     });
   }
   async function projection(request:FastifyRequest,audience:LiveAuth["audience"],sync:string){
-    const p=peer(request,audience,sync,false);if(p.phase!=="READY")throw new AccessError("LIVE_RESYNC_REQUIRED");await quota(p.auth);
+    const p=peer(request,audience,sync,false);if(p.phase!=="READY")throw new AccessError("LIVE_RESYNC_REQUIRED");await quota(p.actor);
     const result=await service.guarded(p.auth,async c=>{ensure(p,c);return service.snapshot(c);});
     if(p.sync!==sync||!p.socket.connected)throw new AccessError("LIVE_RESYNC_REQUIRED");return{...result,sync_id:sync};
   }
@@ -99,7 +102,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
       if(!t || t.expires<=performance.now() || !signed.valid || !signed.value)throw new AccessError("INVALID_SESSION");
       const cookie=cookies[t.auth.audience==="STAFF"?policy.names.staff:policy.names.participant];
       if(!cookie || binding(cookie,signed.value,t.auth.audience)!==t.binding)throw new AccessError("INVALID_SESSION");
-      await browserHttpQuota(options.pool,options.clock,socket.handshake.address);
+      await browserHttpQuota(options.pool,options.clock,clientAddress(socket.request,options.proxy));
       const initial=await service.guarded(t.auth,async c=>({actor:c.actor,streams:c.streams}));
       const key=initial.actor.session_id;
       const cap=initial.actor.audience==="PARTICIPANT"?3:2;
@@ -158,8 +161,8 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
     for(const other of peers.values()){
       const intent=other.intent;
       if(!intent || other.actor.team_round_id!==p.actor.team_round_id || other.actor.round_id!==p.actor.round_id)continue;
-      // Revalidate the announcing session as well as the recipient, without renewing either session.
-      const valid=await service.intent(c,other.auth,other.actor,intent.bounty);
+      // The recipient was just authorised in this transaction; other announcing sessions still need their own check.
+      const valid=other===p?await service.presence(c,intent.bounty):await service.intent(c,other.auth,other.actor,intent.bounty);
       if(other.intent!==intent||!other.socket.connected)continue;
       if(!valid){other.intent=null;dirty(other);continue;}
       const k=`${other.actor.member_round_id}:${intent.bounty}`,existing=grouped.get(k);
@@ -175,9 +178,12 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
       const all=(await options.pool.query<{id:string;head:string}>("SELECT id,head::text FROM live_streams")).rows, current=new Map(all.map(s=>[s.id,s.head]));
       await options.pool.query("SELECT live_publish_batch()");
       async function deliver(p:Peer) {
-        if(p.phase==="SYNCING" && now>=p.expires){p.socket.emit("resync_required",publicFailure());p.socket.disconnect(true);return;}
+        const dueAt=performance.now();
+        if(p.phase==="SYNCING" && dueAt>=p.expires){p.socket.emit("resync_required",publicFailure());p.socket.disconnect(true);return;}
         const presenceVersion=presenceVersions.get(p.actor.team_round_id??"")??0;
-        if(now-p.lastHead<LIVE_LIMITS.headMs && presenceVersion===p.presenceVersion && p.streams.every(s=>current.get(s.stream_id)===p.cursor.get(s.stream_id)))return;
+        if(dueAt-p.lastHead<LIVE_LIMITS.headMs && presenceVersion===p.presenceVersion && p.streams.every(s=>current.get(s.stream_id)===p.cursor.get(s.stream_id)))return;
+        // Check backpressure once for this bounded event/head/presence batch, not between its own writes.
+        if(!p.socket.connected||!p.socket.conn.transport.writable)return;
         await service.guarded(p.auth,async c=>{
           ensure(p,c);p.streams=c.streams;
           for(const s of c.streams){
@@ -193,12 +199,14 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
             }
             p.cursor.set(s.stream_id,page.next);
           }
-          if(p.actor.audience==="PARTICIPANT" && (presenceVersion!==p.presenceVersion || now-p.lastHead>=LIVE_LIMITS.headMs)){
+          const refreshPresence=p.actor.audience==="PARTICIPANT" && (presenceVersion!==p.presenceVersion || dueAt-p.lastHead>=LIVE_LIMITS.headMs);
+          // Deliver the committed cursor before optional presence queries can compete with projection refreshes.
+          if(p.socket.connected){p.socket.emit("heads",{sync_id:p.sync,heads:c.streams,ack_required:p.buffered.length>0,server_time:c.now.toISOString(),expires_at:c.actor.expires_at});p.lastHead=performance.now();}
+          if(refreshPresence){
             const view=await presenceView(c,p), digest=hash(JSON.stringify(view));
-            if(digest!==p.presenceDigest){if(control(p,"presence",{sync_id:p.sync,editors:view}))p.presenceDigest=digest;else return;}
+            if(digest!==p.presenceDigest){if(!p.socket.connected)return;p.socket.emit("presence",{sync_id:p.sync,editors:view});p.presenceDigest=digest;}
           }
           p.presenceVersion=presenceVersions.get(p.actor.team_round_id??"")??0;
-          if(control(p,"heads",{sync_id:p.sync,heads:c.streams,server_time:c.now.toISOString(),expires_at:c.actor.expires_at}))p.lastHead=now;
         }).catch(error=>{app.log.warn({event:"live_connection_invalidated",code:error instanceof AccessError?error.code:(error as {code?:string}).code??"UNAVAILABLE"});p.intent=null;dirty(p);p.socket.emit("resync_required",publicFailure());p.socket.disconnect(true);});
       }
       const connections=[...peers.values()];

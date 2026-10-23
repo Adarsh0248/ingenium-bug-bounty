@@ -137,11 +137,16 @@ export async function realtimeChecks(t:TestContext,c:Context){
       await until(()=>second.presence.some(p=>p.editors.some((e:any)=>e.bounty_id===a.x&&e.tabs===2)));
       assert.ok(other.presence.every(p=>p.editors.length===0));
       const member=(await query("SELECT member_round_id FROM participant_sessions WHERE id=$1",[a.aa.split(".")[1]]))[0].member_round_id;
-      await control(a.round,"PAUSE","MEMBER",member);await until(()=>second.presence.some(p=>p.editors.some((e:any)=>e.paused)));
+      const stream=(await query("SELECT id,head::text FROM live_streams WHERE kind='ROUND' AND round_id=$1",[a.round]))[0];
+      const delivery:{event:string;value:any}[]=[],observe=(event:string,value:any)=>{if(event==='heads'||event==='presence')delivery.push({event,value});};
+      second.socket.onAny(observe);
+      try{await control(a.round,"PAUSE","MEMBER",member);await until(()=>second.presence.some(p=>p.editors.some((e:any)=>e.paused)));}finally{second.socket.offAny(observe);}
       await control(a.round,"RESUME","MEMBER",member);
       tab.socket.volatile.emit("presence",{action:"LEAVE"});await until(()=>second.presence.at(-1)?.editors.some((e:any)=>e.tabs===1));
       first.socket.volatile.emit("presence",{action:"LEAVE"});await until(()=>second.presence.at(-1)?.editors.length===0);tab.socket.disconnect();
       assert.deepEqual(await query("SELECT id,last_activity_at FROM participant_sessions ORDER BY id"),before);
+      const paused=delivery.findIndex(e=>e.event==='presence'&&e.value.editors.some((p:any)=>p.paused));
+      assert.ok(paused>=0&&delivery.slice(0,paused).some(e=>e.event==='heads'&&e.value.heads.some((h:StreamHead)=>h.stream_id===stream.id&&BigInt(h.head)>BigInt(stream.head))),"A committed control head must reach the client before its ancillary presence view");
     });
     await t.test("member sample status reaches only its owner; official results and awards reach the whole team",async()=>{
       await c.budgets();const sample=(await c.service.run(a.aa,a.round,a.x,"synthetic sample",randomUUID())).result.run_id as string;assert.ok(sample);
@@ -194,6 +199,25 @@ export async function realtimeChecks(t:TestContext,c:Context){
         assert.equal(view.hud.wallet,920);assert.equal(view.hud.standing.points,920);
       }finally{client.close();}
     });
+    await t.test("idle heads avoid no-op acknowledgements and a dropped acknowledgement is requested again until cleared",async()=>{
+      const markers:boolean[]=[];
+      let attempts=0,dropped=false,drop=false,view:any=null;
+      const client=connectLive("PARTICIPANT",null,{now:()=>performance.now(),post:async(path,body)=>aa.post(path.slice(aa.prefix.length+1),body),
+        transport(ticket){const socket=io(`${address}/live`,{path:"/api/v1/live/socket",transports:["websocket"],autoConnect:false,reconnection:false,forceNew:true,auth:{ticket},extraHeaders:{Origin:browser.origin,Cookie:aa.header()}});sockets.push(socket);
+          return{get connected(){return socket.connected;},on(event,listener){socket.on(event,value=>{if(event==="heads")markers.push(value.ack_required);listener(value);});},connect(){socket.connect();},disconnect(){socket.disconnect();},
+            volatile:{emit(event,value){if(event==="ack"){attempts++;if(drop&&!dropped){dropped=true;return;}}socket.volatile.emit(event,value);}}};},
+        install(snapshot){view=snapshot;},invalidate(){},award(){},presence(){},state(){}});
+      try{
+        await until(()=>client.replica.phase==="READY");
+        await until(()=>markers.includes(false));
+        const before=attempts,at=markers.length;drop=true;
+        await control(a.round,"PAUSE");
+        await until(()=>view.round.state==="PAUSED"&&dropped&&attempts>=before+2&&markers.slice(at).filter(v=>v===true).length>=2,12000);
+        await until(()=>markers.at(-1)===false);
+        const settled=attempts;await delay(2500);
+        assert.equal(attempts,settled);assert.equal(client.replica.phase,"READY");
+      }finally{client.close();await control(a.round,"RESUME");}
+    });
     await t.test("staff streams enforce the two-tab cap and exclude security-management data from ordinary roles",async()=>{
       const staff=await session(c.organiser.sessionCookie,"STAFF"),one=await staff.connect(a.round),two=await staff.connect(a.round);const view=await one.synchronise();await two.synchronise();
       assert.equal(view.snapshot.security,null);assert.ok(!view.snapshot.streams.some((s:StreamHead)=>s.kind==="STAFF_SECURITY"));assert.ok(view.snapshot.streams.some((s:StreamHead)=>s.kind==="STAFF_SELF"));
@@ -242,6 +266,22 @@ export async function realtimeChecks(t:TestContext,c:Context){
       assert.equal((await current.request(`${current.prefix}/snapshot`,{sync_id:prior.sync})).statusCode,503);
       const successor=await current.connect(),next=await successor.synchronise();assert.notEqual(successor.sync,prior.sync);assert.deepEqual(next.snapshot.hud,snapshot.hud);
       for(const stream of snapshot.streams)assert.ok(BigInt(next.snapshot.streams.find((s:StreamHead)=>s.stream_id===stream.stream_id).head)>=BigInt(stream.head));successor.socket.disconnect();
+    });
+    await t.test("a socket's cached quota identity cannot authorise projection, snapshot or replay after logout",async()=>{
+      const current=await session(currentCookie),connection=await current.connect(),{snapshot}=await connection.synchronise();
+      const bounty=snapshot.bounties.find((b:any)=>!b.claimed).bounty_id;
+      connection.socket.volatile.emit("presence",{action:"ENTER",bounty_id:bounty});
+      await until(()=>connection.presence.at(-1)?.editors.some((e:any)=>e.bounty_id===bounty));
+      const disconnected=once(connection.socket,"disconnect",{signal:AbortSignal.timeout(7000)});
+      await c.budgets();
+      await createEntryService(c.api,c.clock,c.delivery).logout(currentCookie,{sessionId:currentCookie.split(".")[1]!,requestKey:randomUUID()});
+      for(const [path,body] of [["projection",{sync_id:connection.sync}],["snapshot",{sync_id:connection.sync}],["replay",{sync_id:connection.sync,stream_id:snapshot.streams[0].stream_id,after:snapshot.streams[0].head}]] as const){
+        const response=await current.request(`${current.prefix}/${path}`,body);
+        assert.ok([401,503].includes(response.statusCode));
+        assert.equal(Object.hasOwn(response.json(),"data"),false);
+      }
+      await disconnected;
+      connection.socket.disconnect();
     });
     assert.equal((await query("SELECT rows=(SELECT count(*) FROM live_deliveries) AND reserved=(SELECT COALESCE(sum(remaining),0) FROM live_reservations) AS valid FROM live_control"))[0].valid,true);
   }finally{for(const socket of sockets)socket.disconnect();await app.close();}

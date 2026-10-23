@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { accessCredentials } from "./access-schema.js";
@@ -59,14 +60,16 @@ export const teamManagementOutcomes = pgTable(
       ],
     }),
     unique("team_management_intent").on(t.actorId, t.requestKey),
-    unique("team_management_issued_credential").on(t.resultCredentialId),
+    uniqueIndex("team_management_issued_credential")
+      .on(t.resultCredentialId)
+      .where(sql`${t.action}<>'REVOKE'`),
     check(
       "team_management_shape",
       sql`${t.expectedRevision}>=0 and octet_length(${t.fingerprint})=32
     and octet_length(${t.reason}) between 1 and 1024 and btrim(${t.reason})<>''
-    and ((${t.action}='CREATE' and ${t.targetTeamId} is null) or (${t.action}='ROTATE' and ${t.targetTeamId} is not null))
+    and ((${t.action}='CREATE' and ${t.targetTeamId} is null) or (${t.action} in ('ROTATE','ISSUE','REVOKE') and ${t.targetTeamId} is not null))
     and ((${t.outcome}='APPLIED' and ${t.denialReason} is null and ${t.resultTeamId} is not null and ${t.resultCredentialId} is not null and ${t.codeVersion}>0)
-      or (${t.outcome}='REJECTED' and ${t.denialReason} is not null and ${t.denialReason} in ('STALE_VERSION','TEAM_CAPACITY','TEAM_INCOMPLETE')
+      or (${t.outcome}='REJECTED' and ${t.denialReason} is not null and ${t.denialReason} in ('STALE_VERSION','TEAM_CAPACITY','TEAM_INCOMPLETE','CODE_INACTIVE','CODE_ACTIVE')
         and ${t.resultTeamId} is null and ${t.resultCredentialId} is null and ${t.codeVersion} is null))`,
     ),
   ],

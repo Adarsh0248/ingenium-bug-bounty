@@ -10,6 +10,8 @@ visual preview do not start it. No browser endpoint can run these tasks.
 | Validation deadline | 5 seconds | Existing active validation deadline function |
 | Login delivery cleanup | 10 seconds | Up to 200 unusable encrypted payloads in each delivery family |
 | Shared quota cleanup | 60 seconds | Up to 200 unused, fully refilled keys |
+| Expired verifiers | 60 seconds | Up to twenty proof/session verifiers with immutable tombstones |
+| Retired source/diagnostics | 60 seconds | Up to twenty selected rows; paired official sources can produce forty tombstones |
 
 The two-connection monitor/maintenance pool is reused, not a pool per task or
 request. Each task is non-overlapping. Failure logs contain only a fixed event
@@ -56,9 +58,11 @@ integer refill check. A recent or still-depleted bucket cannot be deleted to
 reset its allowance. Only this transient quota table receives a new delete
 permission; canonical history remains protected.
 
-Seven-/thirty-day source and diagnostic retention, 24-hour verifier tombstones,
-whole-dataset archive/restore, host installation and load rehearsal remain open
-requirements. This chunk does not implement those purges or erase backups.
+The later [database payload retention](data-retention.md) batch implements the
+seven-/thirty-day participant source/diagnostic policy, 24-hour verifier
+tombstones, committed progress/status and a finite retired-only operator command.
+Whole-dataset archive/restore, judge-host byte retirement, native installation
+and load rehearsal remain open. Database purges do not erase backups.
 
 ## Shutdown and Verification
 

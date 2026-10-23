@@ -7,6 +7,10 @@ for (const suite of [
   "judging-browser",
   "review-browser",
   "diagnostics-browser",
+  "audit-browser",
+  "announcements-browser",
+  "team-access-browser",
+  "results-browser",
 ]) {
   const code = await new Promise((resolve, reject) => {
     const child = spawn(

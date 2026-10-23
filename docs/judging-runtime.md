@@ -99,13 +99,18 @@ After reviewed migrations, provisioning and installation on the **primary Linux
 host**, the standalone entry point is:
 
 ```sh
-JUDGING_RUNTIME_FILE=/etc/ingenium/judging-runtime.json node apps/api/dist/worker/server.js
+JUDGING_RUNTIME_FILE=/etc/ingenium/judging/runtime.json node apps/api/dist/worker/server.js
 ```
 
 `npm run start:judging` starts the same built entry point with the environment
 already supplied by the protected service launcher. No real runtime file is
 created here, and this command intentionally refuses ordinary Windows startup.
-The production Compose/systemd installer, pinned release/image, credentials and
+The [app HTTPS edge](https-edge.md) has a locally tested Caddy configuration;
+it does not expose or install the judge gateway. Separate restricted
+[primary-host systemd definitions](../infra/app-host/README.md) are now prepared
+and covered by local policy checks, but have not been installed or exercised by
+the actual host's service manager. The production installer, pinned release,
+credentials and
 log/connection/resource supervision still require deployment review. Use one
 separately supervised process, restart-on-failure with bounded backoff, and enough
 stop time for bounded in-flight TLS/database calls; do not force a slot release

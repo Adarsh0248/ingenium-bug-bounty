@@ -72,6 +72,10 @@ export default function Workbench({
     [viewSource, setViewSource] = useState<any>(null),
     [buy, setBuy] = useState<number | null>(null),
     [conflict, setConflict] = useState<any>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, [bug.bounty_id]);
   const command = useRef(workspace.command(bug.bounty_id)),
     unresolved = command.current.unresolved;
   const judgingVersion = JSON.stringify(judging),
@@ -274,7 +278,9 @@ export default function Workbench({
           <span className="eyebrow">
             BOUNTY / {bug.difficulty.toString().padStart(2, "0")}
           </span>
-          <h2>{bug.title}</h2>
+          <h2 ref={heading} tabIndex={-1}>
+            {bug.title}
+          </h2>
         </div>
         <div className="workbench-stats">
           <span className="difficulty">

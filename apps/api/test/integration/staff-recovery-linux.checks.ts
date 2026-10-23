@@ -24,9 +24,12 @@ export async function staffRecoveryLinuxChecks(
   ownerConnection: string,
   apiConnection: string,
   databaseContainer: string,
+  fixture: "staff-recovery" | "operations" = "staff-recovery",
 ) {
   await t.test(
-    "real restricted Linux operator CLI creates, resumes, rotates and retires synthetic Super Admin access on disposable PostgreSQL",
+    fixture === "staff-recovery"
+      ? "real restricted Linux operator CLI creates, resumes, rotates and retires synthetic Super Admin access on disposable PostgreSQL"
+      : "real Linux observer and quarantine CLIs enforce private files, restricted roles and immutable original receipts",
     async () => {
       assert.match(databaseContainer, /^[a-f0-9]{64}$/);
       await exec(
@@ -62,13 +65,18 @@ export async function staffRecoveryLinuxChecks(
         ["../../../../node_modules", "/workspace/node_modules"],
         ["../../package.json", "/workspace/apps/api/package.json"],
         [
-          "../../../../infra/maintenance/test/staff-recovery-linux.mjs",
+          `../../../../infra/maintenance/test/${fixture}-linux.mjs`,
           "/fixture/test.mjs",
         ],
       ].flatMap(([path, target]) => [
         "--mount",
         `type=bind,src=${fileURLToPath(new URL(path!, import.meta.url))},dst=${target},readonly`,
       ]);
+      if (fixture === "operations")
+        bindings.push(
+          "--mount",
+          `type=bind,src=${fileURLToPath(new URL("../../drizzle", import.meta.url))},dst=/workspace/apps/api/drizzle,readonly`,
+        );
       const container = await docker([
         "create",
         "--pull=never",
@@ -129,7 +137,9 @@ export async function staffRecoveryLinuxChecks(
         // Test-only credentials travel over stdin, never argv, Docker metadata or logs.
         assert.match(
           (await result).stdout,
-          /PASS: restricted operator CLI lifecycle and original-candidate recovery/,
+          fixture === "staff-recovery"
+            ? /PASS: restricted operator CLI lifecycle and original-candidate recovery/
+            : /"state":"PASSED"/,
         );
       } finally {
         const config = JSON.parse(

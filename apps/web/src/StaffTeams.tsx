@@ -11,6 +11,8 @@ import {
   Save,
   X,
   Upload,
+  Search,
+  Ban,
 } from "lucide-react";
 import { ApiError, Command, errorText } from "./api";
 import type { Api } from "./api";
@@ -29,10 +31,13 @@ type Team = {
 type Page = {
   control_revision: string;
   total: number;
+  matched: number;
+  search: string;
   items: Team[];
   next_after: string | null;
 };
 type Draft = {
+  action: "CREATE" | "ROTATE" | "ISSUE" | "REVOKE";
   target: string | null;
   revision: string;
   name: string;
@@ -58,7 +63,11 @@ export default function StaffTeams({
   available: boolean;
   blockNavigation: (blocked: boolean) => void;
 }) {
-  const [data, setData] = useState<Page | null>(null),
+  const [result, setResult] = useState<{ path: string; page: Page } | null>(
+      null,
+    ),
+    [search, setSearch] = useState(""),
+    [searchDraft, setSearchDraft] = useState(""),
     [cursors, setCursors] = useState<(string | undefined)[]>([undefined]),
     [draft, setDraft] = useState<Draft | null>(null),
     [reason, setReason] = useState(""),
@@ -83,8 +92,13 @@ export default function StaffTeams({
     mounted = useRef(true),
     generation = useRef(0),
     reading = useRef(false),
-    refresh = useRef<() => Promise<void>>(async () => {}),
+    refresh = useRef<(force?: boolean) => Promise<void>>(async () => {}),
     cursor = cursors.at(-1);
+  const params = new URLSearchParams();
+  if (cursor) params.set("after", cursor);
+  if (search) params.set("search", search);
+  const path = `${base}${params.size ? `?${params}` : ""}`,
+    data = available && result?.path === path ? result.page : null;
   command.current ??= new Command(api, "", () => render((v) => v + 1), "STAFF");
   const locked = !available || denied || busy || command.current.unresolved,
     blocked =
@@ -94,38 +108,53 @@ export default function StaffTeams({
       ? data?.items.find((t) => t.team_id === draft.target)?.code_version
       : data?.control_revision
     : undefined;
-  refresh.current = async () => {
-    if (reading.current) return;
+  const target = draft?.target
+      ? data?.items.find((t) => t.team_id === draft.target)
+      : undefined,
+    accessChanged =
+      !!draft?.target &&
+      (!target || target.has_active_code !== (draft.action !== "ISSUE")),
+    stateChanged =
+      accessChanged || (observed !== undefined && observed !== draft?.revision),
+    searchValid =
+      searchDraft.isWellFormed() &&
+      !searchDraft.includes("\0") &&
+      new TextEncoder().encode(searchDraft).length <= 120;
+  refresh.current = async (force = false) => {
+    if (!available || (reading.current && !force)) return;
     reading.current = true;
     const version = ++generation.current;
     setLoading(true);
     try {
-      const value = await api.request<Page>(
-        `${base}${cursor ? `?after=${cursor}` : ""}`,
-        undefined,
-        "STAFF",
-      );
+      const value = await api.request<Page>(path, undefined, "STAFF");
       if (!mounted.current || version !== generation.current) return;
-      setData(value);
+      if (value.search !== search) throw new ApiError("INVALID_CONTEXT");
+      setResult({ path, page: value });
       setDenied(false);
     } catch (e) {
       if (!mounted.current || version !== generation.current) return;
       if (e instanceof ApiError && [401, 403].includes(e.status)) {
-        setData(null);
         setDraft(null);
         setIssued(null);
         setOwnCode("");
         setConfirm(false);
         setDenied(true);
       }
+      setResult(null);
       setError(errorText(e));
     } finally {
-      reading.current = false;
-      if (mounted.current && version === generation.current) setLoading(false);
+      if (version === generation.current) {
+        reading.current = false;
+        if (mounted.current) setLoading(false);
+      }
     }
   };
   useEffect(() => {
     mounted.current = true;
+    if (!available) {
+      setResult(null);
+      setLoading(false);
+    }
     void refresh.current();
     const timer = setInterval(() => {
       if (!document.hidden) void refresh.current();
@@ -133,9 +162,10 @@ export default function StaffTeams({
     return () => {
       mounted.current = false;
       generation.current++;
+      reading.current = false;
       clearInterval(timer);
     };
-  }, [cursor]);
+  }, [path, available]);
   useEffect(() => {
     blockNavigation(blocked);
   }, [blocked]);
@@ -147,6 +177,16 @@ export default function StaffTeams({
     setOwnCode("");
     setError("");
     setNotice("");
+  }
+  function codeChange(team: Team, action: "ROTATE" | "ISSUE" | "REVOKE") {
+    choose({
+      action,
+      target: team.team_id,
+      revision: team.code_version,
+      name: team.team_name,
+      one: "",
+      two: "",
+    });
   }
   async function acknowledge(
     value: { outcome: Receipt; issued_code?: string | null } | Receipt,
@@ -172,15 +212,25 @@ export default function StaffTeams({
         });
         setReveal(false);
         setCopyMessage("");
-      } else
+      } else if (receipt.action === "REVOKE")
+        setNotice("Team code revoked. No replacement code was issued.");
+      else
         setNotice(
           `Team ${receipt.result_team_id} confirmed. Code delivery unavailable; deliberately rotate its code if a new code is needed.`,
         );
     }
-    await refresh.current();
+    await refresh.current(true);
   }
   async function send() {
-    if (locked || !draft || !valid(reason, 1024) || !ownCode.trim()) return;
+    if (
+      locked ||
+      !draft ||
+      !data ||
+      stateChanged ||
+      !valid(reason, 1024) ||
+      !ownCode.trim()
+    )
+      return;
     const d = draft,
       code = ownCode;
     setConfirm(false);
@@ -190,7 +240,9 @@ export default function StaffTeams({
     try {
       await acknowledge(
         await command.current!.send(
-          d.target ? `${base}/${d.target}/rotate-code` : base,
+          d.target
+            ? `${base}/${d.target}/${d.action.toLowerCase()}-code`
+            : base,
           {
             expected_revision: d.revision,
             reason,
@@ -251,11 +303,20 @@ export default function StaffTeams({
     <section className="staff-section staff-access staff-teams">
       <div className="staff-section-heading">
         <h2>Team registrations</h2>
-        <span>{data ? `${data.total} / 1,000` : ""}</span>
+        <span>
+          {data
+            ? search
+              ? `${data.matched} matching / ${data.total} registered`
+              : `${data.total} / 1,000`
+            : ""}
+        </span>
         <IconButton
           title="Refresh teams"
           disabled={loading || busy}
-          onClick={() => void refresh.current()}
+          onClick={() => {
+            setError("");
+            void refresh.current();
+          }}
         >
           <RefreshCw size={17} />
         </IconButton>
@@ -263,6 +324,7 @@ export default function StaffTeams({
           disabled={locked || !!draft || !data || data.total >= 1000}
           onClick={() =>
             choose({
+              action: "CREATE",
               target: null,
               revision: data!.control_revision,
               name: "",
@@ -282,6 +344,58 @@ export default function StaffTeams({
           Import CSV
         </button>
       </div>
+      <form
+        className="staff-team-search"
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (locked || loading || draft || !searchValid) return;
+          const next = searchDraft.trim();
+          setError("");
+          if (next === search && !cursor) void refresh.current();
+          else {
+            setSearch(next);
+            setCursors([undefined]);
+          }
+        }}
+      >
+        <label>
+          Find team
+          <input
+            type="search"
+            maxLength={120}
+            value={searchDraft}
+            disabled={locked || loading || !!draft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+          />
+        </label>
+        <button
+          type="submit"
+          className="icon-button"
+          title="Search teams"
+          aria-label="Search teams"
+          disabled={locked || loading || !!draft || !searchValid}
+        >
+          <Search size={17} />
+        </button>
+        <IconButton
+          title="Clear team search"
+          disabled={locked || loading || !!draft || (!searchDraft && !search)}
+          onClick={() => {
+            setError("");
+            setSearchDraft("");
+            setSearch("");
+            setCursors([undefined]);
+          }}
+        >
+          <X size={17} />
+        </IconButton>
+      </form>
+      {!searchValid && (
+        <p className="error" role="alert">
+          Search must fit within 120 UTF-8 bytes and contain no NUL characters.
+        </p>
+      )}
       {error && (
         <div className="staff-message error" role="alert">
           {error}
@@ -310,11 +424,14 @@ export default function StaffTeams({
           className="staff-access-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!locked && valid(reason, 1024)) setConfirm(true);
+            if (!locked && data && !stateChanged && valid(reason, 1024))
+              setConfirm(true);
           }}
         >
           <h3>
-            {draft.target ? `Rotate code: ${draft.name}` : "Register team"}
+            {draft.target
+              ? `${draft.action === "REVOKE" ? "Revoke code" : draft.action === "ISSUE" ? "Issue new code" : "Rotate code"}: ${draft.name}`
+              : "Register team"}
           </h3>
           {draft.target && (
             <small className="staff-reference">
@@ -356,16 +473,24 @@ export default function StaffTeams({
                 onChange={(e) => setReason(e.target.value)}
               />
             </label>
-            {observed !== undefined && observed !== draft.revision && (
+            {stateChanged && (
               <div className="staff-message warning">
                 The registration state changed.
-                <button
-                  type="button"
-                  onClick={() => setDraft({ ...draft, revision: observed })}
-                >
-                  <RefreshCw size={16} />
-                  Use latest registration state
-                </button>
+                {!accessChanged && observed !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => setDraft({ ...draft, revision: observed })}
+                  >
+                    <RefreshCw size={16} />
+                    Use latest registration state
+                  </button>
+                )}
+                {accessChanged && (
+                  <span>
+                    Code availability changed. Cancel this change and select the
+                    intended action again.
+                  </span>
+                )}
               </div>
             )}
             <div className="dialog-actions">
@@ -377,6 +502,8 @@ export default function StaffTeams({
                 className="primary"
                 disabled={
                   !valid(reason, 1024) ||
+                  !data ||
+                  stateChanged ||
                   (!draft.target &&
                     ![draft.name, draft.one, draft.two].every((s) => valid(s)))
                 }
@@ -430,21 +557,25 @@ export default function StaffTeams({
                     </td>
                     <td>
                       <IconButton
-                        title={`Rotate team code for ${team.team_name}`}
+                        title={`${team.has_active_code ? "Rotate" : "Issue"} team code for ${team.team_name}`}
                         disabled={
                           locked || !!draft || team.members.length !== 2
                         }
                         onClick={() =>
-                          choose({
-                            target: team.team_id,
-                            revision: team.code_version,
-                            name: team.team_name,
-                            one: "",
-                            two: "",
-                          })
+                          codeChange(
+                            team,
+                            team.has_active_code ? "ROTATE" : "ISSUE",
+                          )
                         }
                       >
                         <KeyRound size={17} />
+                      </IconButton>
+                      <IconButton
+                        title={`Revoke team code for ${team.team_name}`}
+                        disabled={locked || !!draft || !team.has_active_code}
+                        onClick={() => codeChange(team, "REVOKE")}
+                      >
+                        <Ban size={17} />
                       </IconButton>
                     </td>
                   </tr>
@@ -486,6 +617,15 @@ export default function StaffTeams({
           <p>
             <strong>{draft.name}</strong>
           </p>
+          <p>
+            {draft.action === "REVOKE"
+              ? "Revoke team code"
+              : draft.action === "ISSUE"
+                ? "Issue a new team code"
+                : draft.action === "ROTATE"
+                  ? "Rotate team code"
+                  : "Register team"}
+          </p>
           {draft.target ? (
             <>
               <p className="staff-reference">{draft.target}</p>
@@ -493,6 +633,18 @@ export default function StaffTeams({
                 Both members' current sessions and browser handoffs will be
                 revoked. Languages, scores and history remain unchanged.
               </p>
+              {draft.action === "REVOKE" && (
+                <p className="notice">
+                  No replacement code will be issued. New sign-ins remain
+                  unavailable until a new code is deliberately issued.
+                </p>
+              )}
+              {draft.action === "ISSUE" && (
+                <p className="notice">
+                  Previously revoked sessions remain invalid. Issuing a code
+                  does not clear access blocks or change enrolment.
+                </p>
+              )}
             </>
           ) : (
             <p>
@@ -526,7 +678,10 @@ export default function StaffTeams({
               >
                 Back
               </button>
-              <button className="primary" disabled={locked || !ownCode.trim()}>
+              <button
+                className={draft.action === "REVOKE" ? "danger" : "primary"}
+                disabled={locked || !data || stateChanged || !ownCode.trim()}
+              >
                 Confirm team change
               </button>
             </div>

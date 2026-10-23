@@ -10,13 +10,13 @@ import { openStaffFlow } from "./staff-service.js";
 export interface Flow {
   id: string; team_id: string; credential_id: string; credential_version: string; round_id: string | null; state: string;
   purpose: "TEAM_ENTRY" | "REPLACEMENT";
-  proof_verifier: Buffer; created_at: Date; expires_at: Date; activated_session_id: string | null;
+  proof_verifier: Buffer | null; created_at: Date; expires_at: Date; activated_session_id: string | null;
 }
 interface Round { id: string; arena_instance_id: string; kind: number; state: string; closes_at: Date | null; current: boolean; }
 interface Member { id: string; member_id: string; team_id: string; round_id: string; language: Language | null; enrolled_at: Date | null; }
 interface Session {
-  id: string; member_round_id: string; member_id: string; team_id: string; round_id: string; entry_flow_id: string;
-  credential_id: string; credential_version: string; secret_verifier: Buffer; created_at: Date; absolute_expires_at: Date;
+  id: string; member_round_id: string; team_round_id: string; member_id: string; team_id: string; round_id: string; entry_flow_id: string;
+  credential_id: string; credential_version: string; secret_verifier: Buffer | null; created_at: Date; absolute_expires_at: Date;
   last_activity_at: Date; revoked_at: Date | null; revocation_reason: string | null; language: Language; team_name: string; member_name: string; arena_instance_id: string; round_state: string;
 }
 interface Outcome { fingerprint: Buffer; outcome: "ACTIVATED" | "REJECTED"; reason: string | null; session_id: string | null; }
@@ -55,7 +55,7 @@ export async function roundFor(client: PoolClient, id: string): Promise<Round | 
 }
 
 export async function sessionRow(client: PoolClient, sessionId: string, current = true): Promise<Session | undefined> {
-  return first<Session>(client, `SELECT s.*, mr.language, mr.display_name AS member_name, tr.display_name AS team_name,
+  return first<Session>(client, `SELECT s.*, tr.id AS team_round_id, mr.language, mr.display_name AS member_name, tr.display_name AS team_name,
       r.arena_instance_id, r.state AS round_state FROM participant_sessions s
     JOIN member_rounds mr ON mr.id=s.member_round_id JOIN team_rounds tr ON tr.id=mr.team_round_id JOIN rounds r ON r.id=s.round_id
     WHERE s.id=$1 AND (NOT $2 OR EXISTS (SELECT 1 FROM member_session_slots slot WHERE slot.member_id=s.member_id AND slot.session_id=s.id))`, [sessionId, current]);

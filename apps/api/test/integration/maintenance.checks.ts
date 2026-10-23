@@ -76,12 +76,14 @@ export async function maintenanceChecks(t: TestContext, c: Context) {
       "all maintenance waits for trusted time, logs only task labels and retries rather than skipping clock checks",
       async () => {
         const before = await state();
-        await waitFor(async () => reports.length === 4);
+        await waitFor(async () => reports.length === 6);
         assert.deepEqual([...reports].sort(), [
           "deliveries",
+          "payloads",
           "quotas",
           "rounds",
           "validation",
+          "verifiers",
         ]);
         assert.deepEqual(await state(), before);
         for (const task of Object.values(maintenanceTasks(c.api, guard)))

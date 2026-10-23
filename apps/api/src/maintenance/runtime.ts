@@ -15,6 +15,8 @@ export function startEventMaintenance(
     validation: 5000,
     deliveries: 10000,
     quotas: 60000,
+    verifiers: 60000,
+    payloads: 60000,
   };
   const stop = (Object.keys(intervals) as (keyof typeof intervals)[]).map(
     (task) => {

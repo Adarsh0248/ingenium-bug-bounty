@@ -13,7 +13,7 @@ export async function judgingFeedback(
     lane: string;
     bounty_id: string;
     language: string;
-    source: Buffer;
+    source: Buffer | null;
     status: string;
     result: string | null;
     created_at: Date;
@@ -25,6 +25,7 @@ export async function judgingFeedback(
     [parentId, roundId, memberRoundId],
   );
   if (!parent) throw new AccessError("ACCESS_UNAVAILABLE");
+  if (parent.source === null) throw new AccessError("PAYLOAD_EXPIRED");
   // Official results never contain hidden-case identity, counts, bytes or diagnostics.
   const samples =
     parent.lane === "SAMPLE"

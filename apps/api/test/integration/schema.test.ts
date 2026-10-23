@@ -23,6 +23,9 @@ import { contentChecks } from "./content.checks.js";
 import { validationChecks } from "./validation.checks.js";
 import { judgeGatewayChecks } from "./judge-gateway.checks.js";
 import { competitionChecks } from "./competition.checks.js";
+import { backupFixture, backupDocker } from "./backup-fixture.js";
+import { staffRecoveryLinuxChecks } from "./staff-recovery-linux.checks.js";
+import { linuxLoadChecks } from "./load-linux.checks.js";
 
 const exec = promisify(execFile);
 const IMAGE = "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826";
@@ -49,11 +52,15 @@ async function waitForDatabase(connectionString: string): Promise<void> {
   throw new Error("The disposable PostgreSQL test database did not become ready.");
 }
 
-test("registration migrations work on isolated PostgreSQL and preserve their constraints on repeat application", { timeout: 600000 }, async (t) => {
+// The complete matrix includes real 150-second cooldown and 45-second expiry checks; operation limits are unchanged.
+test("registration migrations work on isolated PostgreSQL and preserve their constraints on repeat application", { timeout: 900000 }, async (t) => {
   assert.equal((await lstat(roleScript)).isFile(), true, "The reviewed role script must be a regular file before mounting it.");
   const nonce = randomUUID();
   const password = randomBytes(24).toString("hex");
   const apiPassword = randomBytes(24).toString("hex");
+  const backup = process.env.INGENIUM_TEST_SUITE === "backup" ? await backupFixture() : undefined;
+  if (backup) t.after(() => backup.close());
+  const selectedImage = backup?.image ?? IMAGE;
   // Isolated feature databases share this bounded tmpfs, including migration WAL.
   const container = await docker(["create", "--pull=never", "--name", `ingenium-schema-test-${nonce}`,
     "--label", `ingenium.schema-test=${nonce}`, "--restart", "no", "--read-only", "--user", "999:999", "--cap-drop", "ALL",
@@ -64,7 +71,9 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     "--tmpfs", "/var/run/postgresql:rw,nosuid,nodev,noexec,size=8m,uid=999,gid=999,mode=0700",
     "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=16m,uid=999,gid=999,mode=0700",
     "--mount", `type=bind,src=${roleScript},dst=/docker-entrypoint-initdb.d/01-api-role.sql,readonly`,
-    "--log-driver", "json-file", "--log-opt", "max-size=1m", "--log-opt", "max-file=1", IMAGE],
+    "--log-driver", "json-file", "--log-opt", "max-size=1m", "--log-opt", "max-file=1",
+    ...(backup ? ["--env", "POSTGRES_INITDB_ARGS=--data-checksums", ...backup.mounts()] : []), selectedImage,
+    ...(backup ? ["postgres", "-c", "config_file=/etc/ingenium-backup/postgresql.conf", "-c", "listen_addresses=*", "-c", "max_wal_size=64MB", "-c", "shared_buffers=64MB"] : ["load","load-linux","race-load-linux"].includes(process.env.INGENIUM_TEST_SUITE ?? "") ? ["postgres", "-c", "max_connections=40", "-c", "track_functions=all"] : [])],
   { ...process.env, POSTGRES_PASSWORD: password, POSTGRES_API_PASSWORD: apiPassword });
   assert.match(container, /^[a-f0-9]{64}$/);
   let owner: Pool | undefined;
@@ -84,6 +93,7 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
       throw new Error(`The disposable PostgreSQL test database did not become ready. Startup log:\n${diagnostic}`);
     }
     const ownerUrl = url.toString();
+    if (backup) await backupDocker(["exec", container, "pgbackrest", "--stanza=ingenium", "stanza-create"]);
     owner = new Pool({ connectionString: ownerUrl, max: 2, connectionTimeoutMillis: 2000, statement_timeout: 5000 });
     await migrateDatabase(ownerUrl);
     const db = drizzle(owner);
@@ -91,17 +101,22 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     url.password = apiPassword;
     const apiUrl = url.toString();
     api = new Pool({ connectionString: apiUrl, max: 4, connectionTimeoutMillis: 2000 });
+    if(process.env.INGENIUM_TEST_SUITE === "load-linux") { await linuxLoadChecks(t, ownerUrl, apiUrl, container); return; }
+    if(process.env.INGENIUM_TEST_SUITE === "race-load-linux") { await linuxLoadChecks(t, ownerUrl, apiUrl, container, "race-load"); return; }
+    if(process.env.INGENIUM_TEST_SUITE === "operations-linux") { await staffRecoveryLinuxChecks(t, ownerUrl, apiUrl, container, "operations"); return; }
     if(process.env.INGENIUM_TEST_SUITE==="staff-recovery"){await staffRecoveryChecks(t,ownerUrl,apiUrl,container);return;}
     if(process.env.INGENIUM_TEST_SUITE==="staff-management"){await staffManagementChecks(t,ownerUrl,apiUrl);return;}
     if (["clock","worker-clock","clock-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await clockChecks(t,ownerUrl,apiUrl); return; }
     if(["worker-validation","diagnostics","diagnostics-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){await validationChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="imports"){await registrationImportChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="teams"){await teamManagementChecks(t,ownerUrl,apiUrl);return;}
-    if (["competition", "worker", "maintenance", "participant", "live", "workbench", "history", "history-browser", "judging", "judging-browser", "review", "review-browser", "browser", "registration-browser", "discipline", "discipline-browser", "cancellation", "cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await competitionChecks(t, ownerUrl, apiUrl); return; }
-    await teamManagementChecks(t,ownerUrl,apiUrl);
-    await registrationImportChecks(t,ownerUrl,apiUrl);
-    await judgeGatewayChecks(t, ownerUrl);
-    await competitionChecks(t, ownerUrl, apiUrl);
+    if (["load", "race-load", "operations", "operations-browser", "restore", "backup", "https", "competition", "worker", "maintenance", "participant", "live", "workbench", "history", "history-browser", "judging", "judging-browser", "review", "review-browser", "audit", "audit-browser", "announcements", "announcements-browser", "team-access", "team-access-browser", "results", "results-browser", "retention", "browser", "registration-browser", "discipline", "discipline-browser", "cancellation", "cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await competitionChecks(t, ownerUrl, apiUrl, backup ? { fixture: backup, container } : undefined); return; }
+    if (process.env.INGENIUM_TEST_SUITE !== "foundation") {
+      await teamManagementChecks(t,ownerUrl,apiUrl);
+      await registrationImportChecks(t,ownerUrl,apiUrl);
+      await judgeGatewayChecks(t, ownerUrl);
+      await competitionChecks(t, ownerUrl, apiUrl);
+    }
 
     await t.test("names are labels, members have stable UUIDs and exactly two distinct positions", async () => {
       const first = await db.insert(teams).values({ displayName: "Same team label" }).returning();
@@ -190,7 +205,7 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     await api?.end();
     await owner?.end();
     const identity = await docker(["inspect", "--format", '{{index .Config.Labels "ingenium.schema-test"}}|{{.Config.Image}}', container]);
-    assert.equal(identity, `${nonce}|${IMAGE}`, "Test container ownership changed; do not remove it.");
+    assert.equal(identity, `${nonce}|${selectedImage}`, "Test container ownership changed; do not remove it.");
     await docker(["stop", "--time", "5", container]);
     assert.equal(await docker(["inspect", "--format", "{{.State.Running}}", container]), "false");
     await docker(["rm", container]);

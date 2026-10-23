@@ -1,0 +1,16 @@
+admin off
+persist_config off
+servers {
+	protocols h1 h2
+	strict_sni_host on
+	max_header_size 16KiB
+	timeouts {
+		read_header 5s
+		read_body 15s
+		idle 60s
+	}
+}
+# Request URLs, cookies and bodies must not enter ordinary proxy logs.
+log {
+	output discard
+}

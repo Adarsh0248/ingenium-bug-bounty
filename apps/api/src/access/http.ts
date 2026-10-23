@@ -5,6 +5,7 @@ import helmet from "@fastify/helmet";
 import type { FastifyError, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import { browserId, browserPolicy, boundedCookies, csrfContext, requestOrigin } from "./browser-policy.js";
+import { clientAddress } from "./client-address.js";
 import type { Audience, BrowserSettings } from "./browser-policy.js";
 import type { SessionDelivery } from "./credentials.js";
 import { createEntryService } from "./entry-service.js";
@@ -26,12 +27,20 @@ import {createHistoryService} from "../workbench/history.js";
 import * as historySchema from "../workbench/history-schemas.js";
 import type { JudgingFilters } from "../competition/staff-judging.js";
 import { createSubmissionReviewService } from "../competition/submission-review.js";
+import { createRetentionStatus } from "../maintenance/status.js";
+import { retentionStatus } from "../maintenance/status-schema.js";
+import { createOperationsStatus } from "../maintenance/operations.js";
+import { operationsSchema } from "../maintenance/operations-schema.js";
 import * as reviewSchema from "../competition/submission-review-schemas.js";
 import { createContentService } from "../content/service.js";
 import { createValidationService } from "../content/validation-service.js";
 import { createValidationRunService } from "../content/validation-runs.js";
 import { createValidationDiagnosticService } from "../content/validation-diagnostics.js";
 import * as diagnosticSchema from "../content/validation-diagnostic-schemas.js";
+import { createStaffAuditService } from "./audit-service.js";
+import { auditPage, auditQuery } from "./audit-schemas.js";
+import { createAnnouncementService } from "./announcements.js";
+import * as announcementSchema from "./announcement-schemas.js";
 import { createPublicationService } from "../content/publication-service.js";
 import type { ContentAction } from "../content/policy.js";
 import type { StaffAction } from "./staff-management.js";
@@ -43,7 +52,7 @@ declare module "fastify" {
   interface FastifyRequest { entryCsrfContext: string; }
   interface FastifyContextConfig { clockRecovery?: boolean; largeContent?: boolean; participantSource?: boolean; }
 }
-export interface EntryHttpOptions { pool: Pool; clock: ClockGuard; recoveryClock?: ClockGuard; delivery: SessionDelivery; browser: BrowserSettings; competition?: CompetitionDependencies; }
+export interface EntryHttpOptions { pool: Pool; clock: ClockGuard; recoveryClock?: ClockGuard; delivery: SessionDelivery; browser: BrowserSettings; competition?: CompetitionDependencies; proxy?: "loopback"; }
 
 function sessionView(session: Awaited<ReturnType<ReturnType<typeof createEntryService>["inspect"]>>) {
   return { session_id: session.sessionId, member_id: session.memberId, member_round_id: session.memberRoundId,
@@ -67,12 +76,16 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   const arenas = createArenaService(options.pool, options.clock, options.delivery);
   const competition = createCompetitionService(options.pool, options.clock, options.delivery, options.competition);
   const submissionReviews = createSubmissionReviewService(options.pool, options.clock, options.delivery);
+  const retention = createRetentionStatus(options.pool, options.clock, options.delivery);
+  const operations = createOperationsStatus(options.pool, options.clock, options.delivery);
   const workbench=createWorkbenchService(options.pool,options.clock);
   const history=createHistoryService(options.pool,options.clock);
   const content = createContentService(options.pool, options.clock, options.delivery);
   const validation = createValidationService(options.pool, options.clock, options.delivery);
   const validationRuns = createValidationRunService(options.pool, options.clock, options.delivery);
   const diagnostics = createValidationDiagnosticService(options.pool, options.clock, options.delivery);
+  const audit = createStaffAuditService(options.pool, options.clock, options.delivery);
+  const announcements = createAnnouncementService(options.pool, options.clock, options.delivery);
   const publications = createPublicationService(options.pool, options.clock, options.delivery);
   function recoveryClock() { if (!options.recoveryClock) throw new AccessError("CLOCK_RECOVERY_UNAVAILABLE"); return options.recoveryClock; }
   function entryClock() {
@@ -108,6 +121,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   app.addHook("onTimeout", async (request) => { if (waitingBody.has(request)) release(request); });
   app.addHook("onRequestAbort", async (request) => { if (waitingBody.has(request)) release(request); });
   app.addHook("onRequest", async (request, reply) => {
+    const ip = clientAddress(request.raw, options.proxy);
     if (pending.size >= 128) throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");
     pending.add(request);
     boundedCookies(request, policy);
@@ -118,7 +132,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     const quotaClock = request.routeOptions.config.clockRecovery ? recoveryClock() :
       request.routeOptions.url === "/api/v1/entry/verify" || bootstrapAudience === "ANONYMOUS" ? entryClock() :
       bootstrapAudience?.startsWith("STAFF_RECOVERY") ? (options.recoveryClock ?? options.clock) : options.clock;
-    try { await browserHttpQuota(options.pool, quotaClock, request.ip); }
+    try { await browserHttpQuota(options.pool, quotaClock, ip); }
     finally { if (request.raw.aborted) release(request); }
     waitingBody.add(request);
     if (request.routeOptions.config.largeContent) {
@@ -148,8 +162,10 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     let status = 503, code = "UNAVAILABLE", outcome = "UNKNOWN";
     if (error instanceof AccessError) {
       if (["INVALID_CODE", "INVALID_FLOW", "INVALID_SESSION", "INVALID_AUTHORITY", "BROWSER_CONTEXT_REQUIRED"].includes(error.code)) { status = 401; code = "AUTHORITY_REQUIRED"; }
+      else if (error.code === "PAYLOAD_EXPIRED") { status = 410; code = "PAYLOAD_EXPIRED"; outcome = "NOT_PROCESSED"; }
       else if (error.code === "STAFF_CONFIRMATION_REQUIRED") { status = 403; code = "STAFF_CONFIRMATION_REQUIRED"; }
       else if (error.code === "CLOCK_UNTRUSTED") { code = "CLOCK_UNTRUSTED"; }
+      else if (error.code === "RESTORE_QUARANTINED") { code = "RESTORE_QUARANTINED"; }
       else if (["ORIGIN_DENIED", "ACCESS_UNAVAILABLE"].includes(error.code)) { status = 403; code = "ACCESS_DENIED"; }
       else if (["ROUND_OR_MEMBER_UNAVAILABLE","STAFF_TARGET_UNAVAILABLE","REPLACEMENT_UNAVAILABLE","ARENA_UNAVAILABLE","CONTENT_UNAVAILABLE","WORKBENCH_UNAVAILABLE"].includes(error.code)) { status = 404; code = "SCOPE_UNAVAILABLE"; }
       else if (["INVALID_HEADERS", "INVALID_CONTEXT"].includes(error.code)) { status = 400; code = "INVALID_REQUEST"; }
@@ -169,7 +185,8 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
       status = failure.statusCode === 413 ? 413 : failure.statusCode === 415 ? 415 : 400;
       code = status === 413 ? "BODY_TOO_LARGE" : "INVALID_REQUEST"; outcome = "NOT_PROCESSED";
     }
-    if (status === 503) request.log.warn({ event: "entry_request_unavailable", trace_id: request.id }, "Entry request could not be completed.");
+    if (status === 503) request.log.warn({ event: "entry_request_unavailable", trace_id: request.id,
+      code: error instanceof AccessError ? error.code : /^[0-9A-Z]{5}$/.test(failure?.code ?? "") ? failure!.code : "UNAVAILABLE" }, "Entry request could not be completed.");
     return reply.code(status).send({ schema_version: 1, trace_id: request.id, error: { code, outcome } });
   });
   app.setNotFoundHandler((request, reply) => reply.code(404).send({ schema_version: 1, trace_id: request.id, error: { code: "NOT_FOUND", outcome: "NOT_PROCESSED" } }));
@@ -191,6 +208,24 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   const boundedResponse=(limit:number)=>async(_request:FastifyRequest,_reply:FastifyReply,payload:unknown)=>{
     if(Buffer.byteLength(JSON.stringify(payload))>limit)throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");return payload;
   };
+  app.get("/staff/maintenance/retention", { exposeHeadRoute: false, preSerialization: boundedResponse(16384),
+    schema: { querystring: schema.empty, response: schema.responses(retentionStatus) } }, async request => wrap(request, await retention(request.cookies[policy.names.staff])));
+  app.get("/staff/maintenance/operations", { exposeHeadRoute: false, preSerialization: boundedResponse(16384),
+    schema: { querystring: schema.empty, response: schema.responses(operationsSchema) } }, async request => wrap(request, await operations(request.cookies[policy.names.staff])));
+  const announcementPath="/staff/arenas/:arena_id/announcements";
+  app.post<{Params:{arena_id:string};Body:{scope:"EVENT"|"ROUND"|"TEAM";round_id:string|null;team_id:string|null;request_key:string;message:string;reason:string}}>(announcementPath,{
+    bodyLimit:32768,onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:announcementSchema.arenaParams,body:announcementSchema.sendBody,response:schema.responses(announcementSchema.receipt)},
+  },async request=>wrap(request,await announcements.send(request.cookies[policy.names.staff],{arenaId:request.params.arena_id,scope:request.body.scope,roundId:request.body.round_id,teamId:request.body.team_id,requestKey:request.body.request_key,message:request.body.message,reason:request.body.reason})));
+  app.get<{Params:{arena_id:string;request_key:string}}>(`${announcementPath}/outcomes/:request_key`,{exposeHeadRoute:false,schema:{querystring:schema.empty,params:announcementSchema.outcomeParams,response:schema.responses(announcementSchema.outcome)}},
+    async request=>wrap(request,await announcements.outcome(request.cookies[policy.names.staff],request.params.arena_id,request.params.request_key)));
+  app.get<{Params:{arena_id:string};Querystring:{after?:string}}>(announcementPath,{exposeHeadRoute:false,schema:{params:announcementSchema.arenaParams,querystring:announcementSchema.pageQuery,response:schema.responses(announcementSchema.page(true))}},
+    async request=>wrap(request,await announcements.staffList(request.cookies[policy.names.staff],request.params.arena_id,request.query.after)));
+  app.get<{Params:{arena_id:string;announcement_id:string}}>(`${announcementPath}/:announcement_id`,{exposeHeadRoute:false,schema:{params:announcementSchema.detailParams,querystring:schema.empty,response:schema.responses(announcementSchema.detail(true))}},
+    async request=>wrap(request,await announcements.staffDetail(request.cookies[policy.names.staff],request.params.arena_id,request.params.announcement_id)));
+  app.get<{Querystring:{after?:string}}>("/participant/announcements",{exposeHeadRoute:false,schema:{querystring:announcementSchema.pageQuery,response:schema.responses(announcementSchema.page(false))}},
+    async request=>wrap(request,await announcements.participantList(request.cookies[policy.names.participant],request.query.after)));
+  app.get<{Params:{announcement_id:string}}>("/participant/announcements/:announcement_id",{exposeHeadRoute:false,schema:{querystring:schema.empty,params:announcementSchema.participantParams,response:schema.responses(announcementSchema.detail(false))}},
+    async request=>wrap(request,await announcements.participantDetail(request.cookies[policy.names.participant],request.params.announcement_id)));
   app.get("/competition/history/rounds",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,response:schema.responses(historySchema.rounds)}},
     async request=>wrap(request,await history.rounds(request.cookies[policy.names.participant])));
   app.get<{Params:{round_id:string}}>("/competition/rounds/:round_id/history",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:competitionSchema.roundParams,response:schema.responses(historySchema.overview)}},
@@ -274,6 +309,9 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
       schema: { querystring: schema.empty, params: competitionSchema.outcomeParams, response: schema.responses(competitionSchema.outcome) } },
     async request => wrap(request, await competition.outcome(request.cookies[cookieName], request.params.round_id, request.params.request_key, audience)));
   }
+  app.get<{Params:{round_id:string}}>("/staff/competition/rounds/:round_id/results",{exposeHeadRoute:false,preSerialization:boundedResponse(270336),
+    schema:{params:competitionSchema.roundParams,querystring:schema.empty,response:schema.responses(competitionSchema.finalResults)}},async request=>
+    wrap(request,await competition.results(request.cookies[policy.names.staff],request.params.round_id)));
   app.post<{ Params: { round_id: string; bounty_id: string }; Body: { request_key: string; level: number } }>("/competition/rounds/:round_id/bounties/:bounty_id/hints", {
     onRequest: writeHooks("PARTICIPANT"), schema: { querystring: schema.empty, params: competitionSchema.bountyParams, body: competitionSchema.hintBody, response: schema.responses(competitionSchema.receipt) },
   }, async request => wrap(request, await competition.buyHint(request.cookies[policy.names.participant], request.params.round_id, request.params.bounty_id, request.body.level, request.body.request_key)));
@@ -346,7 +384,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
 
   app.post<{ Body: { code: string } }>("/entry/verify", { onRequest: writeHooks("ANONYMOUS"),
     schema: { querystring: schema.empty, body: schema.verifyBody, response: schema.responses(schema.verifyData) } }, async (request, reply) => {
-    const args={ ip:request.ip,browserId:browserId(request,policy)! };
+    const args={ ip:clientAddress(request.raw, options.proxy),browserId:browserId(request,policy)! };
     const result = entryClock() === options.clock ? await service.begin(request.body.code,args) : await staff.beginRecovery(request.body.code,args);
     if (result.audience === "STAFF") {
       const audience=result.mode === "CLOCK_RECOVERY" ? "STAFF_RECOVERY_ENTRY" : "STAFF_ENTRY";
@@ -469,8 +507,8 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     wrap(request,await registrations.outcome(request.cookies[policy.names.staff],request.params.request_key)));
 
   type TeamBody={request_key:string;expected_revision:string;own_code:string;reason:string;team_name?:string;member_one?:string;member_two?:string};
-  for(const action of ["CREATE","ROTATE"] as const) {
-    app.post<{Body:TeamBody;Params:{team_id?:string}}>(action==="CREATE"?"/staff/teams":"/staff/teams/:team_id/rotate-code",{
+  for(const action of ["CREATE","ROTATE","ISSUE","REVOKE"] as const) {
+    app.post<{Body:TeamBody;Params:{team_id?:string}}>(action==="CREATE"?"/staff/teams":`/staff/teams/:team_id/${action.toLowerCase()}-code`,{
       bodyLimit:16384,onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,...(action==="CREATE"?{}:{params:schema.teamTargetParams}),
         body:action==="CREATE"?schema.teamCreateBody:schema.staffRotateBody,response:schema.responses(schema.teamManagementData)}},async request=>{
       const b=request.body;
@@ -478,8 +516,8 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
         requestKey:b.request_key,expectedRevision:b.expected_revision,ownCode:b.own_code,reason:b.reason,teamName:b.team_name??null,memberOne:b.member_one??null,memberTwo:b.member_two??null}));
     });
   }
-  app.get<{Querystring:{after?:string}}>("/staff/teams",{exposeHeadRoute:false,schema:{querystring:schema.staffListQuery,response:schema.responses(schema.teamListData)}},async request=>
-    wrap(request,await teamManagement.list(request.cookies[policy.names.staff],request.query.after)));
+  app.get<{Querystring:{after?:string;search?:string}}>("/staff/teams",{exposeHeadRoute:false,schema:{querystring:schema.teamListQuery,response:schema.responses(schema.teamListData)}},async request=>
+    wrap(request,await teamManagement.list(request.cookies[policy.names.staff],request.query.after,request.query.search)));
   app.get<{Params:{request_key:string}}>("/staff/outcomes/teams/:request_key",{exposeHeadRoute:false,
     schema:{querystring:schema.empty,params:schema.replacementOutcomeParams,response:schema.responses(schema.teamOutcomeData)}},async request=>
     wrap(request,await teamManagement.outcome(request.cookies[policy.names.staff],request.params.request_key)));
@@ -571,6 +609,9 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     schema: { querystring: schema.empty, params: schema.contentOutcomeParams, response: schema.responses(schema.contentOutcomeData) } }, async request =>
     wrap(request, await content.outcome(request.cookies[policy.names.staff], request.params.action, request.params.target === "catalogue" ? null : request.params.target, request.params.request_key)));
 
+  app.get<{Querystring:{family:string;arena_id?:string;after?:string}}>("/staff/audit",{exposeHeadRoute:false,
+    schema:{querystring:auditQuery,response:schema.responses(auditPage)},
+  },async request=>wrap(request,await audit.list(request.cookies[policy.names.staff],request.query.family,request.query.arena_id,request.query.after)));
   app.post<{ Params: { version_id: string }; Body: { request_key: string; expected_revision: string; reason: string } }>("/staff/content/versions/:version_id/prepare-validation", {
     bodyLimit: 16384, config: { largeContent: true }, onRequest: writeHooks("STAFF"),
     schema: { querystring: schema.empty, params: schema.contentVersionParams, body: schema.validationPrepareBody,

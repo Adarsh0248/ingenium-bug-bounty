@@ -107,7 +107,7 @@ export function createSubmissionReviewService(
   }
   async function payload(client: PoolClient, audit: Audit) {
     const parent = await first<{
-      source: Buffer;
+      source: Buffer | null;
       language: string;
       lane: string;
     }>(
@@ -115,6 +115,7 @@ export function createSubmissionReviewService(
       "SELECT source,language,lane FROM participant_judging WHERE id=$1",
       [audit.parent_id],
     );
+    if (parent?.source === null) throw new AccessError("PAYLOAD_EXPIRED");
     if (!parent || !sameVerifier(sha256(parent.source), audit.source_digest))
       throw new AccessError("SECURITY_UNAVAILABLE");
     let diagnostic: null | {
@@ -131,9 +132,9 @@ export function createSubmissionReviewService(
       const attempt = await first<{
         result: string;
         result_digest: Buffer;
-        stdout_prefix: Buffer;
-        stderr: Buffer;
-        compiler_output: Buffer;
+        stdout_prefix: Buffer | null;
+        stderr: Buffer | null;
+        compiler_output: Buffer | null;
         stdout_bytes: string;
         stderr_truncated: boolean;
         compiler_output_truncated: boolean;
@@ -147,6 +148,7 @@ export function createSubmissionReviewService(
       );
       if (!attempt || !sameVerifier(attempt.result_digest, audit.result_digest))
         throw new AccessError("SECURITY_UNAVAILABLE");
+      if (attempt.stdout_prefix === null || attempt.stderr === null || attempt.compiler_output === null) throw new AccessError("PAYLOAD_EXPIRED");
       diagnostic = {
         attempt_id: audit.attempt_id,
         result: attempt.result,
@@ -206,6 +208,8 @@ export function createSubmissionReviewService(
             return payload(client, prior);
           }
           let resultDigest: Buffer | null = null;
+          if ((await first<{ source: Buffer | null }>(client, "SELECT source FROM participant_judging WHERE id=$1", [parent]))?.source === null)
+            throw new AccessError("PAYLOAD_EXPIRED");
           if (input.attemptId) {
             const result = await first<{ result_digest: Buffer }>(
               client,

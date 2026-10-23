@@ -94,9 +94,9 @@ export function createValidationDiagnosticService(
     const row = await first<{
       result: string;
       result_digest: Buffer;
-      stdout_prefix: Buffer;
-      stderr: Buffer;
-      compiler_output: Buffer;
+      stdout_prefix: Buffer | null;
+      stderr: Buffer | null;
+      compiler_output: Buffer | null;
       stdout_bytes: number;
       stdout_complete: boolean;
       stderr_truncated: boolean;
@@ -114,6 +114,7 @@ export function createValidationDiagnosticService(
     );
     if (!row || !sameVerifier(row.result_digest, audit.result_digest))
       throw new AccessError("SECURITY_UNAVAILABLE");
+    if (row.stdout_prefix === null || row.stderr === null || row.compiler_output === null) throw new AccessError("PAYLOAD_EXPIRED");
     return {
       audit_id: audit.id,
       run_id: audit.run_id,

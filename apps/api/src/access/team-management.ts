@@ -19,7 +19,7 @@ import {
 import type { ClockGuard } from "./transaction.js";
 
 export interface TeamCommand {
-  action: "CREATE" | "ROTATE";
+  action: "CREATE" | "ROTATE" | "ISSUE" | "REVOKE";
   targetId: string | null;
   requestKey: string;
   expectedRevision: string;
@@ -55,6 +55,19 @@ function view(r: Receipt) {
     recorded_at: r.recorded_at.toISOString(),
   };
 }
+export function teamSearch(value: unknown = ""): string {
+  if (
+    typeof value !== "string" ||
+    !value.isWellFormed() ||
+    value.includes("\0") ||
+    Buffer.byteLength(value) > 120
+  )
+    throw new AccessError("INVALID_CONTEXT");
+  return value.trim();
+}
+const searchFilter = `($1::text='' OR strpos(lower(t.display_name),lower($1))>0
+  OR EXISTS(SELECT 1 FROM team_members m WHERE m.team_id=t.id AND strpos(lower(m.display_name),lower($1))>0)
+  OR EXISTS(SELECT 1 FROM registration_sources s WHERE s.team_id=t.id AND strpos(lower(s.registration_id),lower($1))>0))`;
 export function createTeamManagement(
   pool: Pool,
   clock: ClockGuard,
@@ -93,7 +106,7 @@ export function createTeamManagement(
         if (input.targetId !== null) throw new AccessError("INVALID_CONTEXT");
         for (const name of [input.teamName, input.memberOne, input.memberTwo])
           boundedStaffText(name, 120);
-      } else if (input.action === "ROTATE") {
+      } else if (["ROTATE", "ISSUE", "REVOKE"].includes(input.action)) {
         uuid(input.targetId);
         if (
           input.teamName !== null ||
@@ -103,7 +116,7 @@ export function createTeamManagement(
           throw new AccessError("INVALID_CONTEXT");
       } else throw new AccessError("INVALID_CONTEXT");
       await budget(cookie, true);
-      const generated = newAccessCode();
+      const generated = input.action === "REVOKE" ? null : newAccessCode();
       return accessTransaction(
         pool,
         clock,
@@ -140,7 +153,7 @@ export function createTeamManagement(
               input.memberTwo,
               input.reason,
               sha256(canonicalCode(input.ownCode)),
-              generated.verifier,
+              generated?.verifier ?? null,
             ],
           );
           if (!row) throw new AccessError("SECURITY_UNAVAILABLE");
@@ -152,7 +165,9 @@ export function createTeamManagement(
           return {
             outcome: view(row),
             issued_code:
-              !known && row.outcome === "APPLIED" ? generated.code : null,
+              !known && row.outcome === "APPLIED"
+                ? (generated?.code ?? null)
+                : null,
           };
         },
         "EXCLUSIVE",
@@ -167,14 +182,24 @@ export function createTeamManagement(
         throw error;
       });
     },
-    async list(cookie: unknown, after?: string) {
+    async list(cookie: unknown, after?: string, search: unknown = "") {
       if (after) uuid(after);
+      const term = teamSearch(search);
       await budget(cookie);
       return accessTransaction(
         pool,
         clock,
         async (client) => {
           await principal(client, cookie);
+          if (
+            after &&
+            !(await first(
+              client,
+              `SELECT t.id FROM teams t WHERE ${searchFilter} AND t.id=$2`,
+              [term, after],
+            ))
+          )
+            throw new AccessError("INVALID_CONTEXT");
           const items = (
             await client.query(
               `SELECT t.id AS team_id,t.display_name AS team_name,
@@ -182,18 +207,25 @@ export function createTeamManagement(
           COALESCE((SELECT jsonb_agg(jsonb_build_object('member_id',m.id,'member_name',m.display_name,'position',m.position) ORDER BY m.position) FROM team_members m WHERE m.team_id=t.id),'[]'::jsonb) AS members,
           (SELECT COALESCE(max(version),0)::text FROM access_credentials WHERE team_id=t.id) AS code_version,
           EXISTS(SELECT 1 FROM access_credentials WHERE team_id=t.id AND revoked_at IS NULL) AS has_active_code
-          FROM teams t WHERE ($1::uuid IS NULL OR t.id>$1) ORDER BY t.id LIMIT 51`,
-              [after ?? null],
+          FROM teams t WHERE ${searchFilter} AND ($2::uuid IS NULL OR t.id>$2) ORDER BY t.id LIMIT 51`,
+              [term, after ?? null],
             )
           ).rows;
-          const control = await first<{ revision: string; count: number }>(
+          const control = await first<{
+            revision: string;
+            count: number;
+            matched: number;
+          }>(
             client,
-            "SELECT revision,(SELECT count(*)::integer FROM teams) AS count FROM security_control WHERE id=1",
+            `SELECT revision,(SELECT count(*)::integer FROM teams) AS count,(SELECT count(*)::integer FROM teams t WHERE ${searchFilter}) AS matched FROM security_control WHERE id=1`,
+            [term],
           );
           if (!control) throw new AccessError("SECURITY_UNAVAILABLE");
           return {
             control_revision: control.revision,
             total: control.count,
+            matched: control.matched,
+            search: term,
             items: items.slice(0, 50),
             next_after: items.length > 50 ? items[49].team_id : null,
           };

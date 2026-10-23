@@ -36,6 +36,7 @@ export function createClockMonitor(pool: Pool, source: ClockSource) {
     try {
       await client.query("BEGIN; SET LOCAL lock_timeout='750ms'; SET LOCAL statement_timeout='2s'; SET LOCAL idle_in_transaction_session_timeout='3s'; SET LOCAL transaction_timeout='3s'");
       if ((await client.query("SELECT id FROM security_control WHERE id=1 FOR UPDATE")).rowCount !== 1) throw new Error("Missing security anchor.");
+      if ((await client.query("SELECT restore_is_quarantined() AS quarantined")).rows[0]?.quarantined !== false) throw new AccessError("RESTORE_QUARANTINED");
       const state = (await client.query<Health>("SELECT * FROM clock_health WHERE id=1 FOR UPDATE")).rows[0];
       if (!state) throw new Error("Missing clock anchor.");
       const result = await work(client, state);
@@ -127,11 +128,17 @@ export function createClockMonitor(pool: Pool, source: ClockSource) {
 
   return {
     guard, recoveryGuard, runtimeId,
-    async start() {
+    async start(retiredOnly = false) {
       await enqueue(async () => {
         if (started || stopped) throw new Error("Clock monitor already used.");
         now();
         const state = await transaction(async (client, old) => {
+          if (retiredOnly && (old.running || old.fault_latched || (await client.query(`SELECT EXISTS(SELECT 1 FROM arena_instances WHERE status IN ('SETUP','IN_PROGRESS'))
+            OR EXISTS(SELECT 1 FROM arena_control WHERE current_instance_id IS NOT NULL)
+            OR EXISTS(SELECT 1 FROM execution_capacity_slots WHERE num_nonnulls(authoring_attempt_id,participant_attempt_id)>0)
+            OR EXISTS(SELECT 1 FROM participant_judging WHERE status NOT IN ('COMPLETED','CANCELLED'))
+            OR EXISTS(SELECT 1 FROM validation_runs WHERE status IN ('QUEUED','RUNNING')) AS busy`)).rows[0].busy))
+            throw new Error("Retired maintenance requires a stopped, clear runtime and no active or uncertain work.");
           if ((await client.query("SELECT count(*)::integer AS count FROM clock_runs")).rows[0].count >= 10000) throw new Error("Clock runtime capacity unavailable.");
           const unclean = old.running && !old.fault_latched;
           const generation = (BigInt(old.fault_generation) + (unclean ? 1n : 0n)).toString();

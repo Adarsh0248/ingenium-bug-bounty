@@ -17,7 +17,7 @@ export const participantJudging = pgTable("participant_judging", {
   sourceId: uuid("source_id").references(() => competitionOutcomes.id), lane: text("lane").notNull(),
   roundId: uuid("round_id").notNull().references(() => rounds.id), teamRoundId: uuid("team_round_id").notNull().references(() => teamRounds.id),
   memberRoundId: uuid("member_round_id").notNull().references(() => memberRounds.id), bountyId: uuid("bounty_id").notNull().references(() => bounties.id),
-  snapshotId: uuid("snapshot_id").notNull().references(() => validationSnapshots.id), source: bytes("source").notNull(), language: text("language").notNull(),
+  snapshotId: uuid("snapshot_id").notNull().references(() => validationSnapshots.id), source: bytes("source"), language: text("language").notNull(),
   hostEpochId: uuid("host_epoch_id").notNull().references(() => judgeHostEpochs.id), runtimeKey: text("runtime_key").notNull(), runtimeDigest: bytes("runtime_digest").notNull(),
   createdAt: instant("created_at").notNull(), policyVersion: integer("policy_version").notNull().default(1),
   status: text("status").notNull(), result: text("result"), startedAt: instant("started_at"), completedAt: instant("completed_at"),
@@ -56,7 +56,8 @@ export const participantAttempts = pgTable("participant_attempts", {
     and ((${t.sendState}='PREPARED' and ${t.sendStartedAt} is null) or (${t.sendState}='SEND_STARTED' and ${t.sendStartedAt} is not null and ${t.sendStartedAt}>=${t.preparedAt}))
     and ((${t.result} is null and num_nonnulls(${t.evidence},${t.resultDigest},${t.stdoutPrefix},${t.stderr},${t.compilerOutput},${t.resolvedAt})=0)
       or (${t.result} in ('PASSED','WRONG_ANSWER','COMPILATION_ERROR','RUNTIME_ERROR','TIME_LIMIT_EXCEEDED','MEMORY_LIMIT_EXCEEDED','OUTPUT_LIMIT_EXCEEDED','INFRA_ERROR')
-        and num_nonnulls(${t.evidence},${t.resultDigest},${t.stdoutPrefix},${t.stderr},${t.compilerOutput},${t.resolvedAt})=6
+        and num_nonnulls(${t.evidence},${t.resultDigest},${t.resolvedAt})=3
+        and num_nonnulls(${t.stdoutPrefix},${t.stderr},${t.compilerOutput}) in (0,3)
         and octet_length(${t.evidence}::text)<=65536 and octet_length(${t.resultDigest})=32 and octet_length(${t.stdoutPrefix})<=16384
         and octet_length(${t.stderr})<=65536 and octet_length(${t.compilerOutput})<=65536 and ${t.resolvedAt}>=${t.sendStartedAt}))
     and ((${t.releasedAt} is null and ${t.releaseDigest} is null) or (${t.releasedAt} is not null and ${t.releasedAt}>=${t.preparedAt} and octet_length(${t.releaseDigest})=32 and ${t.releaseDigest} is not null))`)]);

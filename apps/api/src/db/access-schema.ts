@@ -66,7 +66,7 @@ export const teamRounds = pgTable("team_rounds", {
 export const entryFlows = pgTable("entry_flows", {
   id: id(), teamId: uuid("team_id").notNull(), credentialId: uuid("credential_id").notNull(),
   purpose: text("purpose").notNull().default("TEAM_ENTRY"),
-  credentialVersion: bigint("credential_version", { mode: "bigint" }).notNull(), proofVerifier: bytes("proof_verifier").notNull(),
+  credentialVersion: bigint("credential_version", { mode: "bigint" }).notNull(), proofVerifier: bytes("proof_verifier"),
   roundId: uuid("round_id").references(() => rounds.id, { onDelete: "restrict" }),
   state: text("state").notNull(), createdAt: instant("created_at").notNull(), expiresAt: instant("expires_at").notNull(),
   activatedSessionId: uuid("activated_session_id").references((): AnyPgColumn => participantSessions.id, { onDelete: "restrict" }), activatedAt: instant("activated_at"),
@@ -93,7 +93,7 @@ export const memberRounds = pgTable("member_rounds", {
 export const participantSessions = pgTable("participant_sessions", {
   id: id(), memberRoundId: uuid("member_round_id").notNull(), memberId: uuid("member_id").notNull(), teamId: uuid("team_id").notNull(),
   roundId: uuid("round_id").notNull(), entryFlowId: uuid("entry_flow_id").notNull(), credentialId: uuid("credential_id").notNull(),
-  credentialVersion: bigint("credential_version", { mode: "bigint" }).notNull(), secretVerifier: bytes("secret_verifier").notNull(),
+  credentialVersion: bigint("credential_version", { mode: "bigint" }).notNull(), secretVerifier: bytes("secret_verifier"),
   createdAt: instant("created_at").notNull(), absoluteExpiresAt: instant("absolute_expires_at").notNull(),
   lastActivityAt: instant("last_activity_at").notNull(), revokedAt: instant("revoked_at"), revocationReason: text("revocation_reason"),
 }, (t) => [foreignKey({ name: "session_member_scope", columns: [t.memberRoundId, t.memberId, t.teamId, t.roundId],

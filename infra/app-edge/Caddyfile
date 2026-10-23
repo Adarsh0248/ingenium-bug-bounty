@@ -1,0 +1,7 @@
+{
+	import global.caddy
+}
+
+https://{$INGENIUM_HOST} {
+	import site.caddy
+}

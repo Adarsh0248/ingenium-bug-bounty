@@ -10,6 +10,26 @@ import { judgeTransaction } from "../content/judge-transaction.js";
 
 export function maintenanceTasks(pool: Pool, clock: ClockGuard) {
   return {
+    async verifiers() {
+      return judgeTransaction(pool, clock, async (client) => {
+        await decisionTime(client, clock);
+        return (
+          await client.query<{ count: number }>(
+            "SELECT maintain_payload_retention('SECRETS') AS count",
+          )
+        ).rows[0]!.count;
+      });
+    },
+    async payloads() {
+      return judgeTransaction(pool, clock, async (client) => {
+        await decisionTime(client, clock);
+        return (
+          await client.query<{ count: number }>(
+            "SELECT maintain_payload_retention('PAYLOADS') AS count",
+          )
+        ).rows[0]!.count;
+      });
+    },
     async rounds() {
       const rounds = await accessTransaction(
         pool,

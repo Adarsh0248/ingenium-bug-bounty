@@ -50,6 +50,11 @@ export async function clockChecks(t: TestContext, ownerConnection: string, apiCo
     finally {
       for (const monitor of monitors.reverse()) { await monitor.flush().catch(() => {}); await monitor.stop().catch(() => {}); }
       await monitorPool.end(); await api.end(); await owner.end();
+      // Each migrated clock database is independent; release it before the next bounded fixture.
+      assert.match(name, /^ingenium_clock_[0-9a-f]{32}$/);
+      const cleanup = new Client({ connectionString: ownerConnection });
+      await cleanup.connect();
+      try { await cleanup.query(`DROP DATABASE "${name}"`); } finally { await cleanup.end(); }
     }
   }
   async function establish(monitor: ReturnType<typeof createClockMonitor>, fake: ReturnType<typeof syntheticSource>) {

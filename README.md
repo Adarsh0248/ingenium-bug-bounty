@@ -9,7 +9,103 @@ no additional features are silently dropped. See the current
 [build and launch checklist](docs/build-status.md). The target is not a readiness
 guarantee, and required security/capacity/recovery gates still apply.
 
-Latest implementation batch: [private validation diagnostics](docs/validation-diagnostics.md)
+Latest implementation batch: [private operations observation](docs/operations-observation.md)
+adds bounded Owner/Super Admin counters, stale/unknown warnings, an offline
+read-only observer and original-receipt recovery inventory. Linux-container
+CLI checks pass with restricted roles and private runtime files. The
+[capacity harness](docs/local-load.md) exercises 100 teams/200 members; its
+Linux-local live-socket rehearsal has passed with exact draft/receipt checks.
+A reconnect race and redundant idle acknowledgements are fixed and covered by
+regressions. A bounded public-standings cache now shares only committed public
+scores, never session authority or private balances. The latest run retained
+200 connections without reconnects and exact draft/submission receipts, with
+faster pause/resume projections but some refused projection reads still recorded.
+Protected API startup now refuses owner/worker database credentials and expanded
+direct-write privileges. The participant browser suite also covers forty moving
+targets on desktop/mobile and keyboard focus into/out of the workbench.
+The user-reported [isolated cloud CLI rehearsal](docs/manual-cloud-rehearsal.md)
+passed; it deliberately kept admission disabled and did not verify live deployment.
+The [fifty-team shared-race rehearsal](docs/local-load.md#fifty-team-shared-race)
+has two consecutive bounded Linux passes with one hundred claim recipients and
+exactly one winner; an earlier capacity refusal remains recorded. Retention now
+uses smaller transactions without extending production deadlines. Separate restricted
+[primary-host service definitions](infra/app-host/README.md) are also prepared,
+not installed. Mobile and minimised HUDs now retain team rank as well as score;
+four viewport checks cover those layouts and workbench keyboard navigation.
+Delivery/admission latency still needs
+improvement; this is not a passed event-capacity gate. Overall completion is
+roughly **88%**, not event readiness. A fresh combined disposable-database run
+passes all 341 checks without cancellations/skips, alongside 304 unit/client
+checks, builds/typechecks and the public-bundle boundary check. The 22 October
+target was not met. Real hosting, alert delivery, complete
+judge installation and full event-length capacity/recovery checks remain open.
+
+Earlier implementation batch: [offline restore quarantine](docs/restore-quarantine.md)
+atomically invalidates restored browser access/delivery capsules and quarantines
+old judge epochs. A persistent independent gate blocks app/worker actions and
+clock restart, without changing scores, locked languages, admitted intents or
+held execution slots. The same operation passes on an actual encrypted physical
+restore into isolation. Overall completion is roughly **81%**, not event readiness.
+Physical old-host fencing, secret rotation and controlled reopening still need
+verification; no real database, deployment or Git history was changed.
+
+Earlier implementation batch: [encrypted backup and isolated restore](docs/backup-restore.md)
+adds a PostgreSQL/pgBackRest image candidate, protected GCS configuration template
+and real full/differential/incremental plus WAL recovery drill. The local restore
+preserves all 109 application tables, migration history and database guards,
+rejects a wrong key/damaged manifest, and stays network-isolated. Overall completion
+is roughly **80%**, not event readiness. Cloud repository installation,
+deployment-secret rotation and safe reopening remain unfinished; nothing was deployed.
+
+Earlier implementation batch: [same-origin HTTPS gateway](docs/https-edge.md)
+adds the real Caddy configuration for the built frontend, protected API and live
+WebSockets. Production requests use a checked same-host client-address boundary;
+secure cookies, CSP/editor workers, private draft updates, cache rules and lost
+POST handling pass local TLS/browser checks. Overall completion is roughly **79%**,
+not a measured readiness score. This does not deploy a cloud host or install a
+public certificate; real judge/host, backups, monitoring and event-load gates remain.
+
+Earlier implementation batch: [database retention and operations](docs/data-retention.md)
+adds guarded 24-hour verifier and 7/30-day source/diagnostic expiry, immutable
+byte/hash tombstones, paired official-source retirement and controlled expired
+reads. Staff have read-only cleanup status; a finite Linux operator command
+supports post-event maintenance without opening a website or executing code.
+Overall completion is roughly **78%**, not a measured readiness score. Local
+database/browser and shared clock/maintenance regressions pass. Production-host byte retirement, native command
+rehearsal, encrypted backups/archive/restore and full event launch gates remain.
+
+Earlier implementation batch: [final results export](docs/results-export.md)
+adds staff CSV/JSON downloads of either round's frozen standings, historical
+arena scope, exact tie-break data and separate qualification status. Private
+balances, code and execution data are excluded; CSV names are spreadsheet-safe.
+Overall completion is roughly **72%** after this verified batch,
+not an event-readiness score. No migration or live database change is needed.
+Installed hosting, retention and full launch/load/security gates remain open.
+
+Earlier implementation batch: [private team search and code revocation](docs/team-registration.md)
+adds bounded team/member/registration-ID search, confirmed code revocation without
+secret issuance, deliberate reissuance and race-safe active/inactive checks.
+Existing grants/handoffs are retired without changing enrolled languages, saved
+code, sporting state or admitted work. Overall completion is roughly **71%**,
+not an event-readiness score. Only disposable synthetic databases were migrated;
+production installation, retention and launch/load/security gates remain open.
+
+Earlier implementation batch: [arena announcements](docs/announcements.md)
+adds event-wide, round-wide and private team messages, scoped live notification,
+a participant inbox and protected staff sending/history. Unknown sends recover
+the original receipt without reposting; opening a message preserves the editor.
+Overall completion is roughly **70%**, not an event-readiness score. The migration
+has only been exercised in disposable test databases. Installed hosting,
+retention and full event-load/security/recovery verification remain open.
+
+Earlier implementation batch: [staff audit history](docs/staff-audit.md)
+adds role-filtered browsing of seventeen immutable record categories, historical
+arena scope, stable paging and source-free detail dialogs. It reads existing
+records without changing commands, sessions or competition state. Overall
+completion is roughly **69%**, not an event-readiness score. Installed hosting,
+remaining event controls, retention and launch/load verification remain open.
+
+Earlier implementation batch: [private validation diagnostics](docs/validation-diagnostics.md)
 adds reason-required Owner/Super Admin review of one resolved authoring dispatch,
 bounded output/accounting, immutable access history and original-session GET-only
 receipt recovery. It never reruns code, changes a result or bypasses publication
@@ -305,8 +401,9 @@ Unit/configuration tests do not need PostgreSQL. `test:db` requires the developm
 database and performs connectivity/role-permission reads without adding data.
 `test:db:schema` uses a separate, labelled, memory-backed PostgreSQL test container
 and the cached pinned Docker image; it never migrates the development database.
-It checks registration/access migrations, concurrent entry/session commands and
-the HTTP adapter through Fastify injection, not public hosting or a real browser.
+It checks registration/access migrations, concurrent entry/session commands,
+the HTTP adapter and database-backed protected browser workflows. These synthetic
+checks do not verify public hosting or the production judge.
 Tests use Node's built-in runner. Building
 produces JavaScript under `apps/api/dist`; compilation is not event-readiness proof.
 

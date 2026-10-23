@@ -67,7 +67,7 @@ export const authoringAttempts = pgTable("authoring_attempts", {
     and ((${t.sendState}='PREPARED' and ${t.sendStartedAt} is null) or (${t.sendState}='SEND_STARTED' and ${t.sendStartedAt} is not null and ${t.sendStartedAt}>=${t.preparedAt}))
     and ((${t.result} is null and num_nonnulls(${t.resultDigest},${t.resolvedAt},${t.evidence},${t.stdoutPrefix},${t.stderr},${t.compilerOutput})=0)
       or (${t.result} is not null and ${t.result} in ('PASSED','WRONG_ANSWER','COMPILATION_ERROR','RUNTIME_ERROR','TIME_LIMIT_EXCEEDED','MEMORY_LIMIT_EXCEEDED','OUTPUT_LIMIT_EXCEEDED','INFRA_ERROR')
-        and num_nonnulls(${t.resultDigest},${t.resolvedAt},${t.evidence},${t.stdoutPrefix},${t.stderr},${t.compilerOutput})=6 and octet_length(${t.resultDigest})=32
+        and num_nonnulls(${t.resultDigest},${t.resolvedAt},${t.evidence})=3 and num_nonnulls(${t.stdoutPrefix},${t.stderr},${t.compilerOutput}) in (0,3) and octet_length(${t.resultDigest})=32
         and jsonb_typeof(${t.evidence})='object' and octet_length(${t.evidence}::text)<=32768 and octet_length(${t.stdoutPrefix})<=16384
         and octet_length(${t.stderr})<=65536 and octet_length(${t.compilerOutput})<=65536 and ${t.resolvedAt}>=${t.sendStartedAt}))
     and ((${t.releasedAt} is null and ${t.releaseDigest} is null) or (${t.releasedAt} is not null and octet_length(${t.releaseDigest})=32

@@ -20,19 +20,23 @@ import type { CompetitionCommand } from "../../src/competition/service.js";
 import { createDrawCipher, createDrawPlan, drawCommitment, qualifiers } from "../../src/competition/policy.js";
 import { migrateDatabase } from "../../src/db/migrate.js";
 import { buildApp } from "../../src/app.js";
+import { createDatabase } from "../../src/database.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
 import { createParticipantJudgeWorker } from "../../src/competition/judging-worker.js";
 import { setTimeout as delay } from "node:timers/promises";
 import { participantJudgingChecks } from "./participant-judging.checks.js";
 import { realtimeChecks } from "./realtime.checks.js";
 import {workbenchChecks} from "./workbench.checks.js";
+import type { BackupFixture } from "./backup-fixture.js";
 
-export async function competitionChecks(t: TestContext, ownerConnection: string, apiConnection: string) {
+export async function competitionChecks(t: TestContext, ownerConnection: string, apiConnection: string, backup?: { fixture: BackupFixture; container: string }) {
   const name = `ingenium_competition_${randomUUID().replaceAll("-", "")}`, bootstrap = new Client({ connectionString: ownerConnection });
   await bootstrap.connect(); try { await bootstrap.query(`CREATE DATABASE "${name}"`); } finally { await bootstrap.end(); }
   const ownerUrl = new URL(ownerConnection), apiUrl = new URL(apiConnection); ownerUrl.pathname = apiUrl.pathname = `/${name}`;
   await migrateDatabase(ownerUrl.toString());
-  const owner = new Pool({ connectionString: ownerUrl.toString(), max: 2 }), api = new Pool({ connectionString: apiUrl.toString(), max: 4 });
+  const owner = new Pool({ connectionString: ownerUrl.toString(), max: 2 }), api = ["load", "race-load"].includes(process.env.INGENIUM_TEST_SUITE ?? "")
+    ? createDatabase(apiUrl.toString(), () => { healthy = false; }, 12).pool
+    : new Pool({ connectionString: apiUrl.toString(), max: 4 });
   let healthy = true;
   const clock = { assertHealthy() { if (!healthy) throw new AccessError("CLOCK_UNTRUSTED"); }, async verify() {}, fault() {} };
   const delivery = sessionDelivery("synthetic-competition", randomBytes(32)), entry = createEntryService(api, clock, delivery), staff = createStaffService(api, clock, delivery);
@@ -196,7 +200,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     async function pipeline() {
       let current = r1, count = 0;
       const context={ owner, api, clock, delivery, deps, service: baseService, judge, validationWorker:worker, driver, judgePool, answers, sent, trace, lost, held, malformed,
-        staff: actor, organiser, budgets, newStaff:person, teams:[a,b], async startRace(round:string) {
+        staff: actor, organiser, budgets, newStaff:person, newTeam:team, teams:[a,b], assess, raceSnapshots:[race.snapshot,race2.snapshot], async startRace(round:string) {
           await budgets();await command(actor,"CLOSE",round);await command(actor,"FINALISE",round);await command(actor,"QUALIFY",round);
           const next=(await command(actor,"SETUP_R2",round,{teams:[a.id,b.id],duration_ms:18000000})).result.round_id as string;
           await command(actor,"CONFIGURE",next,{snapshots:[race.snapshot,race2.snapshot]});await command(actor,"READY",next);await judge.claim();await command(actor,"START",next);
@@ -204,11 +208,14 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
           const bugs=(await owner.query("SELECT id FROM bounties WHERE round_id=$1 ORDER BY position",[next])).rows;
           return {round:next,aa:aa.sessionCookie,ab:ab.sessionCookie,ba:ba.sessionCookie,bb:bb.sessionCookie,x:bugs[0].id as string,y:bugs[1].id as string};
         }, async newRound(durationMs = 18000000) {
-          const row = (await owner.query(`SELECT r.* FROM rounds r JOIN arena_control c ON c.current_instance_id=r.arena_instance_id WHERE r.kind=1`)).rows[0];
+          const row = (await owner.query(`SELECT r.* FROM rounds r JOIN arena_control c ON c.current_instance_id=r.arena_instance_id
+            WHERE r.kind=1 OR r.state NOT IN ('DRAFT','READY') ORDER BY r.kind DESC LIMIT 1`)).rows[0];
           if (row) {
-            if (row.state === "RUNNING") await command(actor, "CLOSE", row.id);
-            if (row.state === "RUNNING" || row.state === "CLOSING") await command(actor, "FINALISE", row.id);
-            await command(actor, "DISCARD", row.id);
+            if (row.state === "PAUSED") await command(actor, "RESUME", row.id, {scope:"GLOBAL",target:null});
+            if (["RUNNING","PAUSED"].includes(row.state)) await command(actor, "CLOSE", row.id);
+            if (["RUNNING","PAUSED","CLOSING"].includes(row.state)) await command(actor, "FINALISE", row.id);
+            // Final R2 closes its own instance; only an R1-only instance may be discarded.
+            if (row.kind === 1) await command(actor, "DISCARD", row.id);
           }
           await budgets(); await judge.claim();
           const made = await arena.command(actor.sessionCookie, { action: "CREATE", roundId: null, requestKey: randomUUID(), expectedRevision: (await owner.query("SELECT revision FROM arena_control WHERE id=1")).rows[0].revision,
@@ -219,6 +226,12 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
           const bugs = (await owner.query("SELECT id FROM bounties WHERE round_id=$1 ORDER BY position", [current])).rows;
           return { round: current, aa: aa.sessionCookie, ab: ab.sessionCookie, ba: ba.sessionCookie, bb: bb.sessionCookie, x: bugs[0].id as string, y: bugs[1].id as string };
         } };
+      if(process.env.INGENIUM_TEST_SUITE==="load"){const {loadChecks}=await import("./load.checks.js");await loadChecks(t,context);return;}
+      if(process.env.INGENIUM_TEST_SUITE==="race-load"){const {raceLoadChecks}=await import("./race-load.checks.js");await raceLoadChecks(t,context);return;}
+      if(["operations","operations-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {operationsChecks}=await import("./operations.checks.js");await operationsChecks(t,context);return;}
+      if(process.env.INGENIUM_TEST_SUITE==="restore"){const {restoreChecks}=await import("./restore.checks.js");await restoreChecks(t,context);return;}
+      if(process.env.INGENIUM_TEST_SUITE==="backup"){assert.ok(backup);const {backupChecks}=await import("./backup.checks.js");await backupChecks(t,context,backup);return;}
+      if(process.env.INGENIUM_TEST_SUITE==="https"){const {httpsChecks}=await import("./https.checks.js");await httpsChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="worker"){const {workerRuntimeChecks}=await import("./worker-runtime.checks.js");await workerRuntimeChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="maintenance"){const {maintenanceChecks}=await import("./maintenance.checks.js");await maintenanceChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="discipline"){const {disciplineChecks}=await import("./discipline.checks.js");await disciplineChecks(t,context);return;}
@@ -226,6 +239,11 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       if(["history","history-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {historyChecks}=await import("./history.checks.js");await historyChecks(t,context);return;}
       if(["judging","judging-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {staffJudgingChecks}=await import("./staff-judging.checks.js");await staffJudgingChecks(t,context);return;}
       if(["review","review-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {submissionReviewChecks}=await import("./submission-review.checks.js");await submissionReviewChecks(t,context);return;}
+      if(["audit","audit-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {staffAuditChecks}=await import("./staff-audit.checks.js");await staffAuditChecks(t,context);return;}
+      if(["announcements","announcements-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {announcementChecks}=await import("./announcements.checks.js");await announcementChecks(t,context);return;}
+      if(["team-access","team-access-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {teamAccessChecks}=await import("./team-access.checks.js");await teamAccessChecks(t,context);return;}
+      if(["results","results-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {resultsExportChecks}=await import("./results-export.checks.js");await resultsExportChecks(t,context);return;}
+      if(process.env.INGENIUM_TEST_SUITE==="retention"){const {retentionChecks}=await import("./retention.checks.js");await retentionChecks(t,context);return;}
       if(["browser","registration-browser","discipline-browser","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {participantBrowserChecks}=await import("./frontend-browser.checks.js");await participantBrowserChecks(t,context);return;}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition") { const {disciplineChecks}=await import("./discipline.checks.js");await disciplineChecks(t,context); }
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition") { const {cancellationChecks}=await import("./cancellation.checks.js");await cancellationChecks(t,context); }
@@ -234,9 +252,14 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {historyChecks}=await import("./history.checks.js");await historyChecks(t,context);}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {staffJudgingChecks}=await import("./staff-judging.checks.js");await staffJudgingChecks(t,context);}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {submissionReviewChecks}=await import("./submission-review.checks.js");await submissionReviewChecks(t,context);}
+      if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {staffAuditChecks}=await import("./staff-audit.checks.js");await staffAuditChecks(t,context);}
+      if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {announcementChecks}=await import("./announcements.checks.js");await announcementChecks(t,context);}
       if(!["participant","workbench"].includes(process.env.INGENIUM_TEST_SUITE??""))await realtimeChecks(t,context);
+      if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {teamAccessChecks}=await import("./team-access.checks.js");await teamAccessChecks(t,context);}
+      if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {resultsExportChecks}=await import("./results-export.checks.js");await resultsExportChecks(t,context);}
+      if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {retentionChecks}=await import("./retention.checks.js");await retentionChecks(t,context);}
     }
-    if (["worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","review","review-browser","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
+    if (["load","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
     let emptyWalletKey: string, emptyWalletReceipt: unknown;
     await t.test("an unaffordable hint rejection is durable and malformed or unconfigured submissions allocate no receipt or priority", async () => {
       await budgets(); emptyWalletKey = randomUUID();

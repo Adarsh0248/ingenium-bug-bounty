@@ -39,6 +39,7 @@ export interface ControlRoom {
   qualified_team_ids: string[] | null;
 }
 export interface StaffLive {
+  announcement_head: string | null;
   server_time: string;
   actor: {
     session_id: string;

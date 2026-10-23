@@ -76,3 +76,106 @@ test("the client renews a live editor at fifteen seconds and never buffers an of
     connected=false;const count=commands.length;client.edit("different-bug");assert.equal(commands.length,count);
   }finally{client.close();}
 });
+
+for (const scenario of [{status:503,code:"CAPACITY_UNAVAILABLE",failures:1},{status:429,code:"RATE_LIMITED",failures:1},{status:503,code:"CAPACITY_UNAVAILABLE",failures:3},{status:401,code:"AUTHORITY_REQUIRED",failures:1}]) {
+  const {failures,...failure}=scenario;
+  test(`read projection ${failure.code} with ${failures} refusals has bounded recovery`,async t=>{
+    t.mock.timers.enable({apis:["setTimeout","setInterval"]});
+    const listeners=new Map<string,(value:any)=>void>();
+    let reads=0,connections=0,installs=0;
+    const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
+    const client=connectLive("PARTICIPANT",null,{now:()=>0,
+      post:async(path)=>{
+        if(path.endsWith("tickets"))return{ticket:"ticket"};
+        if(path.endsWith("snapshot"))return{sync_id:"sync",streams:streams()};
+        if(path.endsWith("projection")){if(++reads<=failures)throw failure;return{sync_id:"sync",streams:streams("1")};}
+        return{sync_id:"sync",events:[],next:"0",through:"0",heads:streams()};
+      },
+      transport(){connections++;return{connected:true,on(name,fn){listeners.set(name,fn);},connect(){listeners.get("sync")!({sync_id:"sync"});},disconnect(){},volatile:{emit(name){if(name==="ready")listeners.get("ready")!({sync_id:"sync",heads:streams()});}}};},
+      install(){installs++;},invalidate(){},award(){},presence(){},state(){}});
+    try{
+      await flush();assert.equal(client.replica.phase,"READY");
+      listeners.get("event")!({...event("1"),sync_id:"sync",replay:false});
+      t.mock.timers.tick(100);await flush();
+      if(failure.status===401){assert.equal(reads,1);assert.equal(client.replica.phase,"STALE");return;}
+      assert.equal(reads,1);assert.equal(connections,1);assert.equal(client.replica.phase,"READY");
+      t.mock.timers.tick(999);await flush();assert.equal(reads,1);
+      t.mock.timers.tick(1001);await flush();
+      if(failures===3){
+        assert.equal(reads,2);assert.equal(connections,1);
+        t.mock.timers.tick(2000);await flush();
+        assert.equal(reads,3);assert.equal(client.replica.phase,"STALE");return;
+      }
+      assert.equal(reads,2);assert.equal(connections,1);assert.equal(installs,2);
+      t.mock.timers.tick(5000);await flush();assert.equal(reads,2);
+    }finally{client.close();}
+  });
+}
+
+for(const random of [0,0.9]){
+  test(`reconnect backoff staggers readers across a shared network (${random})`,async t=>{
+    t.mock.timers.enable({apis:["setTimeout","setInterval"]});
+    t.mock.method(Math,"random",()=>random);
+    let attempts=0;
+    const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
+    const client=connectLive("PARTICIPANT",null,{now:()=>0,post:async(path)=>{assert.ok(path.endsWith("tickets"));attempts++;throw new Error("Synthetic unavailable endpoint");},
+      transport(){throw new Error("No ticket was issued");},install(){},invalidate(){},award(){},presence(){},state(){}});
+    try{
+      await flush();assert.equal(attempts,1);
+      t.mock.timers.tick(249+1000*random);await flush();assert.equal(attempts,1);
+      t.mock.timers.tick(1);await flush();assert.equal(attempts,2);
+    }finally{client.close();}
+  });
+}
+
+test("a slow ticket request cannot overlap with timer-driven reconnects or install a socket after close",async t=>{
+  t.mock.timers.enable({apis:["setTimeout","setInterval"]});
+  const replies:((value:unknown)=>void)[]=[];
+  let transports=0;
+  const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
+  const client=connectLive("PARTICIPANT",null,{now:()=>0,post:async()=>new Promise(resolve=>replies.push(resolve)),
+    transport(){transports++;throw new Error("Late ticket must not create a socket");},install(){},invalidate(){},award(){},presence(){},state(){}});
+  try {
+    await flush();assert.equal(replies.length,1);
+    t.mock.timers.tick(1000);await flush();
+    t.mock.timers.tick(1000);await flush();
+    assert.equal(replies.length,1,"Only one ticket request may be in flight");
+    client.close();replies[0]!({ticket:"late"});await flush();assert.equal(transports,0);
+  }finally{client.close();}
+});
+
+test("a timed-out ticket cannot install over its successor and the handshake deadline remains bounded",async t=>{
+  t.mock.timers.enable({apis:["setTimeout","setInterval"]});t.mock.method(Math,"random",()=>0);
+  const replies:((value:unknown)=>void)[]=[];
+  let transports=0;
+  const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
+  const client=connectLive("PARTICIPANT",null,{now:()=>0,post:async()=>new Promise(resolve=>replies.push(resolve)),
+    transport(){transports++;return{connected:false,on(){},connect(){},disconnect(){},volatile:{emit(){}}};},
+    install(){},invalidate(){},award(){},presence(){},state(){}});
+  try{
+    await flush();assert.equal(replies.length,1);
+    t.mock.timers.tick(10000);await flush();assert.equal(client.replica.phase,"STALE");
+    t.mock.timers.tick(250);await flush();assert.equal(replies.length,2);
+    replies[0]!({ticket:"expired"});await flush();assert.equal(transports,0);
+    replies[1]!({ticket:"current"});await flush();assert.equal(transports,1);
+    t.mock.timers.tick(1000);await flush();assert.equal(replies.length,2);
+    t.mock.timers.tick(10000);await flush();assert.equal(client.replica.phase,"STALE");
+  }finally{client.close();}
+});
+
+test("idle heads need no acknowledgement, but pending heads repeat it after a lost reply",async()=>{
+  const listeners=new Map<string,(value:any)=>void>(),commands:string[]=[];
+  const client=connectLive("PARTICIPANT",null,{now:()=>0,
+    post:async(path)=>path.endsWith("tickets")?{ticket:"ticket"}:path.endsWith("snapshot")?{sync_id:"sync",streams:streams()}:{sync_id:"sync",events:[],next:"0",through:"0",heads:streams()},
+    transport(){return{connected:true,on(event,listener){listeners.set(event,listener);},connect(){listeners.get("sync")!({sync_id:"sync"});},disconnect(){},volatile:{emit(event){commands.push(event);if(event==="ready")listeners.get("ready")!({sync_id:"sync",heads:streams()});}}};},
+    install(){},invalidate(){},award(){},presence(){},state(){}});
+  try{
+    for(let i=0;i<30;i++)await Promise.resolve();assert.equal(client.replica.phase,"READY");
+    listeners.get("heads")!({sync_id:"sync",heads:streams(),ack_required:false});
+    assert.equal(commands.filter(e=>e==="ack").length,0);
+    for(let i=0;i<2;i++)listeners.get("heads")!({sync_id:"sync",heads:streams(),ack_required:true});
+    assert.equal(commands.filter(e=>e==="ack").length,2);
+    listeners.get("heads")!({sync_id:"sync",heads:streams()});
+    assert.equal(commands.filter(e=>e==="ack").length,3,"Older servers retain the conservative acknowledgement behaviour");
+  }finally{client.close();}
+});

@@ -463,6 +463,69 @@
       "when": 1792658723158,
       "tag": "0065_validation_diagnostics",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792663093229,
+      "tag": "0066_staff_audit_navigation",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792664684288,
+      "tag": "0067_announcements",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792670711138,
+      "tag": "0068_team_search_revocation",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792673817268,
+      "tag": "0069_payload_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1792674596633,
+      "tag": "0070_retention_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1792680655119,
+      "tag": "0071_restore_quarantine",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792682416715,
+      "tag": "0072_operations_observation",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792683710514,
+      "tag": "0073_standings_aggregate",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792725211327,
+      "tag": "0074_retention_batch_budget",
+      "breakpoints": true
     }
   ]
 }

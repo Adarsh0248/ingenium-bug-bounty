@@ -6,6 +6,7 @@ import type { Duplex } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import type { TestContext } from "node:test";
 import { Pool } from "pg";
+import { assertApiDatabase } from "../../src/database.js";
 import {
   assertWorkerDatabase,
   createJudgingCoordinator,
@@ -228,6 +229,32 @@ export async function workerRuntimeChecks(
           pool.query("SELECT maintain_competition_round($1)", [randomUUID()]),
           { code: "42501" },
         );
+      },
+    );
+    await t.test(
+      "event API preflight rejects owner/worker credentials and accidental table or column write grants",
+      async () => {
+        await assertApiDatabase(c.api);
+        await assert.rejects(assertApiDatabase(c.owner));
+        await assert.rejects(assertApiDatabase(pool));
+        for (const [grant, revoke] of [
+          [
+            "GRANT TRUNCATE ON wallet_entries TO ingenium_api",
+            "REVOKE TRUNCATE ON wallet_entries FROM ingenium_api",
+          ],
+          [
+            "GRANT UPDATE(verifier) ON access_credentials TO ingenium_api",
+            "REVOKE UPDATE(verifier) ON access_credentials FROM ingenium_api",
+          ],
+        ]) {
+          await c.owner.query(grant!);
+          try {
+            await assert.rejects(assertApiDatabase(c.api));
+          } finally {
+            await c.owner.query(revoke!);
+          }
+          await assertApiDatabase(c.api);
+        }
       },
     );
     const a = await c.newRound();

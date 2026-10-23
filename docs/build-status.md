@@ -1,8 +1,8 @@
 # Build Status and 22 October Target
 
-Updated: 22 October 2026. The user requires the full approved initial application
+Updated: 23 October 2026. The user requires the full approved initial application
 by 22 October, not a demo, silently reduced MVP or feature-skipping release.
-The deadline is a target, not a completion or event-readiness guarantee.
+The 22 October target was missed. It is not a completion or event-readiness guarantee.
 
 The approved `architecture.md` remains the source of competition rules, scope
 and launch gates. Features already explicitly deferred there remain deferred;
@@ -32,8 +32,8 @@ by this document.
 
 ## Completion Estimate
 
-Roughly **68% of the complete approved initial scope**, as an engineering estimate
-on 22 October. Backend/access/authoring/judge components have substantial local
+Roughly **88% of the complete approved initial scope**, as an engineering estimate
+on 23 October. Backend/access/authoring/judge components have substantial local
 evidence, including the normal competition/economy backend and participant job
 orchestration, private workbench drafts and local realtime synchronisation. The
 first participant interface, 3D field, normal arena controls, staff-account and
@@ -43,12 +43,373 @@ block/manual-time discipline, whole-round cancellation and restricted timing
 recovery, participant results/history, normal staff judging/recovery and bounded
 automatic event maintenance and a separately runnable app-side judging service
 and operator-only Super Admin credential recovery, audited submission review
-and private authoring diagnostics now exist; general staff audit navigation,
+and private authoring diagnostics, general staff audit navigation and scoped live
+announcements, private registration search and standalone team-code revocation/
+reissuance, safe final-results export and guarded database payload retention /
+read-only cleanup operations and a locally tested same-origin production HTTPS
+gateway, an encrypted physical backup/isolated restore drill and offline restored
+access/epoch quarantine, private operations observation and offline read-only
+recovery inventory now exist;
 exceptional recovery, installed judge and deployment/launch gates remain incomplete. This is
 not a measured task percentage, a deadline promise or an event-readiness score.
 Small internal batches do not automatically move the whole-project estimate.
 
-Latest batch: [private authoring diagnostics](validation-diagnostics.md).
+## Current Safeguards and Participant Coverage
+
+Protected event startup now verifies the actual database role before launching
+the clock or entry routes. It refuses schema owners, superusers, worker-role
+members, schema/database creation rights and direct table/column writes to
+credentials, awards, wallet entries, official submissions or final results.
+Event-mode connection URLs must remain loopback, password-bearing and free of
+query/fragment overrides. Foundation-only development remains unchanged. Nine
+focused worker checks include real PostgreSQL role/grant refusals and restoration
+of the normal restricted API permissions.
+
+The live service keeps one public-standings entry keyed by the committed round
+stream identity/head. Concurrent readers share that calculation; every request
+still validates current authority and holds the existing round/live locks.
+Private balances are stripped before retention, failed reads are evicted, callers
+receive independent copies, and a new head/round invalidates the entry. Shared
+discipline/live tests and thirteen focused result checks cover exact standings parity,
+time penalties/reversal, shared claims and provisional-to-frozen finalisation.
+
+All 304 unit/client tests, typechecks and production builds pass. The full sixteen-scenario
+participant browser run passed after the HUD correction. The browser checks include forty targets on desktop and
+mobile, nonblank/moving canvas pixels, last-target keyboard access, focus into
+the IDE and return to the selected target on close. Screenshots were inspected;
+software-rendered browser checks do not establish participant-device frame rates
+or complete the comprehensive accessibility audit. Existing large editor/arena
+bundle warnings remain.
+
+The mobile/minimised HUD previously hid rank. Its regression first failed on the
+hidden value; full and compact HUDs now retain team name, score and rank at 320,
+390, 768 and 1440 pixel widths without internal overflow. The current desktop /
+mobile forty-target and keyboard workflows pass after that fix.
+
+Separate [primary-host service definitions](../infra/app-host/README.md) now bind
+the existing API and coordinator entry points to distinct restricted OS accounts,
+private settings, fixed release paths, read-only host files and finite resource /
+restart / graceful-stop policies. Policy checks pass against both definitions.
+No installer, migration hook, root shell, automatic arena start or local sandbox
+execution was added. Actual systemd parsing/execution, OS ownership/cross-account
+checks, whole-host budgets and restart/clock calibration remain required.
+
+The first combined database run exposed a fixture-composition error: the next
+scenario tried to discard an instance whose second round was still live. The
+production guard correctly refused. The shared test helper now completes active
+R2 through normal close/finalise commands, preserving its frozen R1 result;
+the regression also asserts that discarding the live instance remains forbidden.
+No application rule, migration or request/operation timeout was relaxed. The
+initial failed log is retained separately from subsequent runs.
+
+The combined rerun passed 277 checks before its old ten-minute parent allowance
+cancelled the remaining tests. That run is **not** an all-green matrix result.
+The expanded full-matrix allowance is now fifteen minutes; individual API,
+sandbox, judging, expiry and request deadlines are unchanged. A `foundation`
+selector runs the original schema/access/staff/arena/content/validation/clock
+checks independently of the already exercised long competition group. The new
+whole-matrix allowance alone did not establish a one-shot full-suite pass.
+Both failed/incomplete logs are retained; the subsequent complete pass is
+recorded in the follow-up below.
+The independent core run now passes all 144 checks without skips or cancellations,
+including the restricted Linux recovery CLI, source/validation workflows and
+clock fault/restart handling. The separate restricted app-runtime Linux suite
+also passes. Those results do not relabel the cancelled combined run as a pass.
+
+Linux-local run `2fcd87b9-4815-4f9c-bbe0-971f01b5f4b9` passed its bounded
+correctness phases using the same two aggregate test CPUs and API deadlines.
+It retained 200 connections/attempts, no live stale transitions or reconnects,
+200 exact maximum drafts and 100 unique official receipts. Pause/resume projection
+p95 was 4,544 / 4,668 ms; official admission-response p95 was 1,401 ms. The report
+also records eighteen refused projection reads and seventeen associated warnings;
+it is not a zero-refusal or latency-gate pass. Real claim timing, real judge drain,
+600 sockets, full mixed soak and public-host measurements remain open.
+
+The user selected manual Cloud Shell execution. On 23 October they returned the
+expected PASS for the public-only v2 [isolated cloud CLI rehearsal](manual-cloud-rehearsal.md):
+non-root CLI/private runtime permissions, migrations, quarantine receipt and
+read-only inventory passed; admission remained disabled and live deployment was
+explicitly unverified. This is user-reported VM evidence, not an independently
+inspected host installation. The v2 bundle predates migration 0074 and does not
+verify that newer retention change on the VM. Only the rehearsal's two labelled
+temporary containers were reported removed; the old judge lab was untouched.
+The user subsequently confirmed that the Cloud Shell status check printed
+`TERMINATED`; shutdown is user-reported, not an independent API inspection.
+The assistant has performed no cloud operation or Git write.
+
+## Combined Regression and Shared-Race Follow-Up
+
+A complete run reached all 341 checks without cancellation, but eight checks
+failed (including the parent). It exposed a real payload-maintenance transaction
+timeout with accumulated history, followed by temporary test-storage exhaustion
+when several fully migrated clock databases remained allocated together.
+
+Migration `0074_retention_batch_budget` reduces retention to five candidates per
+transaction, at most ten paired tombstones. All age/provenance/byte/source guards,
+permissions and production deadlines remain unchanged. The clock fixtures now
+close their own pools and drop only each finished, nonce-named test database;
+the PostgreSQL memory/storage/CPU ceilings were not raised. Two browser tests now
+observe the revoked-session screen instead of clicking a control already removed
+by valid live revocation. Test drain loops retain the same total candidate ceiling
+despite the smaller production batch size.
+
+The next complete run passed 338/341 checks and confirmed the retention timeout
+and test-storage fixes. Its two remaining leaf failures were the export logout
+test race and a test drain still using the old batch count. Both have been
+corrected. The fresh `schema-regression-20261023-v5.log` run then passed all 341
+checks in about 744 seconds with no failures, cancellations or skips. It exercised
+the combined competition/access/authoring/clock matrix, including database-backed
+browser checks, on a fresh disposable database. All 304 unit/client tests,
+typechecks, production builds, public-bundle boundary and changed-code formatting
+checks also pass. Earlier failed/incomplete logs remain under ignored test results;
+this does not convert their failures into passes or replace the separate native
+judge, public-host, device and load/soak suites.
+
+The separate [fifty-team R2 Linux rehearsal](local-load.md#fifty-team-shared-race)
+now exercises actual qualification, one hundred locked member grants, fifty real
+HTTP admissions and the original participant-worker settlement path. Later correct
+results cannot steal priority from an older unresolved receipt. All one hundred
+members see the single claim, only the winner receives team award notices,
+original-key retries retain their receipt, and all accepted work drains before
+finalisation without changing frozen R1 results.
+
+Its latest run `0c700f5c-fa47-4e93-a1bc-c67c58f41df2` passed all six scenario checks
+within the existing two aggregate test CPUs, memory ceilings and twelve API
+connections. It recorded one hundred connections, no HTTP refusals/warnings and
+4,369 ms from the synthetic assessment request to all claim projections. That is
+not commit-to-claim latency, real compilation, public networking or a sustained
+capacity pass. An earlier run refused six admission requests and remained
+INCOMPLETE; its cause/stability assessment remains open. New controller runs also
+preserve exclusive per-run logs/reports instead of replacing the only record.
+
+The rough estimate is 88%, not the requested 90%. Actual host/judge installation,
+public HTTPS, off-host backup/recovery, real workload latency/soak and reviewed
+event content remain required. The narrow cloud CLI PASS is recorded above; it
+does not satisfy those separate deployment gates. This batch has
+not changed the architecture, development database, real secrets, cloud resources
+or Git history.
+
+## Earlier Verification
+
+Latest verification: the restricted offline observer/quarantine tools pass as
+non-root processes in a real Linux container against disposable PostgreSQL.
+The 100-team capacity harness passed its initial HTTP-only baseline and caught
+a 200-live-socket failure with the foundation preview pool. The active-event
+server already uses the approved twelve API connections; the harness now uses
+that same pool and deadlines, and this run also failed live delivery. A reserved
+connection/command-queue experiment failed and was removed. A subsequent Linux-local
+run passed every phase with the retained reconnect-generation fix: 200 private
+sockets saw pause/resume, 200 maximum drafts round-tripped and 100 teams retained
+exactly one admitted receipt each in a 200-member burst. The initial passing
+report is run `afd4fe21-6f48-4c3c-bcd6-728b428c7f3b`; a later instrumented run
+failed its judge-readiness lock wait and correctly stayed INCOMPLETE. The retained
+idle-acknowledgement change now passes a real lost-ack client/server regression:
+the server requests another acknowledgement while events remain buffered, and
+none for idle heads. Actual protected reads and acknowledgements still validate
+current authority. All 22 focused realtime integration checks, 297 unit/client
+tests, typechecks and production builds pass. Existing editor/arena bundle-size
+warnings remain.
+
+Previous Linux-local run `d49a093a-a02c-4249-9a12-11502b137c3b` passed every correctness
+phase with unchanged test CPU, pool and timeout limits. All 200 drafts matched;
+100 official receipts persisted with no duplicate team/bug admissions. Metadata
+p95 was 345-413 ms. However, control-request-to-projection pause/resume p95 was
+5,282 / 10,730 ms, admission-response p95 was 1,309 ms, and 391 connections were
+opened including recoveries. One projection resynchronisation was refused. This
+is not a passed latency gate, zero-reconnect guarantee or measured real claim
+delivery.
+
+The delivery-stability follow-up first reproduced suppressed cursor heads, then
+fixed the transport check to precede one bounded event/head/presence batch.
+Heartbeats use the actual send time; the current transaction's own editor authority
+and already joined team ID are reused rather than queried again. Other announcing
+sessions and every protected batch remain authorised; buffer/deadline limits are
+unchanged. All 22 realtime integration checks, 297 unit/client tests, typechecks
+and production builds pass. Latest Linux-local run
+`df16b57e-5b63-4000-9fcd-839c087cf9a7` passed all correctness phases with exactly
+200 connections/attempts, no live-phase stale/reconnect transitions and no recorded
+unavailable reads/warnings. All 200 drafts and 100 official receipts remained
+correct. Metadata p95 was 241-344 ms, but pause/resume projection p95 was still
+6,435 / 6,386 ms and admission-response p95 was 1,703 ms. This fixes the observed
+reconnect churn; it does not establish the experience targets or sustained event
+capacity. No real judging throughput or public deployment is implied. Real public network,
+600-socket, latency/queue-drain, mixed-soak and clock-agent gates remain open.
+See [operations observation](operations-observation.md) and
+[capacity rehearsal](local-load.md). Existing cloud-host use was separately
+authorised only for isolated rehearsal; retained lab data remains untouched.
+The existing VM was started for that rehearsal, but browser file upload required
+the user and browser control subsequently became disabled. No rehearsal container
+was launched there. The user confirmed stopping the idle VM afterward; this is
+user-reported, not independently verified host state. Cloud rehearsal is unfinished.
+
+Earlier batch: [offline restore quarantine](restore-quarantine.md). An owner-only,
+atomic command revokes restored participant/staff sessions and flow/handoff
+authority, purges encrypted browser delivery material, clears session pointers
+and quarantines active execution epochs. Its immutable original-key receipt
+survives duplicate/concurrent calls and lost replies. An independent persistent
+gate refuses protected API/live/worker actions and clock/maintenance startup,
+including the timing-recovery path; normal readiness returns 503. No old provider
+queue is replayed, held slot released, verdict invented, code ownership/language
+reset or sporting timestamp rewritten. Focused checks preserve byte/hash-bound
+sporting/source/intent/physical-work records and prove injected receipt failure
+rolls back every change. The encrypted physical restore drill now preserves all
+110 app tables before applying the same quarantine operation to the isolated
+copy. Ten restore checks, seven physical-backup checks and all 285 unit/client
+tests pass; production builds/typechecks and new-code formatting pass. Eleven
+shared clock/worker/timing-recovery checks, ten automatic-maintenance checks and
+twenty live-state checks pass, including real timed expiry and shared R2 claims.
+The complete global/browser/load matrix was not rerun. This is not a real host
+fencing, Linux CLI installation or post-restore reopening rehearsal. Secret
+rotation, integrity assessment, retention catch-up and a reviewed controlled
+reopening procedure remain pending; the gate has no bypass/clear command.
+
+Earlier batch: [encrypted backup and isolated restore](backup-restore.md). A
+digest-pinned PostgreSQL image candidate installs and verifies the exact available
+pgBackRest 2.59.3 package. Public-only build context, protected GCS configuration
+placeholders, sixty-second WAL switching and dependency-aware fourteen-day
+retention are prepared without installing a production secret or scheduler.
+The disposable checks create a real source/award/hint/final result, take encrypted
+full/differential/incremental backups and archive a WAL-only tail. Wrong-key and
+damaged-manifest restore requests fail; valid recovery uses an exact LSN and
+excludes a later synthetic marker. SHA256/count fingerprints match all 109 app
+tables, migration history and one probe table; function/trigger/constraint/grant
+definitions also match. The restricted API role still cannot create tables.
+The restored copy has no network, public ports, app/worker, automatic restart or
+repository-write permission; it does not authorise event resumption. Seven
+focused backup checks, the eight-check normal stock-image/team-access regression
+and all 282 unit/client tests pass; builds/typechecks and
+new-code formatting pass. Local recovery took about seven seconds on this small
+fixture, not a production RTO guarantee. The full global matrix was not rerun.
+One initial setup's temporary directory with generated test-only keys remains
+after a blocked filesystem cleanup; its labelled Docker container/volume were
+verified and removed. No real data, cloud service, architecture or Git history
+was changed. Actual encrypted off-host GCS verification, deployment/key inventory,
+backup scheduling/lag alerts/budgets, physical old-epoch fencing and safe
+reopening remain required, alongside real judge and
+event-load/security gates. Ordinary database operation is still separate from
+production backup readiness.
+
+Earlier batch: [same-origin HTTPS edge](https-edge.md). Real Caddy serves the
+built public frontend, proxies API/live WebSockets on one origin, overwrites the
+client-address header and refuses arbitrary proxy trust. Both ordinary HTTP and
+upgraded live quotas/code verification use the shared loopback-only boundary;
+the normal production server enables it without weakening development mode.
+Entry/API/errors remain non-cacheable, only existing hash-named assets receive
+immutable caching, private/dot/source/health paths are not exposed, and upstream
+POST retries are disabled. Production builds, secure cookie/Origin/CSRF policy,
+real self-hosted editor workers and live pause/resume are exercised through TLS,
+not Vite; the established socket survives the upload deadline. A socket-loss
+fixture reaches the upstream once and returns a generic error. All seven focused
+TLS/PostgreSQL/browser checks, 281 unit/client tests, twenty existing live-state
+checks and the four-check full both-round/staff browser regression pass. Production
+builds/typechecks, formatting and the bundle boundary check pass; desktop/mobile
+screenshots were inspected. The complete global database/browser matrix was not
+rerun. No migration, actual runtime secret, cloud resource,
+architecture or Git history was changed. Native Linux installation, public
+DNS/certificate/redirect renewal, host/proxy connection limits, monitoring,
+encrypted backup/restore, judge retirement and full event-load/security/recovery
+gates remain open. Existing editor/arena bundle warnings remain.
+
+Earlier batch: [database retention and operations](data-retention.md). Expired
+flow/session verifiers and eligible seven-/thirty-day source/diagnostic bytes
+retire through immutable, byte/hash-bound tombstones. Official source copies
+retire atomically, while source receipts, original results, awards, languages,
+published tests and positive physical-release evidence remain. Technical timeouts
+and Round 1 intermission cannot authorize expiry; unresolved/held work prevents
+cleanup. Current-authority private reads return explicit retention unavailability,
+not empty programs or starter substitution. Bounded scans record progress only
+with commit, and Owners/Super Admins have read-only status without a purge button.
+A finite Linux-only operator command needs protected local API-role configuration,
+fresh normal clock trust, a stopped monitor and retired/no-uncertain-work state;
+it starts no HTTP listener or participant execution. All 278 unit/client tests,
+the thirteen-check retention/HTTP/browser suite, ten-check existing maintenance
+regression, eleven-check clock regression and four-check full both-round/staff
+browser regression pass. Builds/typechecks, schema consistency and the bundle
+boundary check pass; desktop/mobile screenshots were inspected. The complete
+global database/browser matrix was not rerun. Existing large editor/arena bundle
+and Three.js deprecation warnings remain.
+Migrations `0069`/`0070` have only run in disposable synthetic databases. Actual
+Linux CLI/probe ownership, judge-host staging/byte retirement, full resource
+budgets, encrypted archival/backup/restore and event load/security/recovery gates
+remain required. No architecture, real database, cloud service or Git history
+was changed.
+
+Earlier batch: [final results export](results-export.md). Monitor now offers
+CSV/JSON downloads of the selected round's immutable final standings, including
+historical arenas, exact timing/difficulty tie-break values and result provenance.
+Qualification is separately pending/locked for Round 1 and not applicable to
+Round 2; tied ranks are preserved. Only current normal staff authority can read
+the explicit bounded projection, never wallets, source, credentials or hidden
+execution data. CSV quoting/formula protection and lossless JSON use no new
+dependency. Browser downloads are generation-fenced, non-overlapping and
+read-only; failed reads can be retried without a command or result mutation.
+No migration is needed. All 275 unit/client tests, the twelve-check focused
+PostgreSQL/HTTP/browser suite and the existing four-check full both-round/staff
+browser regression pass. Typechecks, production builds, formatting and the bundle
+boundary check pass; desktop/mobile screenshots were inspected. The checksum is
+of the public sporting projection only, never the private snapshot/configuration
+hashes. No real database, cloud host, architecture or Git history was changed.
+The complete global test matrix was not rerun. Encrypted archive/backup/restore,
+retention and installed-host/full event launch gates remain separate unfinished
+work; existing large arena/editor bundle warnings remain.
+
+Earlier batch: [private team search and code revocation](team-registration.md).
+Owner/Super Admin registration search now matches literal team/member/registration
+labels with 120-byte query bounds, scoped 50-row paging and no activity renewal or
+public directory. Revocation issues no replacement secret and retires both members'
+grants, proofs, encrypted handoffs and private live access. Deliberate Issue is
+distinct from Rotate, so stale rotations cannot restore a revoked code; issuance
+does not clear blocks or bypass same-round re-entry approval. Existing identities,
+languages, saved drafts, round clocks, scores and admitted source are preserved;
+already-admitted work still completes and receives its normal once-only award.
+Original-key GET recovery never replays a write or reveals an old code. Migration
+`0068_team_search_revocation` only extends immutable receipt constraints and the
+existing confirmed writer; it has only run in disposable databases.
+All 272 unit/client tests, the focused nine-check PostgreSQL/HTTP/browser suite,
+the eight-check existing team-management suite, nine-check CSV-import suite and
+four-check both-round/staff browser regression pass. Typechecks, production builds
+and the bundle boundary check pass; desktop/mobile screenshots were inspected.
+No real registration data, project/cloud database, architecture or Git history
+was changed. Installed-host, retention and full event-load/security/recovery/
+deployment gates remain open; existing large arena/editor bundle warnings remain.
+
+Earlier batch: [arena announcements](announcements.md). All normal staff roles can
+send event-wide, round-wide and private team notices with a separate staff reason,
+audience review, immutable receipts and original-key GET-only recovery. Participants
+have a live new-message marker and paged inbox/focused reader without losing the
+editor buffer. Body text is loaded by ID, not broadcast in snapshots or events;
+private notices cannot advance another team's streams or notification revision.
+Equal-time sends, pause-time communication, revocation, cross-arena isolation and
+round-two visibility are covered. Closed arenas reject new delivery and preserve
+read-only history. Audit navigation gains an eighteenth record category.
+Migration `0067_announcements` has only been applied in disposable databases.
+All 271 unit/client tests, the 13-check focused PostgreSQL/HTTP/browser suite,
+the 20-check live/replay regression, the existing four-check both-round/staff
+browser regression, typechecks, production builds and the bundle boundary check
+pass. Desktop/mobile screenshots were inspected. No real database,
+cloud host, architecture or Git history was changed. Full-system/event-load and
+installed-host/deployment gates remain open; existing large editor/arena bundle
+warnings remain.
+
+Earlier batch: [staff audit navigation](staff-audit.md). The protected Audit tab
+browses seventeen existing immutable record families with bounded, source-free
+projections, full-record metadata dialogs, role-filtered categories, current or
+historical arena scope, stable time/UUID paging and non-overlapping refresh.
+Normal staff management history remains Super-Admin-only; operator records and
+private source/evidence grants are not broadened. Reads do not mutate canonical
+state, replay commands or renew sessions. Index-only migration
+`0066_staff_audit_navigation` has only been exercised in disposable databases.
+All 270 unit/client checks, the ten-check focused PostgreSQL/HTTP/browser suite,
+the existing four-check both-round/staff browser regression, typechecks,
+production builds and the bundle boundary check pass. Desktop/mobile screenshots
+were inspected; long hostile reasons are safely rendered and bounded in tables,
+with full wrapping/scrolling in the detail dialog. No real database, cloud host,
+architecture or Git history was changed. Full global database/browser coverage
+was not rerun; existing large editor/arena bundle warnings remain.
+Retention/archive, remaining event controls, installed-host service wiring and
+full-system/security/recovery/deployment/load gates remain open.
+
+Earlier batch: [private authoring diagnostics](validation-diagnostics.md).
 Owners/Super Admins can deliberately review one resolved validation dispatch's
 bounded output/accounting with exact-run confirmation, a reason and immutable
 result-bound access history. Normal reports remain output-free and add bounded
@@ -298,18 +659,18 @@ matching names automatically link them to a later CSV upload.
 
 | Area | Current evidence | Remaining required work |
 | --- | --- | --- |
-| Local API and PostgreSQL | Health/readiness routes and separate restricted API role tested | Production connection/process configuration |
-| Registration storage | Two stable member positions; Owner/Super Admin manual/CSV registration with stable import IDs, preview/conflict checks and atomic 100-team batches; one-time team codes and rotation, 1,000-team pool guard and safe pagination | Actual event-export preparation, manual-to-export reconciliation where needed, remaining search/revocation workflows |
+| Local API and PostgreSQL | Health/readiness routes, separate restricted API role and startup privilege preflight tested; native service candidates prepared | Actual host installation and process/connection rehearsal |
+| Registration storage | Two stable member positions; Owner/Super Admin manual/CSV registration with stable import IDs, preview/conflict checks and atomic 100-team batches; one-time code issuance/rotation, standalone revocation and deliberate reissuance, 1,000-team pool guard, literal private team/member/registration search and scoped pagination | Actual event-export preparation and manual-to-export reconciliation where needed |
 | Access and language lock | Persisted entry, renewal/logout, expiry warnings, approved replacement and immutable receipts; first participant entry/restoration UI; qualifying activity and Linux clock/secret wiring, scheduled encrypted-handoff and bounded quota cleanup tested with real PG and synthetic observations | Primary-host runtime rehearsal, deeper participant recovery coverage, exceptional recovery and remaining verifier/source retention |
-| Content and authoring | Private draft editor/checker, immutable snapshots, validation history/reports, human review and own-code-confirmed recoverable publication; durable runs/full check sets, fencing/recovery/accounting; pinned client/registry, guarded queue, capsule/producer interfaces, execution/recovery handoff, automatic deadline maintenance and separate app-side validation worker tested with disposable services; reason-required private single-dispatch diagnostics and paged access audit | Real-host sandbox/producer installation and runtime compatibility, primary-host service installation/rehearsal, general staff-operation audit navigation and whole-app resource reservations/cleanup |
+| Content and authoring | Private draft editor/checker, immutable snapshots, validation history/reports, human review and own-code-confirmed recoverable publication; durable runs/full check sets, fencing/recovery/accounting; pinned client/registry, guarded queue, capsule/producer interfaces, execution/recovery handoff, automatic deadline maintenance and separate app-side validation worker tested with disposable services; reason-required private single-dispatch diagnostics and paged access audit; general source-free staff audit navigation | Real-host sandbox/producer installation and runtime compatibility, primary-host service installation/rehearsal and whole-app resource reservations/cleanup |
 | Participant workbench | Backend admission/frozen jobs, scoped content, private conditional drafts/receipts and official source; React/Monaco connects live gates, autosave/conflicts, Run/Submit/hints, public feedback, paged results/attempt/wallet history, private saved work and current-grant same-instance R1/R2 history | Deeper recovery/accessibility/edge coverage, dependency-aware source retention and real load/performance checks |
 | Judge boundary | Registry/queue, guarded lifecycle/backend, release-tree integrity, native socket-listener PIDFD/executable checks and pinned Docker/image reports, native host resource/config authority, phase/storage identities, Linux residue checks and authority-gated certificate-to-slot release handoff implemented; per-capsule producer/CLI, filter/pipes, workspace and checked evidence tested locally; real v1 path not VM-verified | Production full-host retirement authority and installation, real host/daemon compatibility and image contents/loaded-policy verification, positive real-host preparation/retirement and interrupted-child tests, unknown-child/cross-boot recovery, genuine readiness, runtime/scheduling and capacity/security/recovery tests |
 | R1/R2 competition | Normal lifecycle, published selections, scoped pauses, frozen official/sample jobs, fair dispatch/recovery, private feedback, independent R1 awards, fixed final results/draw/qualification, same-instance R2/carryover, manual ranking-time additions/reversals, drain-gated whole-round cancellation, automatic timer/sample maintenance, separate app-side judging worker/readiness and global earliest-receipt race tested with real PG and synthetic driver observations | Actual primary-host/judge installation and rehearsal, remaining UI and launch tests |
 | Economy and standings | Append-only source-linked awards/debits/opening funds, sequential team hints, exact frozen-tier R2 points, both ranking rules, private HTTP/live projections and read-only paged wallet/award and provisional/final standings UI tested | Full production resource reservations/retention, event-content balance and load/recovery rehearsal |
-| Live state | Source-linked streams, protected Socket.IO, consistent snapshots/replay, live claims/economy/judging/control updates and temporary team presence; first React HUD/workbench integration, browser reload/pause/privacy checks and disposable PG evidence | Full admin integration, production proxy/browser coverage and 100-team burst/reconnect testing |
-| Staff and round controls | Persisted grants/management APIs; React singleton/round/pause controls; Super Admin normal staff management, code/revocation and replacements; authoring, validation/publication, manual/CSV registration, discipline, cancellation and timing recovery; filtered judging/job timelines, confirmed extra-dispatch authorisation and private recovery audit/GET-only receipt recovery; operator-only backup Super Admins, fresh-code recovery and verified retirement; audited admitted-program/single-dispatch review and paged private-access history; private validation diagnostics | Real operator/secret-delivery rehearsal, remaining general staff-operation audit navigation, installed maintenance and launch coverage |
+| Live state | Source-linked streams, protected Socket.IO, consistent snapshots/replay, live claims/economy/judging/control updates and temporary team presence; React HUD/workbench, browser reload/pause/privacy and real local production TLS/proxy checks | Full event integration and 100-team burst/reconnect testing |
+| Staff and round controls | Persisted grants/management APIs; React singleton/round/pause controls; Super Admin normal staff management, code/revocation and replacements; authoring, validation/publication, manual/CSV registration, discipline, cancellation and timing recovery; filtered judging/job timelines, confirmed extra-dispatch authorisation and private recovery audit/GET-only receipt recovery; operator-only backup Super Admins, fresh-code recovery and verified retirement; audited admitted-program/single-dispatch review and paged private-access history; private validation diagnostics and general immutable staff audit navigation | Real operator/secret-delivery rehearsal, remaining event controls, installed maintenance and launch coverage |
 | Visual arena and accessibility | Cyberpunk circuit-city/codebase with articulated roaming mechanical crawlers, difficulty accents, queued post-IDE aimed termination, explicit pending Run/Submit indicators and cleared read-only markers; minimisable HUD, keyboard navigator, reduced-motion confirmation and responsive workbench; desktop/mobile screenshot and canvas-pixel checks | Further visual feedback, real-device calibration, comprehensive keyboard/accessibility audit and realistic 40-target performance |
-| Hosting and event operations | Isolated judge lab; clock gate, durable incidents/watermarks, authorised clearance and private runtime loader tested with synthetic observations | Actual Linux clock/probe/service-ownership rehearsal, full-app HTTPS/private services, secret installation, monitoring/alerts, verified off-host backups/restoration and deployment |
+| Hosting and event operations | Isolated judge lab; clock gate, durable incidents/watermarks, authorised clearance and private runtime loader tested with synthetic observations; production Caddy configuration/shared client-address boundary/local TLS tests; pgBackRest image/config candidate and real local encrypted chain/WAL restore with table/guard integrity and failed-key/manifest checks; offline restored-access/epoch quarantine and persistent admission gate | Actual Linux clock/probe/service-ownership rehearsal, public DNS/certificate renewal, installed private services, connection ceilings, secret rotation, monitoring/alerts, off-host GCS checks, physical restore fencing and reviewed reopening, full recovery rehearsal and deployment |
 | Event launch gates | Not completed | Full browser/concurrency/security tests, realistic 100-team load/reconnect/burst testing, recovery rehearsal and validated competition content |
 
 ## Current Validation and Publication Batch

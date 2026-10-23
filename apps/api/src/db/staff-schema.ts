@@ -12,7 +12,7 @@ const id = () => uuid("id").primaryKey().$defaultFn(randomUUID);
 export const staffEntryFlows = pgTable("staff_entry_flows", {
   id: id(), staffId: uuid("staff_id").notNull().references(() => staffIdentities.id, { onDelete: "restrict" }),
   credentialId: uuid("credential_id").notNull(), credentialVersion: bigint("credential_version", { mode: "bigint" }).notNull(),
-  proofVerifier: bytes("proof_verifier").notNull(), mode: text("mode").notNull(), generation: bigint("generation", { mode: "bigint" }).notNull(),
+  proofVerifier: bytes("proof_verifier"), mode: text("mode").notNull(), generation: bigint("generation", { mode: "bigint" }).notNull(),
   state: text("state").notNull(), createdAt: instant("created_at").notNull(), expiresAt: instant("expires_at").notNull(),
   sessionId: uuid("session_id").references((): AnyPgColumn => staffSessions.id, { onDelete: "restrict" }), activatedAt: instant("activated_at"),
 }, (t) => [unique("staff_flow_owner").on(t.id, t.staffId),
@@ -26,7 +26,7 @@ export const staffEntryFlows = pgTable("staff_entry_flows", {
 export const staffSessions = pgTable("staff_sessions", {
   id: id(), staffId: uuid("staff_id").notNull().references(() => staffIdentities.id, { onDelete: "restrict" }),
   flowId: uuid("flow_id").notNull(), credentialId: uuid("credential_id").notNull(), credentialVersion: bigint("credential_version", { mode: "bigint" }).notNull(),
-  secretVerifier: bytes("secret_verifier").notNull(), mode: text("mode").notNull(), generation: bigint("generation", { mode: "bigint" }).notNull(),
+  secretVerifier: bytes("secret_verifier"), mode: text("mode").notNull(), generation: bigint("generation", { mode: "bigint" }).notNull(),
   createdAt: instant("created_at").notNull(), absoluteExpiresAt: instant("absolute_expires_at").notNull(), lastActivityAt: instant("last_activity_at").notNull(),
   revokedAt: instant("revoked_at"), revocationReason: text("revocation_reason"),
 }, (t) => [unique("staff_session_owner").on(t.id,t.staffId), unique("staff_session_flow").on(t.id,t.flowId),

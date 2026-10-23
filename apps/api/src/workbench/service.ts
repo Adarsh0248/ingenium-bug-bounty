@@ -62,7 +62,8 @@ export function createWorkbenchService(pool:Pool,clock:ClockGuard){
         if(!row)throw new AccessError("WORKBENCH_UNAVAILABLE");return{bounty_id:bounty,sample_number:number,field,content:row.content.toString("utf8"),byte_length:row.content.length};});
     },
     async draft(cookie:unknown,round:string,bounty:string){return read(cookie,round,bounty,async c=>{
-      const row=await first<{id:string;source_code:Buffer;revision:string;created_at:Date;updated_at:Date}>(c.client,"SELECT id,source_code,revision,created_at,updated_at FROM code_drafts WHERE member_round_id=$1 AND bounty_id=$2",[c.memberRoundId,bounty]);
+      const row=await first<{id:string;source_code:Buffer|null;revision:string;created_at:Date;updated_at:Date}>(c.client,"SELECT id,source_code,revision,created_at,updated_at FROM code_drafts WHERE member_round_id=$1 AND bounty_id=$2",[c.memberRoundId,bounty]);
+      if(row?.source_code===null)throw new AccessError("PAYLOAD_EXPIRED");
       return{draft_id:row?.id??null,round_id:round,bounty_id:bounty,member_round_id:c.memberRoundId,language:c.language,revision:row?.revision??"0",
         source:row?row.source_code.toString("utf8"):(await variant(c)).starter_code.toString("utf8"),source_kind:row?"DRAFT":"STARTER",created_at:row?.created_at.toISOString()??null,updated_at:row?.updated_at.toISOString()??null,...gate(c)};
     });},
@@ -77,8 +78,8 @@ export function createWorkbenchService(pool:Pool,clock:ClockGuard){
       return read(cookie,round,bounty,async c=>{const row=await first(c.client,"SELECT * FROM draft_save_outcomes WHERE member_round_id=$1 AND bounty_id=$2 AND request_key=$3",[c.memberRoundId,bounty,key]);return{status:row?"OBSERVED":"NOT_OBSERVED",outcome:row?receipt(row):null};});
     },
     async officialSource(cookie:unknown,round:string,bounty:string,submission:string){try{uuid(submission);}catch{throw new AccessError("INVALID_CONTEXT");}
-      return read(cookie,round,bounty,async c=>{const row=await first<{id:string;member_round_id:string;language:string;source:Buffer;received_at:Date}>(c.client,"SELECT id,member_round_id,language,source,received_at FROM competition_submissions WHERE id=$1 AND round_id=$2 AND bounty_id=$3 AND team_round_id=$4",[submission,round,bounty,c.teamRoundId]);
-        if(!row)throw new AccessError("WORKBENCH_UNAVAILABLE");return{submission_id:row.id,member_round_id:row.member_round_id,language:row.language,source:row.source.toString("utf8"),received_at:row.received_at.toISOString(),read_only:true};});
+      return read(cookie,round,bounty,async c=>{const row=await first<{id:string;member_round_id:string;language:string;source:Buffer|null;received_at:Date}>(c.client,"SELECT id,member_round_id,language,source,received_at FROM competition_submissions WHERE id=$1 AND round_id=$2 AND bounty_id=$3 AND team_round_id=$4",[submission,round,bounty,c.teamRoundId]);
+        if(!row)throw new AccessError("WORKBENCH_UNAVAILABLE");if(row.source===null)throw new AccessError("PAYLOAD_EXPIRED");return{submission_id:row.id,member_round_id:row.member_round_id,language:row.language,source:row.source.toString("utf8"),received_at:row.received_at.toISOString(),read_only:true};});
     },
     async submissions(cookie:unknown,round:string,bounty:string,after?:string){
       if(after!==undefined&&(!/^(0|[1-9]\d{0,18})$/.test(after)||BigInt(after)>9223372036854775807n))throw new AccessError("INVALID_CONTEXT");

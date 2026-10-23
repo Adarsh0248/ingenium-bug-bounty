@@ -53,8 +53,9 @@ items and use audited reads. Reports contain identifiers/categories/accounting
 state, not reference code, hidden I/O or raw judge diagnostics. A separate
 [private diagnostic review](validation-diagnostics.md) now opens one resolved
 dispatch with exact-run confirmation, a recorded reason, immutable access history
-and original-session receipt recovery. General staff-operation audit navigation
-remains separate work.
+and original-session receipt recovery. General source-free
+[staff audit navigation](staff-audit.md) now browses the original access/command
+records without providing a private-source grant.
 
 Local forms and unknown receipt identities are tab-local, with unload warnings;
 forcing a reload can discard them. History restores committed runs/publication,

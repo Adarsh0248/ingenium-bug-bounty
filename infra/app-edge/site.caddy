@@ -1,0 +1,62 @@
+root * "{$INGENIUM_WEB_ROOT}"
+header {
+	-Server
+	X-Content-Type-Options nosniff
+	X-Frame-Options DENY
+	Referrer-Policy no-referrer
+	Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	Strict-Transport-Security "max-age=31536000"
+	Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+}
+route {
+	@public not path /api /api/*
+	header @public Cache-Control no-store
+	@api path /api /api/*
+	handle @api {
+		header >Cache-Control no-store
+		@encoded header Content-Encoding *
+		respond @encoded 415
+		request_body {
+			max_size 16777216
+		}
+		reverse_proxy 127.0.0.1:{$INGENIUM_API_PORT:3000} {
+			lb_retries 0
+			lb_try_duration 0
+			header_up -Forwarded
+			header_up -X-Forwarded-For
+			header_up -X-Forwarded-Host
+			header_up -X-Forwarded-Proto
+			header_up X-Ingenium-Client-IP {http.request.remote.host}
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 20s
+				keepalive off
+			}
+		}
+	}
+	@private path /.* */.* /health /ready /metrics /admin /admin/*
+	handle @private {
+		respond 404
+	}
+	handle /assets/* {
+		@asset {
+			method GET HEAD
+			path_regexp hashed ^/assets/[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8,}\.(js|css|woff2?|ttf|png|jpe?g|webp|avif|glb|gltf|wasm)$
+			file
+		}
+		header @asset Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+	handle / {
+		@read method GET HEAD
+		rewrite @read /index.html
+		file_server
+	}
+	handle {
+		respond 404
+	}
+}
+handle_errors {
+	header Cache-Control no-store
+	respond "Request unavailable." {err.status_code}
+}
