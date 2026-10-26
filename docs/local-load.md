@@ -1,5 +1,82 @@
 # Local Capacity Rehearsal
 
+## Actual commit timing and mixed soak, 25 October
+
+The shared-race fixture now enables `track_commit_timestamp` only in its disposable
+PostgreSQL instance. It records the original award transaction's actual commit
+time and each socket's first claim event/projection arrival, with a same-host
+clock bracket check. The 100-member run `670364f1-b429-4ec4-8b47-b510dbf64eef`
+passes p95 of 836/837 ms and p99 of 856 ms. The earlier 1,106/1,107-ms result
+and unsuccessful eight-delivery experiment remain retained. The current code
+keeps six delivery groups and avoids a database transaction for a receipt that
+only trims that socket's already-sent buffer; reads/ready/presence still check
+current durable authority. Receipts cannot acknowledge beyond their sent cursor.
+The race fixture is now also checking all three tabs for each of 100 members;
+the earlier 100-socket pass does not certify that larger run.
+
+The first mixed-soak extension exposed a real client/server race: a claim cleared
+an editor intent, then a queued `RENEW` disconnected that otherwise valid member.
+The new live regression fails before the fix; all 25 live checks pass after it.
+A later combined-load run failed its slow-tab isolation check, while the isolated
+rerun passed all 25; retain both reports and do not erase that load concern.
+
+```powershell
+$env:INGENIUM_TEST_SUITE='load-soak-linux'
+npm run test:db:schema
+Remove-Item Env:INGENIUM_TEST_SUITE
+```
+
+This reuses the bounded Linux API/database/generator fixture and writes separate
+nonce-specific `linux-load-soak-*` reports. The prerequisites must pass before
+the hour starts. It settles the original 100 admitted synthetic official jobs,
+then keeps 600 sockets, 200 members, metadata reads, drafts and sample judgments
+active for at least 3,600,000 actual milliseconds. No quota counter is reset
+during that hour. Expected transient database contention is counted while the
+coordinator reconciles the same durable jobs; failed prerequisites, privacy or
+socket-state checks cannot produce a passing report. The judge and clock remain
+explicitly synthetic. This is not a real-compiler or public-TLS capacity claim.
+
+## Current 600-tab gate, 25 October
+
+`load-linux` now puts its browser generators in a separate bounded process:
+one CPU / 768 MiB each for the API, PostgreSQL and the generator (three aggregate
+CPUs). The older two-CPU combined runs below are historical evidence, not claims
+for this new setup. The generator receives only synthetic browser identities
+through a nonce-scoped private abstract socket; it gets no database credential,
+Docker socket or private configuration.
+
+The current test requires 200 current member sessions, three tabs each (600),
+200 active editors, refusal of a fourth tab, 11-second steady observation,
+recovery of all tabs after a simultaneous disconnect within 60 seconds, at most
+1,800 socket attempts and complete pause/resume delivery. Draft and official
+submission checks keep their original bounds. Earlier separated runs failed the
+reconnect gate; their reports remain retained. Do not infer capacity from the
+earlier 200-socket pass or from a healthy partial reconnect.
+
+The latest fix bounds incomplete server joins at 32 and tells an already bound
+client when that specific capacity fence is full. Explicit HTTP/socket capacity
+and HTTP rate refusals jump to the existing capped jitter window, with at least
+one second before another attempt. Ordinary network failures keep their faster
+initial retry. No durable command is retried. A one-second initial projection
+jitter experiment still failed pause/resume and was removed. A currently
+authorised coherent projection is now computed once per identical session/scope
+tab group inside its guarded transaction and sent after commit. This avoids
+turning the same broadcast into three additional reads per member. The client
+still uses bounded HTTP/replay recovery if that push is lost, and fences older
+HTTP results/failures.
+
+The full revised run `e9c63dda-7057-4d34-9764-0411aab47fee` passes. Its controller
+is `a670c5ce-54cb-4f5d-87a8-4d5ed4bda525`; the corresponding immutable report is
+`apps/api/test-results/linux-load-a670c5ce-54cb-4f5d-87a8-4d5ed4bda525.json`.
+All 600 tabs recover in 55,382 ms with 1,372 socket attempts. All private scopes
+and pause/resume views pass, followed by 200 maximum drafts and 100 admissions /
+100 normal official refusals. Request-to-projection pause/resume p95 is 4,852 /
+4,627 ms. These are measured local latencies, not a public-network guarantee.
+Real compiler execution, production TLS and uninterrupted event-length soak are
+not part of this capacity test.
+
+## Running the synthetic rehearsal
+
 Run only against the disposable synthetic harness:
 
 ```powershell

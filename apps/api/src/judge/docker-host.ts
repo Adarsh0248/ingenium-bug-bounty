@@ -27,6 +27,10 @@ export interface DockerReportPins { daemon_sha256: string; image_config_sha256: 
 // These are reported configuration digests, not daemon authentication, loaded-policy proof or a drain authority.
 export function dockerDaemonDigest(raw: Buffer) {
   const row = report(raw), security = row.SecurityOptions;
+  const warnings=row.Warnings===null?[]:row.Warnings;
+  // Moby #51111 is an informational notice in this reviewed version; freeze it without accepting other warnings.
+  const v1Notice="WARNING: Support for cgroup v1 is deprecated and planned to be removed by no later than May 2029 (https://github.com/moby/moby/issues/51111)";
+  if(!Array.isArray(warnings)||warnings.length>1||warnings.length===1&&(row.ServerVersion!=="29.9.2"||warnings[0]!==v1Notice))return fail();
   if (row.OSType !== "linux" || row.Architecture !== "x86_64" || row.CgroupVersion !== "1" || row.CgroupDriver !== "cgroupfs"
     || !["overlay2", "overlayfs"].includes(row.Driver as string) || row.DockerRootDir !== "/var/lib/docker" || row.DefaultRuntime !== "runc"
     || row.ExperimentalBuild !== false || row.LiveRestoreEnabled !== false || object(row.Swarm).LocalNodeState !== "inactive"
@@ -34,7 +38,7 @@ export function dockerDaemonDigest(raw: Buffer) {
     || !Array.isArray(security) || security.length < 2 || security.length > 3 || new Set(security).size !== security.length
     || security.some(value => !["name=apparmor", "name=apparmor,profile=default", "name=seccomp,profile=builtin", "name=cgroupns"].includes(value))
     || security.filter(value => value === "name=apparmor" || value === "name=apparmor,profile=default").length !== 1
-    || !security.includes("name=seccomp,profile=builtin") || row.Warnings !== null && (!Array.isArray(row.Warnings) || row.Warnings.length !== 0)) return fail();
+    || !security.includes("name=seccomp,profile=builtin")) return fail();
   const runtimes = object(row.Runtimes);
   if (!Object.hasOwn(runtimes, "runc") || Object.keys(runtimes).some(key => !["runc", "io.containerd.runc.v2"].includes(key))) return fail();
   for (const value of Object.values(runtimes)) object(value);
@@ -42,7 +46,7 @@ export function dockerDaemonDigest(raw: Buffer) {
   return hash({ id: text(row.ID), name: text(row.Name), version: text(row.ServerVersion), kernel: text(row.KernelVersion),
     os: row.OSType, architecture: row.Architecture, cgroup_version: row.CgroupVersion, cgroup_driver: row.CgroupDriver,
     driver: row.Driver, root: row.DockerRootDir, default_runtime: row.DefaultRuntime, init_binary: text(row.InitBinary),
-    security: [...security].sort(), runtimes, commits });
+    security: [...security].sort(), warnings, runtimes, commits });
 }
 
 export function dockerImageConfigDigest(raw: Buffer, imageId: string) {

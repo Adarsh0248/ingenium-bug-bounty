@@ -44,33 +44,33 @@ export async function realtimeChecks(t:TestContext,c:Context){
     const jar=new Map<string,string>(),prefix=audience==="STAFF"?"/api/v1/staff/live":"/api/v1/live";
     let csrf="";
     const header=()=>[...jar].map(([name,value])=>`${name}=${value}`).join("; ");
-    async function request(url:string,body?:unknown,extra:Record<string,string>={}){
-      const response=await app.inject({method:body===undefined?"GET":"POST",url,headers:{origin:browser.origin,cookie:header(),...(body===undefined?{}:{"content-type":"application/json","x-csrf-token":csrf}),...extra},...(body===undefined?{}:{payload:body as object})});
+    async function request(url:string,body?:unknown,extra:Record<string,string>={},target=app){
+      const response=await target.inject({method:body===undefined?"GET":"POST",url,headers:{origin:browser.origin,cookie:header(),...(body===undefined?{}:{"content-type":"application/json","x-csrf-token":csrf}),...extra},...(body===undefined?{}:{payload:body as object})});
       const values=response.headers["set-cookie"];
       for(const line of values===undefined?[]:typeof values==="string"?[values]:values){const [pair]=line.split(";");const split=pair!.indexOf("=");jar.set(pair!.slice(0,split),pair!.slice(split+1));}
       return response;
     }
     await request("/api/v1/bootstrap?audience=ANONYMOUS");jar.set(audience==="STAFF"?policy.names.staff:policy.names.participant,cookie);
     const bootstrap=await request(`/api/v1/bootstrap?audience=${audience}`);assert.equal(bootstrap.statusCode,200);csrf=bootstrap.json().data.csrf_token;
-    async function post(path:string,body:unknown){await c.budgets();const response=await request(`${prefix}/${path}`,body);assert.equal(response.statusCode,200,response.body);return response.json().data;}
-    async function connect(roundId:string|null=null){
-      const ticket=await post("tickets",audience==="STAFF"?{round_id:roundId}:{});
-      const socket=io(`${address}/live`,{path:"/api/v1/live/socket",transports:["websocket"],autoConnect:false,reconnection:false,forceNew:true,
+    async function post(path:string,body:unknown,target=app){await c.budgets();const response=await request(`${prefix}/${path}`,body,{},target);assert.equal(response.statusCode,200,response.body);return response.json().data;}
+    async function connect(roundId:string|null=null,target=app,targetAddress=address){
+      const ticket=await post("tickets",audience==="STAFF"?{round_id:roundId}:{},target);
+      const socket=io(`${targetAddress}/live`,{path:"/api/v1/live/socket",transports:["websocket"],autoConnect:false,reconnection:false,forceNew:true,
         auth:{ticket:ticket.ticket},extraHeaders:{Origin:browser.origin,Cookie:header()}});sockets.push(socket);
       const sync=once(socket,"sync",{signal:AbortSignal.timeout(5000)});socket.connect();const [value]=await sync;
-      const events:any[]=[],presence:any[]=[],headEvents:any[]=[];socket.on("event",e=>events.push(e));socket.on("presence",e=>presence.push(e));socket.on("heads",e=>headEvents.push(e));
+      const events:any[]=[],presence:any[]=[],headEvents:any[]=[],projections:any[]=[];socket.on("event",e=>events.push(e));socket.on("presence",e=>presence.push(e));socket.on("heads",e=>headEvents.push(e));socket.on("projection",e=>projections.push(e));
       const cursors:Record<string,string>={};let acknowledged=false;
       socket.on("event",e=>{if(acknowledged)cursors[e.stream_id]=e.sequence;});
       const timer=setInterval(()=>{if(acknowledged&&socket.connected)socket.volatile.emit("ack",{sync_id:value.sync_id,heads:cursors});},500);timer.unref();socket.on("disconnect",()=>clearInterval(timer));
       async function synchronise(between?:()=>Promise<void>){
-        const snapshot=await post("snapshot",{sync_id:value.sync_id});for(const h of snapshot.streams)cursors[h.stream_id]=h.head;
+        const snapshot=await post("snapshot",{sync_id:value.sync_id},target);for(const h of snapshot.streams)cursors[h.stream_id]=h.head;
         await between?.();
         const replay:any[]=[];
-        for(const h of snapshot.streams){let after=h.head;do{const page=await post("replay",{sync_id:value.sync_id,stream_id:h.stream_id,after});replay.push(...page.events);after=page.next;cursors[h.stream_id]=after;if(after===page.through)break;}while(true);}
+        for(const h of snapshot.streams){let after=h.head;do{const page=await post("replay",{sync_id:value.sync_id,stream_id:h.stream_id,after},target);replay.push(...page.events);after=page.next;cursors[h.stream_id]=after;if(after===page.through)break;}while(true);}
         const ready=once(socket,"ready",{signal:AbortSignal.timeout(5000)});socket.volatile.emit("ready",{sync_id:value.sync_id,heads:cursors});await ready;acknowledged=true;
         return {snapshot,replay};
       }
-      return{socket,sync:value.sync_id,events,presence,heads:headEvents,synchronise};
+      return{socket,sync:value.sync_id,events,presence,heads:headEvents,projections,synchronise};
     }
     return{post,request,connect,header,prefix};
   }
@@ -81,6 +81,29 @@ export async function realtimeChecks(t:TestContext,c:Context){
   async function complete(id:string){c.answers.set(id,"PASSED");await c.judge.claim();const deadline=Date.now()+15000;
     while(!(await query("SELECT completed_at FROM participant_judging WHERE id=$1",[id]))[0].completed_at){assert.ok(Date.now()<deadline);await c.judge.tick();await delay(25);}}
   try{
+    await t.test("incomplete live joins are bounded before accepting another expensive synchronisation",async()=>{
+      const capacityApp=makeApp(),capacityAddress=await capacityApp.listen({host:"127.0.0.1",port:0});
+      try{
+        const people=[];
+        for(let i=0;i<16;i++){const staff=await c.newStaff("ORGANISER");people.push(await session(staff.sessionCookie,"STAFF"));}
+        const connected=[];
+        for(const user of people){connected.push(await user.connect(null,capacityApp,capacityAddress));connected.push(await user.connect(null,capacityApp,capacityAddress));}
+        assert.equal(connected.length,32);assert.ok(connected.every(p=>p.socket.connected));
+        const ticket=await aa.post("tickets",{},capacityApp),extra=io(`${capacityAddress}/live`,{path:"/api/v1/live/socket",transports:["websocket"],autoConnect:false,reconnection:false,forceNew:true,
+          auth:{ticket:ticket.ticket},extraHeaders:{Origin:browser.origin,Cookie:aa.header()}});sockets.push(extra);
+        const denied=new Promise<void>((resolve,reject)=>{
+          const timer=setTimeout(()=>reject(new Error("Incomplete-join admission deadline")),3000);
+          extra.once("connect_error",error=>{clearTimeout(timer);try{assert.equal(error.message,"LIVE_AUTHORITY_REQUIRED");assert.deepEqual((error as Error&{data?:unknown}).data,{code:"CAPACITY_UNAVAILABLE"});resolve();}catch(error){reject(error);}});
+          extra.once("connect",()=>{clearTimeout(timer);reject(new Error("A thirty-third incomplete join was admitted"));});
+        });
+        extra.connect();await denied;extra.disconnect();
+        // Finishing an existing handshake frees admission without reducing any session's tab allowance.
+        await connected[0]!.synchronise();
+        assert.ok(connected.every(p=>p.socket.connected));
+        const replacement=await aa.connect(null,capacityApp,capacityAddress);await replacement.synchronise();
+        assert.equal(replacement.socket.connected,true);
+      }finally{await capacityApp.close();}
+    });
     await t.test("live heads and budget roll back together; the API cannot manufacture deliveries",async()=>{
       const before=await query("SELECT id,head FROM live_streams ORDER BY id"),budget=await query("SELECT * FROM live_control");
       const client=await c.owner.connect();try{await client.query("BEGIN");await client.query("UPDATE rounds SET revision=revision+1 WHERE id=$1",[a.round]);assert.notDeepEqual((await client.query("SELECT id,head FROM live_streams ORDER BY id")).rows,before);}finally{await client.query("ROLLBACK");client.release();}
@@ -92,7 +115,7 @@ export async function realtimeChecks(t:TestContext,c:Context){
       for(const extra of [{"x-csrf-token":"invalid"},{origin:"http://elsewhere.invalid"}])assert.equal((await aa.request(`${aa.prefix}/tickets`,{},extra)).statusCode,403);
       assert.equal((await aa.request(`${aa.prefix}/tickets`,{round_id:randomUUID()})).statusCode,400);
       const ticket=await aa.post("tickets",{}),bad=io(`${address}/live`,{path:"/api/v1/live/socket",transports:["websocket"],autoConnect:false,reconnection:false,auth:{ticket:ticket.ticket},extraHeaders:{Origin:browser.origin,Cookie:ba.header()}});sockets.push(bad);
-      const denied=once(bad,"connect_error",{signal:AbortSignal.timeout(3000)});bad.connect();assert.match(String((await denied)[0]),/LIVE_AUTHORITY_REQUIRED/);bad.disconnect();
+      const denied=once(bad,"connect_error",{signal:AbortSignal.timeout(3000)});bad.connect();const failure=(await denied)[0];assert.match(String(failure),/LIVE_AUTHORITY_REQUIRED/);assert.equal(failure.data,undefined);bad.disconnect();
     });
     await t.test("ordinary delivery capacity cannot consume the control reserve",async()=>{
       const client=await c.owner.connect();try{
@@ -116,6 +139,21 @@ export async function realtimeChecks(t:TestContext,c:Context){
       assert.notEqual(snapshot.streams.find((s:StreamHead)=>s.kind==="MEMBER").stream_id,teammate.snapshot.streams.find((s:StreamHead)=>s.kind==="MEMBER").stream_id);
       assert.equal((await ba.request(`${ba.prefix}/snapshot`,{sync_id:first.sync})).statusCode,503);
     });
+    await t.test("committed live projections reach each current private scope without requiring another HTTP read",async()=>{
+      const tabs=[first,second,other];
+      try{
+        await control(a.round,"PAUSE");
+        await until(()=>tabs.every(tab=>tab.projections.some(p=>p.round.state==="PAUSED")));
+        const views=tabs.map(tab=>tab.projections.find(p=>p.round.state==="PAUSED"));
+        for(const [index,tab] of tabs.entries()){
+          const view=views[index];assert.equal(view.sync_id,tab.sync);assert.equal(view.actor.round_id,a.round);assert.equal(view.streams.length,3);
+          assert.doesNotMatch(JSON.stringify(view),/source_code|reference_code|synthetic reference|protected hint/);
+        }
+        assert.equal(views[0].actor.team_round_id,views[1].actor.team_round_id);
+        assert.notEqual(views[0].actor.member_round_id,views[1].actor.member_round_id);
+        assert.notEqual(views[0].actor.team_round_id,views[2].actor.team_round_id);
+      }finally{await control(a.round,"RESUME");}
+    });
     await t.test("a saved draft invalidates only its owner's live workbench and snapshots contain revisions, never source",async()=>{
       await c.budgets();const workbench=createWorkbenchService(c.api,c.clock),source="private live draft text";
       await workbench.save(a.aa,{roundId:a.round,bountyId:a.x,requestKey:randomUUID(),baseRevision:"0",source});
@@ -128,8 +166,28 @@ export async function realtimeChecks(t:TestContext,c:Context){
     await t.test("three tabs per participant session are allowed; a fourth is refused without changing the member slot",async()=>{
       const before=await query("SELECT * FROM member_session_slots ORDER BY member_id"),two=await aa.connect(),three=await aa.connect();await two.synchronise();await three.synchronise();
       const ticket=await aa.post("tickets",{}),four=io(`${address}/live`,{path:"/api/v1/live/socket",transports:["websocket"],autoConnect:false,reconnection:false,auth:{ticket:ticket.ticket},extraHeaders:{Origin:browser.origin,Cookie:aa.header()}});sockets.push(four);
-      const denied=once(four,"connect_error",{signal:AbortSignal.timeout(3000)});four.connect();await denied;four.disconnect();
+      const denied=once(four,"connect_error",{signal:AbortSignal.timeout(3000)});four.connect();assert.equal((await denied)[0].data,undefined);four.disconnect();
+      await c.budgets();
+      await createWorkbenchService(c.api,c.clock).save(a.aa,{roundId:a.round,bountyId:a.x,requestKey:randomUUID(),baseRevision:"1",source:"private three-tab draft"});
+      const changed=(e:any)=>e.patch.projection==="draft"&&e.patch.bounty_id===a.x&&e.patch.revision==="2";
+      await until(()=>[first,two,three].every(tab=>tab.events.some(changed)));
+      assert.ok(!second.events.some(changed)&&!other.events.some(changed));
+      assert.ok(!JSON.stringify([first.events,two.events,three.events,second.events,other.events]).includes("private three-tab draft"));
       assert.deepEqual(await query("SELECT * FROM member_session_slots ORDER BY member_id"),before);two.socket.disconnect();three.socket.disconnect();
+    });
+    await t.test("one failed shared read withholds new heads without disconnecting healthy authenticated tabs",async sub=>{
+      let failed=false;
+      const original=c.api.query.bind(c.api), before=first.heads.length;
+      sub.mock.method(c.api,"query",((text:unknown,...args:unknown[])=>{
+        if(!failed && text==="SELECT id,head::text FROM live_streams"){
+          failed=true;return Promise.reject(new Error("Synthetic shared-read outage"));
+        }
+        return (original as Function)(text,...args);
+      }) as typeof c.api.query);
+      await until(()=>failed);
+      assert.ok([first,second,other].every(tab=>tab.socket.connected));
+      await until(()=>first.heads.length>before);
+      assert.ok([first,second,other].every(tab=>tab.socket.connected));
     });
     await t.test("editor intents aggregate tabs, stay team-private, clear on leave and display individual pauses",async()=>{
       const before=await query("SELECT id,last_activity_at FROM participant_sessions ORDER BY id"),tab=await aa.connect();await tab.synchronise();
@@ -182,7 +240,9 @@ export async function realtimeChecks(t:TestContext,c:Context){
         assert.equal(BigInt(pruned.retained_from),BigInt(pruned.head)+1n);
       }finally{await client.query("ROLLBACK");client.release();}
     });
-    await t.test("the client helper refreshes a coherent projection, recovers a lost final event and reconnects without replaying gameplay commands",async()=>{
+    await t.test("the client helper refreshes a coherent projection, recovers a lost final event and reconnects without replaying gameplay commands",async sub=>{
+      // Protocol recovery is deterministic here; the separate load test exercises real jitter.
+      sub.mock.method(Math,"random",()=>0);
       let view:any=null,dropEvents=false,installs=0,current:Socket|undefined;
       const client=connectLive("PARTICIPANT",null,{now:()=>performance.now(),post:async(path,body)=>aa.post(path.slice(aa.prefix.length+1),body),
         transport(ticket){const socket=io(`${address}/live`,{path:"/api/v1/live/socket",transports:["websocket"],autoConnect:false,reconnection:false,forceNew:true,auth:{ticket},extraHeaders:{Origin:browser.origin,Cookie:aa.header()}});sockets.push(socket);current=socket;
@@ -231,6 +291,10 @@ export async function realtimeChecks(t:TestContext,c:Context){
       await c.budgets();const submission=(await c.service.submit(race.aa,race.round,race.x,"private winning source",randomUUID())).result.submission_id as string;await complete(submission);
       await until(()=>lose.events.some(e=>e.patch.type==="CLAIM"&&e.patch.bounty_id===race.x));
       await until(()=>lose.presence.at(-1)?.editors.length===0);
+      lose.socket.volatile.emit("presence",{action:"RENEW",bounty_id:race.x});await delay(750);
+      assert.equal(lose.socket.connected,true,"A cleared bounty's stale presence renewal must not disconnect its editor.");
+      const forged=Object.fromEntries(win.heads.at(-1).heads.map((h:StreamHead)=>[h.stream_id,"9223372036854775807"]));
+      const rejected=once(win.socket,"disconnect",{signal:AbortSignal.timeout(3000)});win.socket.volatile.emit("ack",{sync_id:win.sync,heads:forged});await rejected;
       assert.ok(!lose.events.some(e=>e.patch.type==="AWARD"));assert.equal(JSON.stringify(lose.events).includes("private winning source"),false);
       await assert.rejects(live.guarded({audience:"PARTICIPANT",cookie:a.aa,roundId:null},live.snapshot));currentCookie=race.aa;
       await assert.rejects(live.guarded({audience:"PARTICIPANT",cookie:a.aa,roundId:race.round},live.snapshot));
@@ -254,11 +318,17 @@ export async function realtimeChecks(t:TestContext,c:Context){
       const fresh=await current.connect();assert.notEqual(fresh.sync,old.sync);await fresh.synchronise();fresh.socket.disconnect();
     });
     await t.test("a slow synchronising tab exceeding 256 buffered events must start over, without any economic effect",async()=>{
-      const current=await session(currentCookie),slow=await current.connect(),before=await query("SELECT count(*)::text n FROM wallet_entries");
-      const disconnected=once(slow.socket,"disconnect",{signal:AbortSignal.timeout(5000)});
-      const round=(await live.guarded({audience:"PARTICIPANT",cookie:currentCookie,roundId:null},async context=>context.actor.round_id));
-      await c.owner.query("SELECT competition_event($1,NULL,'ROUND_CHANGED',$1,date_trunc('milliseconds',clock_timestamp())) FROM generate_series(1,270)",[round]);
-      await disconnected;assert.deepEqual(await query("SELECT count(*)::text n FROM wallet_entries"),before);
+      const current=await session(currentCookie),healthy=await current.connect(),healthyTwo=await current.connect();
+      await healthy.synchronise();await healthyTwo.synchronise();
+      const slow=await current.connect(),before=await query("SELECT count(*)::text n FROM wallet_entries");
+      try {
+        const disconnected=once(slow.socket,"disconnect",{signal:AbortSignal.timeout(5000)});
+        const round=(await live.guarded({audience:"PARTICIPANT",cookie:currentCookie,roundId:null},async context=>context.actor.round_id));
+        await c.owner.query("SELECT competition_event($1,NULL,'ROUND_CHANGED',$1,date_trunc('milliseconds',clock_timestamp())) FROM generate_series(1,270)",[round]);
+        await disconnected;assert.deepEqual(await query("SELECT count(*)::text n FROM wallet_entries"),before);
+        assert.equal(healthy.socket.connected,true);assert.equal(healthyTwo.socket.connected,true);
+        await until(()=>healthy.events.length>=270&&healthyTwo.events.length>=270);
+      } finally {healthy.socket.disconnect();healthyTwo.socket.disconnect();slow.socket.disconnect();}
     });
     await t.test("a server restart clears transient handles but preserves committed scores and stream heads",async()=>{
       const current=await session(currentCookie),prior=await current.connect(),{snapshot}=await prior.synchronise();await app.close();
@@ -269,10 +339,11 @@ export async function realtimeChecks(t:TestContext,c:Context){
     });
     await t.test("a socket's cached quota identity cannot authorise projection, snapshot or replay after logout",async()=>{
       const current=await session(currentCookie),connection=await current.connect(),{snapshot}=await connection.synchronise();
+      const two=await current.connect(),three=await current.connect();await two.synchronise();await three.synchronise();
       const bounty=snapshot.bounties.find((b:any)=>!b.claimed).bounty_id;
       connection.socket.volatile.emit("presence",{action:"ENTER",bounty_id:bounty});
       await until(()=>connection.presence.at(-1)?.editors.some((e:any)=>e.bounty_id===bounty));
-      const disconnected=once(connection.socket,"disconnect",{signal:AbortSignal.timeout(7000)});
+      const disconnected=Promise.all([connection,two,three].map(tab=>once(tab.socket,"disconnect",{signal:AbortSignal.timeout(7000)})));
       await c.budgets();
       await createEntryService(c.api,c.clock,c.delivery).logout(currentCookie,{sessionId:currentCookie.split(".")[1]!,requestKey:randomUUID()});
       for(const [path,body] of [["projection",{sync_id:connection.sync}],["snapshot",{sync_id:connection.sync}],["replay",{sync_id:connection.sync,stream_id:snapshot.streams[0].stream_id,after:snapshot.streams[0].head}]] as const){

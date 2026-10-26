@@ -74,11 +74,19 @@ export async function disciplineBrowserChecks(
         exact: true,
       }),
     ).toBeVisible();
-    await section
-      .getByRole("button", { name: "Reverse 11 minute penalty", exact: true })
-      .click();
-    await confirm();
-    await expect(dialog).not.toBeVisible();
+    const refreshUrl=/\/api\/v1\/staff\/discipline\?/;
+    let refreshing=false,release!:()=>void;
+    const held=new Promise<void>(resolve=>{release=resolve;});
+    await page.route(refreshUrl,async route=>{refreshing=true;await held;await route.continue();});
+    try{
+      await section.getByRole("button",{name:"Refresh discipline",exact:true}).click();
+      await expect.poll(()=>refreshing,{timeout:5000}).toBe(true);
+      await section.getByRole("button",{name:"Reverse 11 minute penalty",exact:true}).click();
+      await dialog.getByLabel("Discipline reason",{exact:true}).fill("Synthetic browser discipline");
+      await dialog.getByLabel("Discipline staff code",{exact:true}).fill(c.staff.code);
+      await expect(dialog.getByRole("button",{name:"Confirm discipline",exact:true})).toBeEnabled();
+      await confirm();await expect(dialog).not.toBeVisible();
+    }finally{release();await page.unrouteAll({behavior:"wait"});}
     await expect(
       section.getByRole("heading", {
         name: "Manual time: 0 / 300 min",

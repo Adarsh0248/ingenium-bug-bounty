@@ -26,7 +26,8 @@ export function mountRecords(table: string) {
     const before = parts[0]!.split(" "), after = parts[1]!.split(" ");
     if (before.length < 6 || after.length !== 3 || before.some(value => value === "") || after.some(value => value === "")
       || !/^[1-9][0-9]{0,18}$/.test(before[0]!) || ids.has(before[0]!) || !/^[1-9][0-9]{0,18}$/.test(before[1]!)
-      || !before[3]!.startsWith("/") || !before[4]!.startsWith("/")) return fail();
+      || !(before[3]!.startsWith("/") || after[0] === "nsfs" && /^(pid|mnt|net|ipc|uts|user|cgroup|time):\[[1-9][0-9]{0,18}\]$/.test(before[3]!))
+      || !before[4]!.startsWith("/")) return fail();
     const device = before[2]!.split(":");
     if (device.length !== 2 || device.some(value => !/^(0|[1-9][0-9]{0,9})$/.test(value) || BigInt(value) > 4294967295n)) return fail();
     ids.add(before[0]!);
@@ -64,6 +65,11 @@ export function retainedStorage(plan: ExecutionPlan, boot: string, physical: Phy
     mounts[key] = { mount_id: mount.mount_id, device: mount.device };
   }
   return mounts;
+}
+export function storageAcknowledgement(plan: ExecutionPlan, boot: string, physical: PhysicalExecutionIdentity, value: unknown) {
+  retainedStorage(plan, boot, physical, value);
+  return { version: 1, boot_id: uuid(boot), attempt_id: plan.attemptId, container_id: physical.container_id,
+    storage_sha256: sha256(judgeJson(value)).toString("hex") };
 }
 // Called only inside the already verified fresh capsule, before workspace writes or source execution.
 export async function captureStorage(plan: ExecutionPlan, boot: string, physical: PhysicalExecutionIdentity, signal: AbortSignal) {

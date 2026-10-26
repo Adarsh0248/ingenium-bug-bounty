@@ -106,6 +106,11 @@ static int authenticate(void) {
 }
 static int arguments(int argc, char **argv) {
   if (argc < 2 || argc > 256) return 0;
+  if (!strcmp(argv[1], "export")) {
+    if (argc != 3 || strlen(argv[2]) != 64) return 0;
+    for (size_t i = 0; i < 64; i++) if (!((argv[2][i] >= '0' && argv[2][i] <= '9') || (argv[2][i] >= 'a' && argv[2][i] <= 'f'))) return 0;
+    return 1;
+  }
   int allowed = !strcmp(argv[1], "info") || !strcmp(argv[1], "inspect") || !strcmp(argv[1], "create") || !strcmp(argv[1], "start")
     || !strcmp(argv[1], "stop") || !strcmp(argv[1], "rm") || (argc > 2 && ((!strcmp(argv[1], "image") && !strcmp(argv[2], "inspect"))
     || (!strcmp(argv[1], "container") && !strcmp(argv[2], "ls"))));

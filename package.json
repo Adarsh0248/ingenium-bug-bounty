@@ -8,6 +8,8 @@
   },
   "packageManager": "npm@11.19.1",
   "overrides": {
+    "fast-uri@^3.0.0": "3.1.9",
+    "fast-uri@^4.0.0": "4.2.3",
     "monaco-editor": {"dompurify": "3.4.17"},
     "@esbuild-kit/core-utils": {
       "esbuild": "0.25.12"
@@ -21,8 +23,12 @@
     "test:browser": "npm run test:browser --workspace @ingenium/web --",
     "test:browser:db": "node apps/web/test/real-backend.mjs",
     "build": "npm run build --workspaces --if-present",
+    "build:release": "npm run build && node scripts/build-app-release.mjs",
+    "build:judge": "npm run build --workspace @ingenium/api && node infra/judge-gateway/build-release.mjs",
     "start": "npm run start --workspace @ingenium/api",
     "start:judging": "npm run start:judging --workspace @ingenium/api",
+    "start:judge-supervisor": "npm run start:judge-supervisor --workspace @ingenium/api",
+    "start:judge-gateway": "npm run start:judge-gateway --workspace @ingenium/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:db": "npm run test:db --workspace @ingenium/api",
@@ -30,6 +36,8 @@
     "test:worker:runtime": "npm run test:worker:runtime --workspace @ingenium/api",
     "test:judge:launcher": "npm run test:judge:launcher --workspace @ingenium/api",
     "test:judge:installation": "npm run test:judge:installation --workspace @ingenium/api",
+    "test:judge:image": "npm run test:judge:image --workspace @ingenium/api",
+    "test:judge:toolchains": "npm run test:judge:toolchains --workspace @ingenium/api",
     "test:judge:capsule": "npm run test:judge:capsule --workspace @ingenium/api",
     "test:judge:storage": "npm run test:judge:storage --workspace @ingenium/api",
     "test:judge:phase": "npm run test:judge:phase --workspace @ingenium/api",

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { setImmediate } from "node:timers/promises";
 import type { TestContext } from "node:test";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { buildApp } from "../../src/app.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
 import { newAccessCode, newProof, sha256 } from "../../src/access/credentials.js";
@@ -16,7 +16,7 @@ export async function browserChecks(t: TestContext, owner: Pool, api: Pool, deli
   const settings = { mode: "production" as const, origin: ORIGIN, cookieKey: randomBytes(32), csrfKey: randomBytes(32) };
   const policy = browserPolicy(settings);
   let healthy = true;
-  const clock = { assertHealthy() { if (!healthy) throw new AccessError("CLOCK_UNTRUSTED"); }, async verify() {}, fault() {} };
+  const clock = { assertHealthy() { if (!healthy) throw new AccessError("CLOCK_UNTRUSTED"); }, async verify(_client: PoolClient) {}, fault() {} };
   const create = () => buildApp({ database: { async check() {}, async close() {} }, entry: { pool: api, clock, delivery, browser: settings } });
   const app = create();
   await app.ready();
@@ -356,14 +356,35 @@ export async function browserChecks(t: TestContext, owner: Pool, api: Pool, deli
       assert.equal(staff.cookies.has(policy.names.entry), false); assert.equal(staff.cookies.has(policy.names.participant), false);
     });
 
-    await t.test("HTTP read-limit refusal is shared, bounded and never returns the private session projection", async () => {
+    await t.test("HTTP read-limit refusal is shared, bounded and never returns the private session projection", async sub => {
       const team = await fixture(), client = browser(), entry = await client.start(team.code);
       assert.equal((await client.send("/api/v1/entry/activate", { body: { member_id: team.first, language: "c", request_key: randomUUID() }, token: entry.csrf_token })).statusCode, 200);
       assert.equal((await client.send("/api/v1/bootstrap?audience=PARTICIPANT")).statusCode, 200);
-      await owner.query("UPDATE quota_buckets SET credits=0,refilled_at=date_trunc('milliseconds',clock_timestamp()),seen_at=date_trunc('milliseconds',clock_timestamp()) WHERE kind='READ_MEMBER' AND key_hash=$1", [sha256(team.first)]);
+      const key = sha256(team.first), wrapped = new WeakSet<PoolClient>();
+      let seeded = false;
+      sub.mock.method(clock, "verify", async (connection: PoolClient) => {
+        if (wrapped.has(connection)) return;
+        wrapped.add(connection);
+        const query = connection.query.bind(connection);
+        let now: Date | undefined;
+        sub.mock.method(connection, "query", (async (text: unknown, ...args: unknown[]) => {
+          if (text === "SELECT rate, burst, credits, refilled_at FROM quota_buckets WHERE kind = $1 AND key_hash = $2 FOR UPDATE"
+            && Array.isArray(args[0]) && args[0][0] === "READ_MEMBER" && key.equals(args[0][1])) {
+            assert.ok(now);
+            // A read refills every 100 ms; seed at this real decision instant, not a prior network round trip.
+            await query("UPDATE quota_buckets SET credits=0,refilled_at=$2,seen_at=$2 WHERE kind='READ_MEMBER' AND key_hash=$1", [key, now]);
+            seeded = true;
+          }
+          const result = await (query as Function)(text, ...args);
+          if (text === "SELECT date_trunc('milliseconds', clock_timestamp()) AS now") now = result.rows[0].now;
+          return result;
+        }) as typeof connection.query);
+      });
       const response = await client.send("/api/v1/bootstrap?audience=PARTICIPANT");
+      assert.equal(seeded, true);
       assert.equal(response.statusCode, 429); assert.equal(response.headers["retry-after"], "1");
       assert.equal(response.json().data, undefined);
+      assert.deepEqual((await owner.query("SELECT rate,burst,credits FROM quota_buckets WHERE kind='READ_MEMBER' AND key_hash=$1", [key])).rows[0], { rate: 600, burst: 30, credits: "0" });
       assert.equal((await owner.query("SELECT count(*)::integer AS count FROM participant_sessions WHERE member_id=$1", [team.first])).rows[0].count, 1);
     });
 

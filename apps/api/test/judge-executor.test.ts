@@ -48,7 +48,11 @@ test("real launcher pipes preserve a maximum frozen request, binary source/input
 test("launcher failures, oversized output/diagnostics and missing executables remain private errors, never normal results", async () => {
   for (const mode of ["exit", "oversize", "stderr", "stderr-overflow"]) {
     await assert.rejects(exchangeProtectedProcess(command(mode), Buffer.from("{}"), signal()), error => {
-      assert.ok(error instanceof Error); assert.doesNotMatch(error.message, /private synthetic diagnostic|AAAA|ENOENT|source/); return true;
+      assert.ok(error instanceof Error); assert.doesNotMatch(error.message, /private synthetic diagnostic|AAAA|ENOENT|source/);
+      const detail=error.cause as {diagnostic_prefix:string;diagnostic_bytes:number};assert.ok(Buffer.byteLength(detail.diagnostic_prefix)<=4096);
+      if(mode==="stderr")assert.match(detail.diagnostic_prefix,/private synthetic diagnostic/);
+      if(mode==="stderr-overflow")assert.ok(detail.diagnostic_bytes>16384);
+      return true;
     });
   }
   await assert.rejects(exchangeProtectedProcess({ file: `${process.execPath}.absent`, args: [] }, Buffer.from("{}"), signal()), /uncertain/);

@@ -43,6 +43,15 @@ test("unsupported engines and missing kernel/daemon protections fail even if a c
   }
 });
 
+test("Docker 29.9.2's exact reviewed v1 deprecation notice stays pinned while all limit support and other warnings remain mandatory",()=>{
+  const f=fixture(),notice="WARNING: Support for cgroup v1 is deprecated and planned to be removed by no later than May 2029 (https://github.com/moby/moby/issues/51111)";
+  const report={...f.daemon,ServerVersion:"29.9.2",Warnings:[notice]};
+  assert.notEqual(dockerDaemonDigest(bytes(report)),dockerDaemonDigest(bytes({...report,Warnings:[]})));
+  for(const patch of [{ServerVersion:"29.9.1"},{ServerVersion:"30.0.0"},{Warnings:[notice,"another warning"]},{Warnings:[notice,notice]},
+    {Warnings:[notice+" "]},{MemoryLimit:false},{SwapLimit:false},{CpuCfsPeriod:false},{CpuCfsQuota:false},{PidsLimit:false},{CgroupVersion:"2"}])
+    assert.throws(()=>dockerDaemonDigest(bytes({...report,...patch})));
+});
+
 test("daemon ID, kernel, engine/runtime versions and runtime configuration drift cannot match the approved report pin", async () => {
   for (const patch of [{ ID: "another-daemon" }, { ServerVersion: "29.9.2" }, { KernelVersion: "6.8.0-another" }, { Name: "another-host" },
     { RuncCommit: { ID: "new-commit" } }, { Runtimes: { runc: { path: "/tmp/runc" } } }]) {

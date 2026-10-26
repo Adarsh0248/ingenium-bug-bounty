@@ -16,14 +16,14 @@ test("temporary storage and bounded read-only proc checks use real Linux mounts/
     .map(([source, target]) => [fileURLToPath(new URL(source!, import.meta.url)), target!] as const);
   for (const [source] of bindings) await lstat(source);
   const nonce = randomUUID(), container = await docker(["create", "--pull=never", "--name", `ingenium-storage-test-${nonce}`, "--label", `ingenium.storage-test=${nonce}`,
-    "--restart", "no", "--network", "none", "--read-only", "--user", "0:0", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
+    "--restart", "no", "--network", "none", "--read-only", "--user", "0:0", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--security-opt", "no-new-privileges=true",
     "--memory", "192m", "--memory-swap", "192m", "--cpus", "0.5", "--pids-limit", "32",
     ...Object.entries(CAPSULE_TMPFS).flatMap(([path, options]) => ["--tmpfs", `${path}:${options}`]),
     ...bindings.flatMap(([source, target]) => ["--mount", `type=bind,src=${source},dst=${target},readonly`]),
     "--log-driver", "json-file", "--log-opt", "max-size=1m", "--log-opt", "max-file=1", "--entrypoint", "/usr/local/bin/node", IMAGE, "/run/verify-storage.mjs"]);
   assert.match(container, /^[a-f0-9]{64}$/);
   try {
-    const output = await docker(["start", "--attach", container]); assert.match(output, /^[#\u2139] pass 6$/m); assert.match(output, /^[#\u2139] fail 0$/m);
+    const output = await docker(["start", "--attach", container]); assert.match(output, /^[#\u2139] pass 9$/m); assert.match(output, /^[#\u2139] fail 0$/m);
   } finally {
     const config = JSON.parse(await docker(["inspect", "--format", "{{json .Config}}", container]));
     assert.equal(config.Image, IMAGE); assert.equal(config.Labels["ingenium.storage-test"], nonce);

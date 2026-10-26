@@ -90,7 +90,7 @@ export default function StaffDiscipline({
   const team = round.teams.find((t) => t.team_id === teamId),
     cursor = cursors.at(-1),
     locked =
-      !available || denied || busy || command.current.unresolved || loading,
+      !available || denied || busy || command.current.unresolved || (loading && !data),
     active = !!data?.current,
     canPenalise =
       active &&

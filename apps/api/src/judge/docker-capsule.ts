@@ -29,6 +29,7 @@ export const CAPSULE_TMPFS = {
   "/tmp": "rw,nosuid,nodev,noexec,size=16m,nr_inodes=256,mode=0700",
 } as const;
 export function capsuleCreateArguments(ref: CapsuleReference) {
+  // Docker parses --mount as CSV; combined controller names contain commas.
   return ["create", "--pull=never", "--name", ref.name, ...Object.entries(ref.labels).flatMap(([key, value]) => ["--label", `${key}=${value}`]),
     "--restart", "no", "--network", "none", "--read-only", "--user", "0:0", "--cap-drop", "ALL",
     ...CAPSULE_CAPABILITIES.flatMap(capability => ["--cap-add", capability]), "--security-opt", "no-new-privileges=true",
@@ -37,7 +38,7 @@ export function capsuleCreateArguments(ref: CapsuleReference) {
     "--ulimit", "nofile=1024:1024", "--ulimit", "core=0:0", "--ipc", "private", "--init=false", "--no-healthcheck", "--stop-timeout", "2", "--log-driver", "none",
     "--interactive", "--attach", "stdin", "--attach", "stdout", "--attach", "stderr",
     ...Object.entries(CAPSULE_TMPFS).flatMap(([path, options]) => ["--tmpfs", `${path}:${options}`]),
-    ...capsuleMounts(ref).flatMap(mount => ["--mount", `type=bind,src=${mount.source},dst=${mount.target}${mount.readonly ? ",readonly" : ""}`]),
+    ...capsuleMounts(ref).flatMap(mount => ["--mount", `type=bind,"src=${mount.source}",dst=${mount.target}${mount.readonly ? ",readonly" : ""}`]),
     "--entrypoint", "/usr/local/bin/node", ref.intent.image_id, CAPSULE_ENTRY];
 }
 function same(a: unknown, b: unknown) { if (JSON.stringify(a) !== JSON.stringify(b)) return fail(); }

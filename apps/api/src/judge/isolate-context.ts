@@ -41,7 +41,7 @@ export function checkCapsuleProcess(status: string, selfCgroup: string, apparmor
   if (!/^NoNewPrivs:\s+1$/m.test(status) || !/^Seccomp:\s+2$/m.test(status) || apparmor !== "ingenium-isolate-executor-v1 (enforce)\n") return bad();
   const controllers = new Map<string, string>();
   for (const row of selfCgroup.trimEnd().split("\n")) {
-    const match = /^(0|[1-9][0-9]*):([a-z_,]*):(\/[^\s:]*)$/.exec(row); if (!match) return bad();
+    const match = /^(0|[1-9][0-9]*):([a-z_,]*|name=systemd):(\/[^\s:]*)$/.exec(row); if (!match) return bad();
     for (const controller of match[2]!.split(",")) {
       if (controllers.has(controller)) return bad(); controllers.set(controller, match[3]!);
     }

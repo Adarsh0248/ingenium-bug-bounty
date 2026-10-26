@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, chown, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -30,6 +30,7 @@ export async function createTestRedis() {
     // Disposable credentials and volatile storage; never connect this helper to an existing Redis.
     const config = join(directory, "redis.conf");
     await writeFile(config, `bind 0.0.0.0\nprotected-mode yes\nrequirepass ${password}\nsave ""\nappendonly no\nmaxmemory 32mb\nmaxmemory-policy noeviction\nmaxclients 32\nloglevel warning\n`);
+    if (process.platform === "linux" && process.getuid?.() === 0) { await chown(config, 999, 999); await chmod(config, 0o400); }
     container = await docker(["create", "--pull=never", "--name", `ingenium-redis-test-${nonce}`, "--label", `ingenium.redis-test=${nonce}`,
       "--restart", "no", "--read-only", "--user", "999:999", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
       "--memory", "96m", "--memory-swap", "96m", "--cpus", "0.5", "--pids-limit", "32", "--publish", "127.0.0.1::6379",

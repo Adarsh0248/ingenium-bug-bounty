@@ -10,12 +10,13 @@ export function createJudgeExecutionWorker(store: ReturnType<typeof createJudgeS
   const epoch = store.hostEpochId, boot = store.bootId, runtimes = store.runtimes;
   if (queue.hostEpochId !== epoch || executor.hostEpochId !== epoch || queue.bootId !== boot || executor.bootId !== boot
     || judgeJson(runtimeRecord(executor.runtimes)) !== judgeJson(runtimeRecord(runtimes))) throw new Error("Executor does not match the registered host.");
-  let busy = false;
+  let busy = false, activeAttempt: string | null = null;
   async function turn<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
     signal.throwIfAborted(); if (busy) throw new Error("Execution worker is busy."); busy = true;
-    try { return await work(); } finally { busy = false; }
+    try { return await work(); } finally { busy = false; activeAttempt = null; }
   }
   async function execute(claim: ExecutionClaim, operation: "EXECUTE" | "RECOVER", signal: AbortSignal) {
+    activeAttempt = claim.payload.attemptId;
     const request = executionRequest(claim, boot, runtimes, operation), bytes = Buffer.from(judgeJson(request));
     // The executor receives its own copy; asynchronous mutation cannot alter our result binding.
     const reply = await executor.exchange(readJudgeJson(bytes) as typeof request, signal);
@@ -26,6 +27,7 @@ export function createJudgeExecutionWorker(store: ReturnType<typeof createJudgeS
     return { state: "SEALED", attemptId: claim.payload.attemptId } as const;
   }
   return {
+    get activeAttempt() { return activeAttempt; },
     run: (signal: AbortSignal) => turn(signal, async () => {
       await executor.assertReady(signal); signal.throwIfAborted();
       const claim = await claimJudgeDelivery(store, queue, signal);

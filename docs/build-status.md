@@ -1,6 +1,6 @@
 # Build Status and 22 October Target
 
-Updated: 23 October 2026. The user requires the full approved initial application
+Updated: 26 October 2026. The user requires the full approved initial application
 by 22 October, not a demo, silently reduced MVP or feature-skipping release.
 The 22 October target was missed. It is not a completion or event-readiness guarantee.
 
@@ -32,8 +32,8 @@ by this document.
 
 ## Completion Estimate
 
-Roughly **88% of the complete approved initial scope**, as an engineering estimate
-on 23 October. Backend/access/authoring/judge components have substantial local
+Roughly **95% of the complete approved initial scope**, as an engineering estimate
+on 26 October. Backend/access/authoring/judge components have substantial local
 evidence, including the normal competition/economy backend and participant job
 orchestration, private workbench drafts and local realtime synchronisation. The
 first participant interface, 3D field, normal arena controls, staff-account and
@@ -49,10 +49,664 @@ reissuance, safe final-results export and guarded database payload retention /
 read-only cleanup operations and a locally tested same-origin production HTTPS
 gateway, an encrypted physical backup/isolated restore drill and offline restored
 access/epoch quarantine, private operations observation and offline read-only
-recovery inventory now exist;
+recovery inventory, separate private judge gateway and continuous supervisor
+entry points with protected runtime loading and bounded automatic work now exist;
 exceptional recovery, installed judge and deployment/launch gates remain incomplete. This is
 not a measured task percentage, a deadline promise or an event-readiness score.
 Small internal batches do not automatically move the whole-project estimate.
+
+## Continuous Judge Services Milestone
+
+### Current verification boundary, 25 October
+
+Latest update: the individually guarded v9 and v10 executions pass all five
+languages. A startup-signal lifetime regression failed before its fix and the
+Linux installation suite now passes 23 inner checks. The 2-CPU VM still missed
+five-second concurrent readiness observations, so the user approved resizing the
+same test VM to `e2-custom-6-24576`. That earlier test boot was
+`c0838d0f-8771-4260-b73f-d255968f434a`; three concurrent observations then passed
+in 2.50–2.60 seconds, including while an execution was active. The new epoch is
+`3ced2a8c-8d52-4167-99b3-903b9bb5d24d`. The original failed attempts remain held
+under their fenced epochs; no permit was reset.
+
+The five-hour continuous two-worker test began around 13:13 UTC (18:43 IST) on
+25 October. With the user's approval to use today's time efficiently, it stopped
+after 52 complete batches / 312 jobs / 82.6 minutes, across all five languages
+and fourteen negative/boundary fixtures, with actual mTLS, Redis, accounting and
+physical cleanup. Every accepted record was drained before stopping. Five
+uninterrupted hours remain **unverified**. These measurements
+do not prove the architecture's target of eight execution slots or 100-team
+mixed compiler capacity; that earlier run used two physical permits.
+
+A new full two-round harness passes both its synthetic-judge preflight and actual
+participant compilation through a private SSH/mTLS bridge, with
+restricted database worker credentials: samples, independent awards, score reset,
+wallet carryover, ordered paid hints, five-minute wrong penalties and one shared
+winner. Its fixture setup respects real cooldowns and staff rate limits. This
+fixture setup uses synthetic time and publication validation. No
+competition database or browser service is installed on the judge VM.
+
+The installed active-crash rehearsal now passes interruption with two UID-60000
+processes, read-only recovery, explicit original-ID physical retirement and a
+refused duplicate launch. Its original consumed permit stays held because no
+reliable verdict exists. Original observer failures and records are preserved.
+The 50-team Linux race now measures actual PostgreSQL transaction commits and
+passes 300-tab claim-event/projection p95 of 814 ms and p99 of 835/836 ms with
+browser generators separate from the API's CPU allowance. A stale editor
+renewal after a claim previously caused reconnects; its regression fails before
+the fix and all 25 live checks pass afterward. The local 600-tab mixed soak passes
+3,607,324 actual milliseconds, 52,000 metadata reads, 1,040 drafts, 260 samples
+and settlement of 100 original synthetic official submissions. Its clock and
+judge are synthetic; reconnect/backpressure history remains reported. The latest
+complete PostgreSQL suite passes 348 checks. The DB-backed browser matrix passes
+116 checks across ten suites after fixing an admin background-refresh race.
+
+The production judge now wires eight independent workers, nine queue clients and
+the separately reviewed `007_eight_slots.sql` limit. The focused DB matrix passes
+49 checks, including no change to old holds and concurrent refusal of a ninth
+permit. The first actual eight-worker trial on a fresh epoch failed readiness
+under load. Its 20 new associations, seven consumed permits and four started
+executions remain preserved. Expensive pre-claim verification is now serialised
+without removing any check or reducing the eight execution slots. That second
+host trial also failed readiness: eight original permits remain held (seven
+started), and all 25 provider/attempt/outbox associations are preserved. Idle
+readiness passes, but eight concurrent observations take 4.3–4.6 seconds before
+compiler load. Read-only scheduling calibration reduced the foreground check to
+3.1 seconds by lowering background priority. Execution/recovery now yield CPU
+priority while readiness retains its normal priority; all file, peer, boot,
+policy, budget and five-second deadline checks remain. The Linux regression
+fails before that fix and passes afterward, including 24 installation checks.
+That next trial reached eight started jobs but stopped at worker retirement,
+with six saved results and no sealed release. Read-only checkpoints place the
+first failure after its original groups and configuration were removed, at the
+full-host reference observation. All 25 database associations remain unchanged.
+Whole-host inspections are now ordered with a session-owned advisory lock;
+compilation retains eight slots and the observer keeps every check and its
+five-second bound. The 50-check focused DB suite passes serialization, callback
+failure, waiting cancellation, lost-session abort and original-history checks.
+That coordinated trial also stopped at retirement. The captured storage devices
+were reused by newer capsules before the original whole-host inspection finished.
+The judge correctly kept the uncertain permits held; increasing the scan deadline
+would not fix that identity collision. The host now retains four verified,
+close-on-exec namespace handles until retirement, and the capsule waits for their
+exact durable acknowledgement before exiting. Only those four original handles
+in the owning host process are exempted from the negative reference census; live
+tasks, foreign handles, mounts and cgroups still block it. Handles close before
+any cleanup proof. A real-VM canary passes distinct storage identities, full
+post-removal census, live-task/extra-handle refusal and owned cleanup
+(`vm-namespace-pin-canary-v2-20261026.log`). All 349 API and 21 client unit checks,
+the 50 focused DB checks pass. The v15 installed program compiled and saved its
+result but the host rejected the deliberately transferred UID-60000 workspace.
+A separate fixed diagnostic reproduced that exact owner-check failure; neither
+consumed attempt was reset. The validator now accepts only that specific
+0700 workspace ownership transition; foreign owners, writable workspace and
+transferred control storage still fail. All eight native storage checks and the
+full unit/type suites pass (`storage-owner-regressions-20261026.log`). The v16
+installed candidate now passes all five languages, original-claim duplicates,
+lost-reply recovery and complete cleanup in 17.4–19.5 seconds per fixture
+(`vm-storage-owner-candidate-v16-20261026.log`). Both prior consumed attempts and
+all earlier fenced histories remain unchanged. That eight-slot trial then hit
+PostgreSQL's reserved-connection refusal with its twenty-connection test server.
+The shared production/rehearsal pool budgets are now four supervisor, two
+gateway and one publisher connection, leaving room for eight launchers and
+readiness without changing the database or physical permits. All fifty DB
+checks pass with those limits; v17 again passes all five installed languages.
+The updated eight-slot run kept readiness below 1.7 seconds and used distinct
+captured storage IDs, but stopped during the full reference census after the
+first container, every owned cgroup and its configuration were gone. A separate
+read-only calibration reproduced the census's five-second timeout under 24
+concurrent health checks, with no submission or source execution. Metadata reads
+now run directly in the isolated host CLI with bounded cancellation yields;
+every task, FD, mount, namespace, cgroup and five-second deadline check remains.
+The same calibration passes in 2,589 ms (`vm-census-metadata-calibration-20261026.log`),
+and native regressions include exiting processes, 96 open descriptors and
+cancellation. A full capacity PASS is still required.
+
+The v18 trial completed six real mixed-language jobs but then stopped at a later
+worker. Its unresolved records include completed first retirement scans; final
+certification remained incomplete. Readiness stayed below 1,575 ms and the
+database log showed no new connection refusal. A separate read-only calibration
+of the same scan at normal scheduling priority passes in 1,675 ms. Only the
+bounded reference observation is now temporarily promoted to normal priority,
+with checked restoration afterward; source preparation keeps its lower priority.
+All 349 API / 21 client checks and both workspace types pass. The v19 installed
+trial now passes all twenty real mixed-language programs, using eight physical
+slots, mTLS, Redis, exact compiler output, bound results and full cleanup in
+126,527 ms. Its twenty readiness observations peak at 1,727 ms; the coordinator
+RSS peaks at 192,315,392 bytes. The queue is empty and readiness withdrawn after
+the completed batch (`vm-eight-slot-inspection-priority-capacity-20261026.log`).
+This is a real eight-slot PASS; the 100-team compiler burst is still required.
+
+The first application/compiler burst retained all 100 original official
+receipts but exceeded its settlement deadline. It exposed an application-side
+two-slot development ceiling, distinct from the already qualified cloud
+judge's eight slots. The first roster expansion also exposed the deferred
+authoring guard's exact-two requirement; both failures and their records remain
+preserved. Migrations 0075/0076 now permit only complete two/eight rosters, with
+the existing two-slot development default. An owner-only, idempotent event
+script adds six slots without updating the original records. The focused
+database regression checks owner-only access, original slot preservation,
+normal accounting, partial-roster rejection and ninth-slot refusal. The
+corrected eight-slot synthetic 100-team service burst passes all 100 awards,
+with zero worker faults (`eight-slot-burst-integrity-preflight-20261026.log`).
+The fresh real-compiler run uses new isolated records; it does not replay the
+old failed attempts. The eight-slot run then stopped after forty new case
+executions were sealed and drained, with six consumed reservations retained
+after a worker fault during final verification. Its 100-team gate failed, and
+all original records remain preserved. Read-only observation of the first
+retained resource passes in 1,354 ms; a separate 24-readiness-observation load
+calibration takes 3,055 ms, without admitting or running code. The inspection
+budget now allows ten seconds, preserving all checks, the five-second readiness
+limit and the eighty-second host-command deadline. Private bounded failure
+locations make another refusal diagnosable without exposing program bytes.
+The 24 targeted diagnostic/supervisor checks, 349 API/21 client checks, native
+storage regression and workspace types pass. A separately fenced candidate is
+being qualified; the real 100-team gate is still open.
+
+The ten-second experiment passed five individual language executions but the
+larger run failed again after four new cases were sealed/drained. The user then
+deferred the 100-team compiler test. Its failure is not a PASS or a demonstrated
+maximum roster; the sustained-load worker fault remains unresolved. The
+inspection deadline has been restored to five seconds. Private error causes
+are preserved through the launcher adapter rather than discarded. One original
+saved result was recovered through explicit guarded retirement in 15,403 ms,
+with a real cleanup certificate and no source re-execution
+(`vm-explicit-retirement-diagnostic-v21-20261026.log`). Its remaining uncertain
+reservations and original evidence stay preserved. No additional cloud test
+window is being used for the deferred load test.
+
+The final five-second-inspection candidate passes C, C++, Java, Python and
+JavaScript with actual guarded execution, lost-reply recovery and full cleanup
+(`vm-final-private-candidate-v22-20261026.log`). The original seventeen source
+records, including the explicitly recovered result, remain unchanged under
+their fenced epoch. Four installed compilation-error/CPU/output/boundary cases
+also pass (`vm-final-guarded-failures-v22-20261026.log`). The final unit/client
+run passes 349/21 checks and both workspace types pass; the current complete
+database matrix passes 350 checks. None of these smaller passes replaces the
+deferred maximum-load gate or resolves its observed worker fault.
+
+The final installed crash test also passes with two UID-60000 processes,
+original-launcher interruption, read-only recovery, guarded original-ID
+retirement and duplicate refusal (`vm-final-installed-crash-v22-20261026.log`).
+The original physical resources are removed, but the uncertain consumed permit
+remains held and no participant verdict was invented. This concludes the
+smaller private host checks; the 100-team test remains deferred at the user's
+request and its observed load fault remains unresolved.
+
+The verification VM was deliberately stopped and its status independently
+confirmed `TERMINATED` on 26 October. Its disk and retained histories remain in
+place; no extra test window, event deployment or assistant Git commit occurred.
+Both application workspaces build successfully, with the existing editor/arena
+size warnings. The release candidate is packaged from the final compiled files
+with an explicit hash inventory and `deployment_ready=false`.
+
+The 100-team service-burst preflight also passes: 200 requests at parallelism 16
+admit 100 official receipts and refuse the competing 100 requests; all 100 jobs
+settle with independent awards and no worker faults. Its judge/time/authoring
+fixtures are synthetic and admission uses the authorised service directly. It
+does not certify browser HTTP load or real compiler throughput.
+
+`npm run build:release` now prepares a separate hash-inventoried application
+candidate from explicit built/public paths. Its output says deployment_ready=false
+and dependencies_installed=false. It excludes local settings, dependency folders,
+test data, old lab evidence and one-use TLS credentials. Packaging self-checks
+pass. The clean non-root Linux production-dependency installation, compiled API
+health request and built public entry checks also pass. The full current unit
+run passes 349 API plus 21 client tests. See
+[the current pre-deployment handoff](pre-deployment-readiness.md) for the remaining
+gates and exact boundaries of this evidence.
+
+The entries below retain the sequence of earlier checks and failures; later
+results supersede their pending wording. Local verification currently includes
+363 unit/client tests, the full 348-test disposable PostgreSQL matrix, 23
+participant browser scenarios and 116 database-backed browser checks. The real
+installed v7 judge completed all five languages and the fourteen failure/boundary
+cases (the corrected fork fixture used a new attempt; its original compile-error
+record remains unchanged).
+
+The first continuous two-worker service rehearsal failed before any of its five
+programs started: two permits were reserved and three deliveries remained queued.
+All records and evidence remain intact. Three concurrent read-only readiness
+checks then reproduced the unchanged five-second deadline failure. The fix hashes
+the protected release once per open installation, then rechecks the original
+inode/device/ctime/mtime/ownership/mode and exact directory contents on every
+later use. Kernel peer, daemon/image reports, host context, policy and storage
+checks remain required. The Linux regression suite passes 22 inner checks,
+including rejection of identical-byte dependency rewrites; a read-only VM
+calibration completed three concurrent observations in 4.23–4.26 seconds. This
+calibration is not a successful installed service or capacity result.
+
+The old boot was stopped deliberately and the approved six-hour stop limit was
+applied. The VM restarted at 12:22:51 UTC on 25 October with boot
+`6797c91f-0238-4016-80dd-0be86632c69d`. The original database and checkpoint
+filesystem were resumed without recreation or migration. A fresh v8 epoch is
+being verified; the five-hour endurance run has not started. Deployment remains
+unauthorised and the whole-project estimate remains roughly 91%.
+
+### Host verifier implementation, 25 October
+
+The production composition now exists in `host-cli.ts`, `host-backend.ts` and
+`host-verification.ts`. The fixed native launcher accepts only its five named
+operations. Startup uses a root-private configuration, a restricted judge
+database role and the original immutable release. Ordinary RECOVER uses a
+separate read-only backend; it cannot call Docker, establish readiness or retire
+resources. Explicit root maintenance remains a separate operation.
+
+The native observer checks real nsfs descriptors, reserved Linux 6.8 initial
+namespace identities, the complete procfs mount and required host capabilities.
+Loaded-policy observation reads the kernel's enforced AppArmor profile and raw
+compiled-policy digest. Image observation streams a never-started owned Docker
+container's exported filesystem into a bounded TAR reader, without extraction.
+A once-only inspection intent and root-private, fsynced boot/epoch/release cache
+prevent a missing acknowledgement from authorising a replacement inspection.
+Fresh readiness rechecks the kernel context, policy revision, cgroup topology,
+release tree and authenticated Docker reports against that original cache.
+
+The retirement composition resolves the original consumed database permit,
+checks the complete immutable lifecycle/result context, confirms original-ID
+container absence, verifies that the original configuration and every controller
+parent remain absent, and scans task/process references under the verified host
+view. Only then can the existing certificate-first path append positive drain.
+This is implemented code, **not a positive real-host certification**. Root in
+the local Docker VM is correctly refused as an initial host. Positive v1/6.8
+compiler, policy, concurrent-process and crash calibration is still required.
+
+Evidence: all 358 unit/client checks pass, including explicit-capacity backoff,
+physical checkpoint budgets, native report framing, import-only packaging and
+the exact reviewed Docker notice (`final-reviewed-host-unit-20261025.log`).
+Both application typechecks pass. The installation suite passes 21 inner component
+checks plus its outer checks and a separate genuinely non-root native-launcher
+refusal (`host-installation-linux-20261025-v5.log`). Nine Python TAR checks pass
+on Windows and Linux. Two actual cached Redis-image exports produce the same
+filesystem digest (`image-export-20261025-v3.log`). The larger Node-image export
+hit the unchanged 75-second local pipe deadline; that failure is retained and
+does not certify event-image throughput. No production limit was increased.
+
+`npm run build:judge` creates an offline, hash-inventoried candidate build under
+the ignored `build/` directory. It includes two standalone bundled programs,
+native sources, a frozen five-language Dockerfile and the attributed upstream
+Moby seccomp profile. Its output explicitly says `host_verified: false` and does
+not install services, apply migrations, load policy or run participant code.
+Bundle hashes, syntax and refusal behaviour pass their self-check. The full
+candidate image builds successfully. Its stripped static observer is 803,168
+bytes, below the unchanged 1 MiB bound; all four native tools compile with strict
+warnings. The exact candidate image
+`sha256:727b56f40ae170a74b61ed7cd9a87a6e05516909e7b4a75db5898d80aaca38b3`
+passes fifteen trusted answers across C, C++, Java, Python and JavaScript, plus
+binary ownership/mode/hash, compiler diagnostic and capsule-refusal checks
+(`toolchains-final-20261025.log`). This is toolchain evidence, not Isolate/host
+certification. The clean verification VM has now remotely confirmed the reviewed
+6.8 kernel and actual v1 controller mounts after reboot. Full host gates stay open.
+
+Readiness now observes an 8 GiB preallocated dedicated ext4 checkpoint volume,
+its real kernel loop backing identity and minimum byte/inode headroom. It refuses
+missing, substituted, sparse or unbounded storage. The operator supplied a
+positive real-VM `PREREQUISITES_PASSED` report for production host-context,
+all thirteen v1 controllers, enforced loaded-policy and storage readers. It
+explicitly keeps `host_verified: false`. The initial native JSON/wire mismatch
+was reproduced and fixed without changing the judge protocol or relaxing native
+identity checks; v1 evidence was retained. The v4 candidate builds on that
+host as `sha256:2f1fedd67c258af86a0cad247c2e15a620c4523853f9ded5168e9a7640a72a88`.
+The actual native Docker peer check also passes. Strict daemon/image report
+validation initially refused Docker 29.9.2's informational v1 deprecation notice.
+The exact upstream notice is now accepted only for that reviewed version and
+included in the daemon digest; every capability flag and rejection of other
+warnings remains mandatory. Seventeen affected tests pass. The operator supplied
+a positive native-peer/repeated-report result and all fifteen fixed toolchain
+answers on the actual VM image. The exited original test container was verified
+and removed; its evidence remains under `/var/lib/ingenium/host-toolchains-*`.
+Both actual image exports now match: 2,082,512,216 data bytes, 35,045 entries and
+27,639 files, with tree hash
+`a2712c9fd25d92fabee4789a1397d72354baaa0e0b89ad490a67073375a02101`.
+They took 55,890 and 26,763 ms. The never-started original inspection container
+was verified and removed; its durable evidence remains on the VM. Complete
+immutable installation and production boot preparation now pass on unused test
+epoch `bac6fb8c-6740-4c32-a415-f6cb860fe39a`. Preparation took 45,305 ms, fresh
+readiness 1,665 ms, and lost-acknowledgement recovery reused the original cache.
+Release digest is `d3e22161024199246dfc6a7c8cacd885b90cddb836e86a0981808dedb57fbba3`;
+proof is `ad6e9094abfb246c457b29b156e0848188dcc580e15529a6492c9d360b7ed2c0`.
+No database readiness is issued; actual Isolate execution is the next open gate.
+
+The fixed database/launcher rehearsal applied all six real judge migrations
+on a separate retained PostgreSQL container/volume and created restricted service
+accounts. It uses a structural provider fixture, not qualification of the actual
+Judge0 engine/schema. Its first C attempt consumed a permit and stopped before
+container creation: the installer omitted the required root-only `capsules`
+directory. Read-only evidence showed only binding/intent/resource-intent records,
+no execution checkpoint, no container and no allocated job cgroups. Original
+attempt `892f92fd-ef98-4857-8e43-d6be2e9e90e9` remains held with no invented result
+or drain. The installer now creates that root and the preparation fixture checks
+it. A guarded v2 continuation verifies the exact old state, adds the missing
+directory and uses five fresh attempts; the old permit and full association must
+remain unchanged. Real execution/cleanup success is pending. Local shared
+database-bootstrap, whole-app/fixture typechecks and five scripts' Linux syntax/
+refusal checks pass. The operator then authorised direct SSH from this computer;
+Google CLI authentication and IAP access now work. The assistant ran v2 itself.
+It added the missing root, but its fresh C attempt
+`ca2944d3-a1fd-4757-bc0d-6760eaf84bf9` stopped after recording resource allocations
+and before container creation. Both permits remain held. Actual read-only
+production verification confirms the private configuration, all thirteen
+controller allocations and original host proof still match.
+
+The root cause was an unquoted comma in `cpu,cpuacct` source paths in Docker's
+CSV mount argument. The shared argument producer now quotes the source field;
+no path or confinement requirement changes. The actual Docker CLI regression
+fails before the fix and passes after it. The same negative/positive parser
+check passes on the VM's Docker 29.9.2 against an intentionally unreachable
+endpoint, so it cannot create or start a container. All 358 unit/client checks,
+22 affected lifecycle tests and whole-app typechecks pass. The next installed
+execution rehearsal must use a fresh reviewed release/epoch and preserve both
+old failed associations; do not patch their proofs, reset permits or retry them.
+Positive actual Isolate execution remains an open gate.
+
+### Continued deployment-readiness verification, 25 October
+
+The user authorised completion of all development/testing without deployment
+and explicitly approved a six-hour stop limit on the same verification VM for
+the final five-hour endurance test. That longer window has not yet been used.
+The VM was restarted with the existing three-hour limit; the original checkpoint
+filesystem was remounted without formatting, and its exact compiled policy and
+dedicated daemon were restored. Actual boot is now
+`20eb54b8-96c5-4442-ae16-5ff2034b0adc`.
+
+The old epoch was fenced with its two associations unchanged. A complete copy
+of the old release/configuration was retained before the quoting correction.
+Fresh epoch `a16ecbec-9d8a-46e4-bd67-bfa4c0b28f86` passed real boot/image/policy/
+storage preparation after correcting staging permissions to the reviewed 0444.
+Its first C container was created, started and exited 125 before compilation.
+Its original attempt/container/resources remain retained with no result or drain.
+The production membership parser had rejected the genuine `name=systemd`
+hierarchy. A regression fails before the fix and passes after it, including
+duplicate/foreign hierarchy and missing PID-controller refusals. This changes
+only parsing of the observed named hierarchy; confinement checks remain intact.
+
+A separately labelled, fixed metadata-only probe with the same capability,
+AppArmor/seccomp, controller and filesystem restrictions passed the updated
+process/mount checks on the actual VM. It ran no submitted source, consumed no
+database permit and supplied no readiness/drain verdict. Its original stopped
+inspection container and empty owned resources were normally removed; evidence
+is `/var/lib/ingenium/inspection-probe-6f2a459e-54a8-4e40-84f0-13e67df7a5de`.
+
+Runtime v5 built on the VM as
+`sha256:ad04714decd5690ebb9e95b09dfb7b317aa4fe08e2ba7b39596a2cbb54fdb9b6`.
+Both real image exports agree: 2,082,512,229 bytes, 35,045 entries, 27,639 files,
+tree `bd2ddd769c76e525eb97b96d15a4ad13082a5dbef81d1dc42abfb7ed81e1be00`.
+They took 51,566 and 30,315 ms; the never-started original was verified/removed.
+The v5 candidate is in the next guarded fresh-epoch rehearsal; it is not yet a
+successful real five-language execution result.
+
+All 23 participant browser tests passed again, including keyboard workbench
+focus/return, denied WebGL fallback, reduced motion, mobile/HUD parity, revoked
+access, uncertain-command recovery and all forty moving/reachable bounties
+(`deployment-ready-browser-20261025.log`, 4.4 minutes). All 359 unit/client tests
+pass after the named-hierarchy regression. The full disposable database matrix
+passed all 348 tests in 747 seconds, with no skipped checks
+(`deployment-ready-schema-20261025.log`). Real services, execution failures/concurrency/recovery,
+endurance and final packaging remain required before deployment readiness.
+
+The v5 epoch `4512cec7-26b5-42ca-9757-093a3e0a7315` passed preparation but its
+first C capsule exited 125 before compilation. Two separate metadata-only
+inspections isolated a shared validator defect: `runtimeObject` sorted its
+caller's expected-key array in place, assigning sorted executable tags to the
+original path order. Actual binaries match their original toolchain hashes;
+the expected labels were wrong. The validator now sorts a copy. A regression
+with eight distinct hashes fails before the fix and passes after it; all 16
+affected configuration/worker/supervisor tests pass. Original failed attempts,
+containers and resource receipts remain held. A fresh reviewed host release
+is required; no old execution is replayed and no original proof is patched.
+
+With that correction, epoch `03db5e3e-5fa7-480b-9fd6-027be168f611` compiled and
+ran its C fixture at UID/GID 60000, saved exact stdout `12\n`, CPU/memory
+accounting and normal Isolate phase cleanup, then removed its original Docker
+container and all thirteen owned controller allocations/configuration. Its
+reservation remains held: the final reference scan rejected a real unrelated
+`nsfs` mount with kernel root `mnt:[...]`. The mount parser now recognises only
+the known namespace-handle formats and the reference checker explicitly rejects
+any handle matching the original capsule's namespace. The new regression fails
+before the fix and all eleven storage tests pass afterward. A read-only scan
+using the corrected parser passes on the actual retained C evidence, without
+starting code, editing records or granting drain. Evidence is in
+`vm-retirement-inspection-v3-20261025.log`. Runtime v7 was rebuilt for the next
+fresh-epoch rehearsal. All 362 current unit/client checks pass. No event is
+deployed, and all historical failed records remain preserved.
+
+The v7 candidate passed all five installed executions on epoch
+`f36c7cce-82cf-4ced-bce3-8acc220b173f`, image
+`sha256:db5f53f248aa2e5a5dfaf95ff66aa6eba6720b2c6a9a745ec3a1a05cce54182b`.
+Each used one durable consumed permit, genuine protected compile/run evidence,
+the exact answer, read-only lost-reply recovery, a refused duplicate launch and
+verified normal container/controller/configuration/reference cleanup. Original
+fenced histories remain unchanged. Evidence is
+`vm-candidate-v7-20261025.log`. End-to-end per-case times including repeated
+verification/recovery were 37.7–44.2 seconds; these are not a throughput pass or
+instantaneous judging claim. The fourteen failure/boundary cases and the private
+continuous mTLS/Redis/two-worker test are separate subsequent gates.
+
+Thirteen installed failure/boundary cases passed with real compiler/interpreter
+causes, protected bytes, consumed duplicate permits, lost replies and normal
+physical cleanup: C/C++/Java compilation errors, Python/JS syntax errors, wrong
+output, nonzero exit, signal crash, CPU/wall limits, memory/output limits and
+protected-path/write denial. The first fork fixture correctly failed compilation
+because strict C17 hid `usleep`; that original result/record is preserved. The
+fixture now uses declared POSIX `sleep`. Only the corrected fresh attempt ran,
+passed the actual process-limit probe and completed cleanup; its continuation
+asserts the original failed association is unchanged. Logs are
+`vm-host-failures-v1-20261025.log` and `vm-host-fork-v1-20261025.log`.
+
+The database-backed browser matrix also passed all 116 checks across its ten
+suites (`deployment-ready-browser-db-20261025.log`): participant flow, clock
+recovery, history, judging, admitted-source review, validation diagnostics, audit,
+announcements, team-code access and final results export. These use disposable
+synthetic data and judge fixtures; they do not replace the installed private
+service/compiler gate or the event-length mixed workload.
+
+The 600-tab gate now passes with a separate one-CPU
+browser-generator process. API, generator and PostgreSQL each have one CPU;
+the previous combined harness had two aggregate CPUs with clients sharing the
+API CPU. Limits/roster/deadlines are unchanged. New regression tests expose and
+remove two unnecessary replay reads after the first server barrier; changed
+streams still replay and old awards still do not animate. Failed intermediate
+reports remain retained. The server now bounds unfinished
+joins at 32 after valid ticket/browser binding and returns a typed capacity hint
+only for that refusal. The client uses the existing capped jitter window directly
+for explicit HTTP/socket capacity or rate refusals, with a one-second minimum;
+ordinary network failures retain fast initial recovery. The capacity regressions
+failed before the change; all ten new backoff cases now pass. Authentication and tab
+quota refusals keep their generic response. Reconnect recovery passed but then
+pause/resume exposed another refresh burst. A one-second refresh-jitter experiment
+did not fix it and was removed. Delivery now reads one coherent projection only
+for identical currently authorised session/scope tabs within that transaction,
+releases its locks, then sends the bounded packets. The client validates its
+generation/stream watermarks, suppresses duplicate HTTP reads and prevents an old
+HTTP success or failure from replacing that newer pushed view. Lost push delivery
+still uses the existing read-only refresh/replay path. No permission cache was
+introduced. The focused realtime suite passes all 25 checks, including privacy,
+logout, role changes and rival claims (`live-push-db-20261025.log`).
+
+Measured passing run `e9c63dda-7057-4d34-9764-0411aab47fee`, controller
+`a670c5ce-54cb-4f5d-87a8-4d5ed4bda525`, retained in
+`linux-load-a670c5ce-54cb-4f5d-87a8-4d5ed4bda525.json`:
+600 sockets / 200 members / 100 teams, fourth-tab refusal, all private scopes,
+simultaneous reconnect in 55,382 ms, 1,372 attempts below the unchanged 1,800 cap,
+complete pause/resume delivery, 200 exact maximum drafts and 100 official
+admissions with 100 normal refusals. Pause/resume request-to-projection p95 is
+4,852 / 4,627 ms, not an instant-update claim. The complete local load process
+passes (`live-load-push-20261025.log`). No roster, security, pool, retry-count or
+timing ceiling was raised. It excludes real compiler execution/public TLS;
+mixed event-length soak and real compiler drain remain open.
+
+The user explicitly deferred creation of real statements, hints, reference/buggy
+programs and cases, and will supply registration data after registration closes.
+These inputs are excluded from this development batch at the user's request;
+synthetic fixtures remain the only test data. Deployment and Git mutations are
+still excluded. A generated Python cache file remains on disk because its
+optional cleanup was blocked by automatic approval review. The standard
+`__pycache__/` ignore rule now keeps generated bytecode out of source commits;
+the rejected deletion was not retried.
+
+The [continuous judge service](judge-supervisor.md) now connects fresh protected
+launcher evidence, the registry's readiness lease, private outbox publication,
+two independent execution workers and bounded read-only restart recovery. It
+holds one database-session lock per epoch; another supervisor is refused, and a
+lost session cannot reconnect to withdraw its replacement's readiness. Current
+host/boot/runtime identity and a fresh nonce bind the actual readiness response.
+Readiness renews independently while both workers are busy. Shutdown/faults stop
+new work and withdraw readiness without resetting permits or inventing drain.
+
+Both production commands exist separately from normal app startup:
+`start:judge-supervisor` and `start:judge-gateway`. The former requires root-only
+private settings and the fixed verified launcher; the HTTPS gateway requires a
+restricted non-root account, its actual Linux boot, a private listen address and
+the exact pinned worker certificate/address. All three judge database roles use
+one preflight that rejects owner/administrative powers, overlapping service roles,
+schema creation and direct access to control, attempt or provider-source tables.
+Examples contain deliberately invalid placeholders. No real secret was loaded,
+service installed, cloud resource started or original lab controller executed.
+
+The new judge-only `006_supervisor_service.sql` adds narrow session-bound lease
+and source-free held-attempt functions. It was applied only to disposable tests.
+It does not belong to the application migration history and cannot reset permits,
+modify sealed results or grant host verification. No startup applies migrations.
+
+Current evidence under `apps/api/test-results/`:
+
+- All 323 unit/client checks pass, including eleven supervisor/gateway cases
+  (`judge-services-unit-20261025-final.log`). Both production builds, typechecks,
+  the bundle policy and the dependency audit pass; the audit reports zero known
+  advisories, not absence of every vulnerability.
+- The 48-check judge database/Redis/TLS matrix passes
+  (`judge-supervisor-20261025-v3.log`), including all three role preflights,
+  singleton exclusion, actual session loss/replacement, four automatic jobs with
+  two concurrent workers, heartbeat renewal during busy work and a preserved
+  unstarted old permit. Responses/proofs are synthetic orchestration fixtures;
+  no participant program or production compiler is executed by those tests.
+- The fixed-launcher/checkpoint Linux suite passes
+  (`supervisor-launcher-20261025-v1.log`), including the new receipt-returning
+  readiness method through the real protected pipe. The separate networkless
+  private-runtime suite passes all six inner checks
+  (`supervisor-runtime-20261025-v6.log`): root-only and restricted file ownership,
+  actual entry-point refusal and private operator file behaviour.
+- An added startup-refusal check initially timed out before returning its message.
+  Loading the queue/supervision runtime now follows private configuration
+  validation. The final refusal checks pass under the same CPU, memory, task and
+  ten-second subprocess limits. Failed logs remain retained; no production or
+  test acceptance limit was relaxed to hide that failure.
+- All 346 checks in the final combined database regression pass without skips
+  or cancellations (`judge-services-full-schema-20261025-final.log`). This run
+  includes the new judge-service checks alongside registration, access, browser,
+  economy, competition, authoring, recovery and clock cases. This completes the
+  continuous-service implementation milestone; it does not complete the separate
+  physical judge, capacity or launch gates.
+- The first combined run had 344 passes and one leaf quota-refusal failure (the
+  parent also counts as failed). Its fixture emptied the bucket before another
+  network round trip, but the real 600/minute policy refills one token every
+  100 ms. The fixture now seeds zero credits at the request's real quota-decision
+  timestamp inside its actual transaction, then checks HTTP 429, Retry-After,
+  unchanged session count and persisted zero credits with the original policy.
+  No production quota or timing rule changed. All 144 foundation checks pass
+  (`judge-services-foundation-20261025-v1.log`); the failed full log remains
+  separately retained as `supervisor-full-schema-20261025-v1.log`.
+
+These entry points complete continuous orchestration code. The subsequent host
+verifier implementation is recorded above; genuine positive Linux-host evidence
+and the complete runtime rehearsal remain required.
+The 600-tab reconnect failure, mixed soak, real compiler drain and actual event
+content/device checks remain open. No readiness was fabricated to waive them.
+
+## Non-Deployment Completion Boundary
+
+The latest request excludes deployment, not unfinished application or judge code.
+Cloud provisioning, service installation, DNS/TLS issuance and live migrations
+are not authorised by that request. Git writes remain the user's responsibility.
+The following must not be described as completed merely by excluding deployment:
+
+- The production full-host proof producer and retirement composition now have
+  implementations, but still need positive Linux-host calibration and the
+  complete compiler/crash/recovery rehearsal. A mocked proof or a successful
+  stock Judge0 status cannot release a physical reservation or substitute for
+  those observations.
+- The 600-tab reconnect, mixed-load soak, real-compiler queue drain and remaining
+  recovery/accessibility checks are completion gates, not installation tasks.
+- Actual challenge content and registration import/reconciliation are now
+  explicitly deferred by the user until those inputs exist. Their eventual
+  review and balance checks remain event preparations; synthetic fixtures do
+  not claim to be actual competition content or registrations.
+
+The completed local recovery batch adds GET-only challenge-load retry, verdict
+polling recovery including a missing initial response, and a plain-text editor
+fallback if the heavy Monaco module cannot load. The workspace retains its draft
+controller, including unsaved code and unresolved autosaves, across read retries
+and editor changes. No recovery read replays a Run, Submit, hint purchase or save.
+Known hint ownership removes the repurchase control while protected content is
+temporarily unavailable. Terminal feedback and capacity refresh recover together,
+so an interrupted metadata read does not leave the Run allowance stale. The
+existing arena error boundary is shared without changing its 3D fallback.
+
+Live delivery groups tabs only when credentials, requested round and complete
+private scope match. Current authority is checked under one guarded transaction,
+never reused across transactions or other members. Each tab retains its own
+cursor, replay buffer, backpressure and resynchronisation checks; one slow tab
+does not disconnect healthy siblings. A failed shared poll emits no new heads or
+data and waits for a fresh guarded turn instead of disconnecting every peer.
+Clock failure and explicit authority errors still disconnect immediately; current
+revocation checks and the ten-second client stale watchdog remain.
+
+The client verifies the server's final READY heads rather than setting READY
+unconditionally. This refreshes liveness, drains buffered replay without duplicate
+award animation, and requires resynchronisation for missing events. Malformed or
+foreign heads cannot unlock writes or presence. Initial connection is immediate;
+failed connections use a random 250--1,250 ms first retry, exponentially widening
+to a maximum 30,250 ms window. The counter resets only after a verified final
+acknowledgement. The original handshake/stale thresholds, quotas, database pool
+and 60-second load-recovery assertion are unchanged.
+
+Final local results, with logs under `apps/api/test-results/`:
+
+- All 312 unit/client checks passed: 291 API and 21 web checks
+  (`unit-regression-20261025-final2.log`), including 26 focused live-client checks.
+- All 342 checks in the complete disposable PostgreSQL matrix passed without
+  skips or cancellations (`schema-regression-20261025-final.log`). These include
+  the 23 live checks for three-tab private revisions, fourth-tab refusal,
+  revocation, sibling isolation and an injected shared-read failure. They use
+  synthetic judge observations and do not certify real language execution.
+- All 23 participant browser scenarios passed together after the protocol and
+  dependency changes (`participant-recovery-20261025-final2.log`). A subsequently
+  strengthened unsaved-code regression also passed: an aborted autosave remains
+  unresolved, a challenge-read retry preserves its text and no second save is
+  sent (`unsaved-recovery-20261025-final.log`). Terminal-read failure was reproduced
+  before its fix; the before/after regression logs are retained.
+- Both production builds, typechecks and the production bundle policy passed.
+  Desktop/mobile workbench screenshots were inspected and archived under
+  `participant-visual-20261025/`. Large editor/arena bundle warnings remain.
+
+The 600-tab reconnect gate is still **INCOMPLETE**. The harness binds three tabs
+to each of 200 members, with 200 editors and 400 observers, and refuses a fourth
+tab without changing enrolment. Later runs held all 600 through an eleven-second
+steady observation, but none recovered all tabs by the unchanged 60-second
+deadline. The latest report, `linux-load.json`, is run
+`f96d94e4-cef2-4089-9755-c1299edc9e08`: 578 READY / 22 STALE and 1,213
+connection attempts. Earlier runs, including the 589 READY / 9 STALE / 2 SYNCING
+result, and their nonce-named reports/logs are retained. Experimental long first
+retry windows were not kept; the final quick-first-retry policy above has unit,
+browser and full database evidence, but has not passed a new 600-tab run.
+
+This harness places the API and all client generators together in one one-CPU
+Node container, with a separate one-CPU database. Its result is a conservative
+combined stress observation, not an isolated production API capacity measurement
+or proof of which production resource is limiting. Separate-generator/real-host
+calibration and the mixed-load soak remain required. No roster, timeout, resource
+budget or acceptance threshold was silently relaxed to manufacture a pass.
+
+The dependency audit found the installed `fast-uri` 3.1.8 / 4.2.2 affected by the
+maintainer's [URI parsing advisory](https://github.com/fastify/fast-uri/security/advisories/GHSA-w74x-v6f9-j3xg)
+and related reference-normalisation advisories. Both supported major lines are
+now pinned to patch releases 3.1.9 / 4.2.3 through the existing override pattern;
+only those two installed packages changed. Four regressions failed before the
+patch and pass afterward, covering both serializer and validator resolution.
+The final full npm audit reports zero known advisories. This is not proof of
+application exploitability before the patch, absence of all vulnerabilities
+afterward, or a native-image security audit. No cloud deployment, Git write,
+development-database operation or architecture change was performed.
 
 ## Current Safeguards and Participant Coverage
 
@@ -73,8 +727,9 @@ receive independent copies, and a new head/round invalidates the entry. Shared
 discipline/live tests and thirteen focused result checks cover exact standings parity,
 time penalties/reversal, shared claims and provisional-to-frozen finalisation.
 
-All 304 unit/client tests, typechecks and production builds pass. The full sixteen-scenario
-participant browser run passed after the HUD correction. The browser checks include forty targets on desktop and
+All 323 unit/client tests, 346 full-matrix disposable database checks, typechecks,
+both final production builds and the production bundle policy pass.
+The full 23-scenario participant browser run passed. The browser checks include forty targets on desktop and
 mobile, nonblank/moving canvas pixels, last-target keyboard access, focus into
 the IDE and return to the selected target on close. Screenshots were inspected;
 software-rendered browser checks do not establish participant-device frame rates
@@ -664,7 +1319,7 @@ matching names automatically link them to a later CSV upload.
 | Access and language lock | Persisted entry, renewal/logout, expiry warnings, approved replacement and immutable receipts; first participant entry/restoration UI; qualifying activity and Linux clock/secret wiring, scheduled encrypted-handoff and bounded quota cleanup tested with real PG and synthetic observations | Primary-host runtime rehearsal, deeper participant recovery coverage, exceptional recovery and remaining verifier/source retention |
 | Content and authoring | Private draft editor/checker, immutable snapshots, validation history/reports, human review and own-code-confirmed recoverable publication; durable runs/full check sets, fencing/recovery/accounting; pinned client/registry, guarded queue, capsule/producer interfaces, execution/recovery handoff, automatic deadline maintenance and separate app-side validation worker tested with disposable services; reason-required private single-dispatch diagnostics and paged access audit; general source-free staff audit navigation | Real-host sandbox/producer installation and runtime compatibility, primary-host service installation/rehearsal and whole-app resource reservations/cleanup |
 | Participant workbench | Backend admission/frozen jobs, scoped content, private conditional drafts/receipts and official source; React/Monaco connects live gates, autosave/conflicts, Run/Submit/hints, public feedback, paged results/attempt/wallet history, private saved work and current-grant same-instance R1/R2 history | Deeper recovery/accessibility/edge coverage, dependency-aware source retention and real load/performance checks |
-| Judge boundary | Registry/queue, guarded lifecycle/backend, release-tree integrity, native socket-listener PIDFD/executable checks and pinned Docker/image reports, native host resource/config authority, phase/storage identities, Linux residue checks and authority-gated certificate-to-slot release handoff implemented; per-capsule producer/CLI, filter/pipes, workspace and checked evidence tested locally; real v1 path not VM-verified | Production full-host retirement authority and installation, real host/daemon compatibility and image contents/loaded-policy verification, positive real-host preparation/retirement and interrupted-child tests, unknown-child/cross-boot recovery, genuine readiness, runtime/scheduling and capacity/security/recovery tests |
+| Judge boundary | Registry/queue, separate private HTTPS gateway and continuous supervisor entry points, singleton session-bound readiness renewal, two automatic workers and read-only held-attempt recovery; guarded lifecycle/backend, release-tree integrity, native socket-listener PIDFD/executable checks and pinned Docker/image reports, native host resource/config authority, phase/storage identities, Linux residue checks and authority-gated certificate-to-slot release handoff implemented; per-capsule producer/CLI, filter/pipes, workspace and checked evidence tested locally; real v1 path not VM-verified | Production full-host retirement authority and installation, real host/daemon compatibility and image contents/loaded-policy verification, positive real-host preparation/retirement and interrupted-child tests, unknown-child/cross-boot recovery, genuine host proof producer, native runtime/scheduling calibration and capacity/security/recovery tests |
 | R1/R2 competition | Normal lifecycle, published selections, scoped pauses, frozen official/sample jobs, fair dispatch/recovery, private feedback, independent R1 awards, fixed final results/draw/qualification, same-instance R2/carryover, manual ranking-time additions/reversals, drain-gated whole-round cancellation, automatic timer/sample maintenance, separate app-side judging worker/readiness and global earliest-receipt race tested with real PG and synthetic driver observations | Actual primary-host/judge installation and rehearsal, remaining UI and launch tests |
 | Economy and standings | Append-only source-linked awards/debits/opening funds, sequential team hints, exact frozen-tier R2 points, both ranking rules, private HTTP/live projections and read-only paged wallet/award and provisional/final standings UI tested | Full production resource reservations/retention, event-content balance and load/recovery rehearsal |
 | Live state | Source-linked streams, protected Socket.IO, consistent snapshots/replay, live claims/economy/judging/control updates and temporary team presence; React HUD/workbench, browser reload/pause/privacy and real local production TLS/proxy checks | Full event integration and 100-team burst/reconnect testing |

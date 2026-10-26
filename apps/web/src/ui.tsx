@@ -1,6 +1,21 @@
-import { useEffect, useId, useRef } from "react";
+import { Component, useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
+export class Boundary extends Component<
+  { children: ReactNode; fallback: ReactNode; onError?: () => void },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    this.props.onError?.();
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 export function IconButton({
   title,
   onClick,

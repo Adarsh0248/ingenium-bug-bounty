@@ -2,14 +2,15 @@ import { constants } from "node:fs";
 import { lstat, open } from "node:fs/promises";
 import { dirname, isAbsolute } from "node:path";
 
-export async function privateRuntimeJson(
+async function runtimeJson(
   path: string,
   limit: number,
+  root: boolean,
 ): Promise<unknown> {
   if (
     process.platform !== "linux" ||
     !process.getuid ||
-    process.getuid() === 0 ||
+    (root ? process.getuid() !== 0 : process.getuid() === 0) ||
     !isAbsolute(path)
   )
     throw new Error("Restricted Linux runtime required.");
@@ -65,3 +66,6 @@ export async function privateRuntimeJson(
     await file.close();
   }
 }
+
+export function privateRuntimeJson(path: string, limit: number) { return runtimeJson(path, limit, false); }
+export function rootRuntimeJson(path: string, limit: number) { return runtimeJson(path, limit, true); }

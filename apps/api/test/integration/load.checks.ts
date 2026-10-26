@@ -4,8 +4,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { TestContext } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { io } from "socket.io-client";
-import { connectLive } from "../../src/live/client.js";
+import { liveLoadDriver } from "./live-load-driver.js";
+import { remoteLiveDriver } from "./live-load-bridge.js";
 import type { participantJudgingChecks } from "./participant-judging.checks.js";
 import { createArenaService } from "../../src/access/arena-service.js";
 import { createEntryService } from "../../src/access/entry-service.js";
@@ -42,6 +42,7 @@ export async function loadChecks(
   t: TestContext,
   c: Parameters<typeof participantJudgingChecks>[1] & {
     newTeam(): Promise<{ id: string; code: string; members: string[] }>;
+    answers: Map<string, string>;
   },
 ) {
   const query = async (sql: string, args: unknown[] = []) =>
@@ -184,20 +185,13 @@ export async function loadChecks(
     production_tls: false,
     live_socket_load: false,
     event_launch_authorised: false,
+    clients_share_api_cpu: !process.env.INGENIUM_LOAD_GENERATOR,
+    generator_cpu_limit: process.env.INGENIUM_LOAD_GENERATOR ? 1 : null,
+    api_cpu_limit: process.platform === "linux" ? 1 : null,
   };
-  const measurements: Record<string, unknown>[] = [],
-    clients: ReturnType<typeof connectLive>[] = [];
+  const measurements: Record<string, unknown>[] = [];
+  const live = process.env.INGENIUM_LOAD_GENERATOR ? remoteLiveDriver(process.env.INGENIUM_LOAD_GENERATOR) : liveLoadDriver();
   const failures = new Map<string, number>();
-  async function until(done: () => boolean, limit = 20000) {
-    const deadline = performance.now() + limit;
-    while (!done()) {
-      assert.ok(
-        performance.now() < deadline,
-        "Local live-load synchronisation deadline",
-      );
-      await delay(100);
-    }
-  }
   const output = fileURLToPath(new URL("../../test-results/", import.meta.url));
   assert.equal(
     c.api.options.max,
@@ -259,6 +253,14 @@ export async function loadChecks(
       assert.equal(response.status, 200);
       return { ...m, jar, csrf: response.value.data.csrf_token };
     });
+    const enrolled = new Map(
+      (
+        await query(
+          "SELECT id,member_id,team_round_id FROM member_rounds WHERE round_id=$1",
+          [round],
+        )
+      ).map((row) => [row.member_id, row]),
+    );
     await t.test(
       "100 teams enroll exactly two current members with independent locked five-language choices",
       async () => {
@@ -315,217 +317,38 @@ export async function loadChecks(
       },
     );
     await t.test(
-      "200 real sockets synchronise private scopes and receive pause/resume without manual refresh",
+      "600 real sockets preserve 200 member grants, refuse a fourth tab and recover a simultaneous disconnect",
       async () => {
-        await c.budgets();
-        const states = new Map<number, string>(),
-          rounds = new Map<number, string>(),
-          wire = new Map<number, string>(),
-          headAt = new Map<number, number>(),
-          staleCauses = new Map<string, number>(),
-          openedByPhase = new Map<string, number>(),
-          start = performance.now();
-        let opened = 0,
-          attempts = 0;
-        let phase = "CONNECT";
-        const pauseDelivery = new Map<number, number>(),
-          resumeDelivery = new Map<number, number>();
-        let controlAt = 0,
-          currentDelivery: Map<number, number> | null = null;
+        await c.budgets(); const start = performance.now();
         try {
-          await mapLimit(sessions, 2, async (s, i) => {
-            const client = connectLive("PARTICIPANT", null, {
-              now: () => performance.now(),
-              post: async (path, body) => {
-                const reply = await request(s, path, body);
-                if (reply.status !== 200)
-                  throw Object.assign(
-                    new Error("Synthetic live HTTP refusal"),
-                    {
-                      status: reply.status,
-                      code: reply.value.error?.code,
-                    },
-                  );
-                return reply.value.data;
-              },
-              transport: (ticket) => {
-                attempts++;
-                assert.ok(attempts <= 450, "Unbounded socket reconnect churn");
-                opened++;
-                openedByPhase.set(phase, (openedByPhase.get(phase) ?? 0) + 1);
-                const socket = io(`${address}/live`, {
-                  path: "/api/v1/live/socket",
-                  autoConnect: false,
-                  forceNew: true,
-                  reconnection: false,
-                  transports: ["websocket"],
-                  auth: { ticket },
-                  extraHeaders: {
-                    Origin: settings.origin,
-                    Cookie: [...s.jar].map(([k, v]) => `${k}=${v}`).join("; "),
-                  },
-                });
-                for (const event of [
-                  "sync",
-                  "heads",
-                  "ready",
-                  "event",
-                  "disconnect",
-                  "connect_error",
-                  "resync_required",
-                  "stale",
-                ]) {
-                  socket.on(event, () => {
-                    wire.set(i, event);
-                    if (event === "heads") headAt.set(i, performance.now());
-                  });
-                }
-                return socket;
-              },
-              install: (snapshot) => {
-                const view = snapshot as any;
-                assert.equal(view.actor.language, s.language);
-                assert.equal(view.actor.round_id, round);
-                assert.doesNotMatch(
-                  JSON.stringify(view),
-                  /PRIVATE-LOAD-DRAFT-|source_code|reference_code|proof_verifier/,
-                );
-                rounds.set(i, view.round.state);
-                if (
-                  currentDelivery &&
-                  view.round.state ===
-                    (currentDelivery === pauseDelivery
-                      ? "PAUSED"
-                      : "RUNNING") &&
-                  !currentDelivery.has(i)
-                )
-                  currentDelivery.set(i, performance.now() - controlAt);
-              },
-              invalidate() {},
-              award() {},
-              presence() {},
-              state: (state) => {
-                if (state === "STALE" && states.get(i) !== "STALE") {
-                  const age = performance.now() - (headAt.get(i) ?? -Infinity);
-                  const key = `${phase}:${states.get(i) ?? "NEW"}:${wire.get(i) ?? "NONE"}:${age >= 10000 ? "OLD_HEAD" : "RECENT_HEAD"}`;
-                  staleCauses.set(key, (staleCauses.get(key) ?? 0) + 1);
-                }
-                states.set(i, state);
-              },
-            });
-            clients.push(client);
-            await until(() => states.get(i) === "READY");
-            client.edit(bounty);
-          });
-          await until(
-            () =>
-              states.size === 200 &&
-              [...states.values()].every((v) => v === "READY"),
-          );
-          phase = "PAUSE";
-          currentDelivery = pauseDelivery;
-          controlAt = performance.now();
+          const initial = await live.initialise({ address, origin: settings.origin, round, bounty,
+            sessions: sessions.map(s => ({ csrf: s.csrf, cookies: [...s.jar], language: s.language,
+              memberRound: enrolled.get(s.memberId).id, teamRound: enrolled.get(s.memberId).team_round_id })) });
+          assert.equal(await live.fourth(), true);
+          report.initial_live_connections = { ...initial, fourth_tab_refused: true };
+          const reconnectMs = await live.reconnect();
+          assert.equal((await query("SELECT count(*)::int n FROM member_rounds WHERE round_id=$1 AND enrolled_at IS NOT NULL", [round]))[0].n, 200);
+          await live.phase("PAUSE");
           await control("PAUSE", round, { scope: "GLOBAL", target: null });
-          try {
-            await until(
-              () =>
-                [...rounds.values()].filter((v) => v === "PAUSED").length ===
-                200,
-            );
-          } catch (error) {
-            t.diagnostic(
-              JSON.stringify({
-                phase: "PAUSE",
-                opened,
-                states: Object.fromEntries(
-                  [...new Set(states.values())].map((v) => [
-                    v,
-                    [...states.values()].filter((x) => x === v).length,
-                  ]),
-                ),
-                rounds: Object.fromEntries(
-                  [...new Set(rounds.values())].map((v) => [
-                    v,
-                    [...rounds.values()].filter((x) => x === v).length,
-                  ]),
-                ),
-                warnings: Object.fromEntries(warnings),
-                failures: Object.fromEntries(failures),
-              }),
-            );
-            for (const client of clients) client.close();
-            throw error;
-          } finally {
-            currentDelivery = resumeDelivery;
-            controlAt = performance.now();
+          try { await live.projection("PAUSED"); }
+          finally {
+            await live.phase("RESUME");
             await control("RESUME", round, { scope: "GLOBAL", target: null });
           }
-          phase = "RESUME";
-          await until(
-            () =>
-              [...rounds.values()].filter((v) => v === "RUNNING").length ===
-              200,
-          );
-          phase = "STEADY";
-          await delay(11000);
-          await until(() => [...states.values()].every((v) => v === "READY"));
-          assert.equal(pauseDelivery.size, 200);
-          assert.equal(resumeDelivery.size, 200);
-          measurements.push({
-            operation: "LIVE_SOCKETS",
-            sockets: 200,
-            opened_connections: opened,
-            connection_attempts: attempts,
-            opened_by_phase: Object.fromEntries(openedByPhase),
-            stale_causes: Object.fromEntries(staleCauses),
-            elapsed_ms: Math.round(performance.now() - start),
-            all_private_scopes: true,
-            global_pause_resume: true,
-            control_request_to_projection_pause_p95_ms: percentile(
-              [...pauseDelivery.values()],
-              0.95,
-            ),
-            control_request_to_projection_pause_p99_ms: percentile(
-              [...pauseDelivery.values()],
-              0.99,
-            ),
-            control_request_to_projection_resume_p95_ms: percentile(
-              [...resumeDelivery.values()],
-              0.95,
-            ),
-            control_request_to_projection_resume_p99_ms: percentile(
-              [...resumeDelivery.values()],
-              0.99,
-            ),
-          });
+          await live.projection("RUNNING");
+          const { pause, resume, ...result } = await live.finish();
+          measurements.push({ operation: "LIVE_SOCKETS", ...result, simultaneous_reconnect_ms: reconnectMs,
+            elapsed_ms: Math.round(performance.now() - start), all_private_scopes: true, global_pause_resume: true,
+            control_request_to_projection_pause_p95_ms: percentile(pause, 0.95),
+            control_request_to_projection_pause_p99_ms: percentile(pause, 0.99),
+            control_request_to_projection_resume_p95_ms: percentile(resume, 0.95),
+            control_request_to_projection_resume_p99_ms: percentile(resume, 0.99) });
           report.live_socket_load = true;
         } catch (error) {
-          report.live_failure = {
-            phase,
-            opened_connections: opened,
-            connection_attempts: attempts,
-            opened_by_phase: Object.fromEntries(openedByPhase),
-            states: Object.fromEntries(
-              [...new Set(states.values())].map((v) => [
-                v,
-                [...states.values()].filter((x) => x === v).length,
-              ]),
-            ),
-            rounds: Object.fromEntries(
-              [...new Set(rounds.values())].map((v) => [
-                v,
-                [...rounds.values()].filter((x) => x === v).length,
-              ]),
-            ),
-            stale_causes: Object.fromEntries(staleCauses),
-          };
-          for (const client of clients) client.close();
-          if (
-            (await query("SELECT state FROM rounds WHERE id=$1", [round]))[0]
-              .state === "PAUSED"
-          ) {
+          report.live_failure = await live.state();
+          await live.close();
+          if ((await query("SELECT state FROM rounds WHERE id=$1", [round]))[0].state === "PAUSED")
             await control("RESUME", round, { scope: "GLOBAL", target: null });
-          }
           throw error;
         }
       },
@@ -648,14 +471,68 @@ export async function loadChecks(
         });
       },
     );
+    if (process.env.INGENIUM_TEST_SUITE === "load-soak") {
+      assert.equal(measurements.length, 6, "Do not start the hour-long phase after a failed capacity prerequisite.");
+      await t.test("one actual hour preserves 600 sockets while metadata, drafts and sample judgments continue", { timeout: 3900000 }, async () => {
+        const contention = new Map<string, number>();
+        const settle = async (ids: string[]) => {
+          for (const id of ids) c.answers.set(id, "PASSED");
+          const end = performance.now() + 300000;
+          while ((await query("SELECT count(*)::int n FROM participant_judging WHERE id=ANY($1::uuid[]) AND completed_at IS NULL", [ids]))[0].n) {
+            assert.ok(performance.now() < end, "Synthetic coordinator did not settle admitted work.");
+            try {
+              assert.equal(await c.judge.claim(), true);
+              if (await c.judge.tick() === "IDLE") await delay(100);
+            } catch (error) {
+              const code = (error as { code?: string }).code;
+              if (!code || !["57014", "55P03", "40001", "40P01"].includes(code)) throw error;
+              // The production coordinator retries durable lookup after a rolled-back database turn too.
+              contention.set(code, (contention.get(code) ?? 0) + 1); await delay(250);
+            }
+          }
+          assert.equal((await query("SELECT count(*)::int n FROM participant_judging WHERE id=ANY($1::uuid[]) AND result='PASSED'", [ids]))[0].n, ids.length);
+        };
+        const official = (await query("SELECT id FROM participant_judging WHERE round_id=$1 AND lane='OFFICIAL'", [round])).map(row => row.id);
+        await settle(official);
+        assert.equal((await query("SELECT count(*)::int n FROM bounty_awards a JOIN bounties b ON b.id=a.bounty_id WHERE b.round_id=$1", [round]))[0].n, 100);
+        const editable = (await query("SELECT id FROM bounties WHERE round_id=$1 AND id<>$2 ORDER BY position LIMIT 1", [round, bounty]))[0].id;
+        const editPath = `/api/v1/competition/rounds/${round}/bounties/${editable}`;
+        const began = performance.now(), utc = Date.now(), latency: number[] = [];
+        let cycles = 0, samples = 0, drafts = 0, peakRss = process.memoryUsage().rss;
+        do {
+          await mapLimit(sessions, 4, async s => {
+            const at = performance.now(), response = await request(s, path);
+            assert.equal(response.status, 200); latency.push(performance.now() - at);
+          });
+          for (let offset = 0; offset < 4; offset++) {
+            const s = sessions[(cycles * 4 + offset) % sessions.length]!, current = await request(s, `${editPath}/draft`);
+            assert.equal(current.status, 200);
+            const saved = await request(s, `${editPath}/draft`, { request_key: randomUUID(), base_revision: current.value.data.revision, source: `// PRIVATE-LOAD-DRAFT-soak-${cycles}-${offset}\n` });
+            assert.equal(saved.status, 200); assert.equal(saved.value.data.outcome, "SAVED"); drafts++;
+          }
+          const sample = await request(sessions[cycles % sessions.length]!, `${editPath}/runs`, { request_key: randomUUID(), source: "// Synthetic hour-long sample\n" });
+          assert.equal(sample.status, 200); assert.equal(sample.value.data.result.status, "ADMITTED");
+          await settle([sample.value.data.result.run_id]); samples++;
+          const state = await live.state(); report.soak_live_state = state; assert.equal(state.assertion_failed, false); assert.equal(state.states.READY, 600);
+          peakRss = Math.max(peakRss, process.memoryUsage().rss); cycles++;
+          if (cycles % 6 === 0) console.log(`SOAK: ${cycles} cycles, ${samples} samples, 600 sockets; ${Math.round((performance.now() - began) / 1000)} seconds`);
+          await delay(10000);
+        } while (performance.now() - began < 3600000);
+        assert.ok(Date.now() - utc >= 3600000);
+        measurements.push({ operation: "ONE_HOUR_MIXED_APP_SOAK", elapsed_ms: Math.round(performance.now() - began), cycles, members: 200, sockets: 600,
+          metadata_reads: latency.length, metadata_p95_ms: percentile(latency, .95), metadata_p99_ms: percentile(latency, .99), drafts, samples,
+          official_burst_settled: official.length, peak_rss: peakRss, real_compilation: false, quota_resets_during_soak: 0, worker_database_contention: Object.fromEntries(contention) });
+      });
+    }
     assert.equal(
       measurements.length,
-      6,
+      process.env.INGENIUM_TEST_SUITE === "load-soak" ? 7 : 6,
       "A failed subcheck cannot produce a PASSED load report.",
     );
     report.state = "PASSED";
   } finally {
-    for (const client of clients) client.close();
+    let cleanupError: unknown;
+    try { await live.close(); } catch (error) { cleanupError = error; report.state = "INCOMPLETE"; }
     await app.close();
     report.measurements = measurements;
     report.warnings = Object.fromEntries(warnings);
@@ -667,5 +544,6 @@ export async function loadChecks(
       `${output}/local-load.json`,
       JSON.stringify(report, null, 2) + "\n",
     );
+    if (cleanupError) throw cleanupError;
   }
 }

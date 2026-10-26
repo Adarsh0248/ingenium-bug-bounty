@@ -20,6 +20,264 @@ async function open(page: import("@playwright/test").Page) {
   ).toBeVisible();
 }
 
+test("a failed challenge read can be retried without discarding its private draft", async ({
+  page,
+}) => {
+  await enter(page);
+  await page.route(`**/bounties/${bounty}/statement`, async (route) => {
+    await route.abort();
+  });
+  await open(page);
+  const code = page.getByRole("textbox", {
+    name: "Your private code",
+    exact: true,
+  });
+  await expect(code).not.toHaveValue("");
+  let saves = 0;
+  await page.route(`**/bounties/${bounty}/draft`, async (route) => {
+    if (route.request().method() === "POST") {
+      saves++;
+      await route.abort();
+    } else await route.continue();
+  });
+  const local =
+    "// unsaved during challenge recovery\n" + (await code.inputValue());
+  await code.fill(local);
+  await expect(page.locator(".save-status")).toHaveText("unresolved");
+  await page.unroute(`**/bounties/${bounty}/statement`);
+  await page.getByRole("button", { name: "Retry challenge" }).click();
+  await expect(
+    page.getByText("Repair the program", { exact: false }),
+  ).toBeVisible();
+  await expect(code).toHaveValue(local);
+  expect(saves).toBe(1);
+  await expect(
+    page.getByRole("button", { name: "Submit fix", exact: true }),
+  ).toBeEnabled();
+});
+
+test("verdict polling recovers a failed GET without sending another run", async ({
+  page,
+}) => {
+  let failNext = false,
+    failed = 0,
+    posts = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/runs")) posts++;
+  });
+  await page.route("**/judging/*", async (route) => {
+    if (failNext) {
+      failNext = false;
+      failed++;
+      await route.abort();
+    } else await route.continue();
+  });
+  await enter(page);
+  await open(page);
+  await page.getByRole("button", { name: /Run samples/ }).click();
+  await expect(page.locator(".feedback-heading")).toContainText("queued");
+  failNext = true;
+  await expect.poll(() => failed).toBe(1);
+  await expect(page.locator(".feedback-heading")).toContainText("passed", {
+    timeout: 12000,
+  });
+  expect(posts).toBe(1);
+});
+
+test("a missing code-editor chunk falls back to an editable draft and still obeys live read-only gates", async ({
+  page,
+}) => {
+  await page.route("**/src/CodeEditor.tsx*", (route) => route.abort());
+  await enter(page);
+  await page.getByRole("button", { name: /01 The silent overflow/ }).click();
+  const code = page.getByRole("textbox", {
+    name: "Your private code",
+    exact: true,
+  });
+  await expect(
+    page.getByRole("status").filter({ hasText: "code editor unavailable" }),
+  ).toBeVisible();
+  await expect(code).toHaveValue(/long long a, b/);
+  await code.fill(
+    "// retained through editor failure\nint main() { return 0; }\n",
+  );
+  await page
+    .getByRole("button", { name: "Save private draft", exact: true })
+    .click();
+  await expect(page.locator(".save-status")).toHaveText("saved");
+  await page.request.post("/api/v1/_fixture", { data: { action: "pause" } });
+  await expect(code).toHaveAttribute("readonly", "");
+  await expect(code).toHaveValue(/retained through editor failure/);
+  await page.request.post("/api/v1/_fixture", { data: { action: "resume" } });
+  await expect(code).toBeEditable();
+  await page
+    .getByRole("button", { name: "Close workbench", exact: true })
+    .click();
+  await page.getByRole("button", { name: /01 The silent overflow/ }).click();
+  await expect(code).toHaveValue(/retained through editor failure/);
+});
+
+test("a run with no initial feedback response recovers by its known receipt and stops polling on close", async ({
+  page,
+}) => {
+  let blocked = true,
+    reads = 0,
+    posts = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/runs")) posts++;
+  });
+  await page.route("**/judging/*", async (route) => {
+    reads++;
+    if (blocked) await route.abort();
+    else await route.continue();
+  });
+  await enter(page);
+  await open(page);
+  await page.getByRole("button", { name: /Run samples/ }).click();
+  await expect.poll(() => reads).toBeGreaterThanOrEqual(2);
+  blocked = false;
+  await expect(page.locator(".feedback-heading")).toContainText("passed", {
+    timeout: 12000,
+  });
+  expect(posts).toBe(1);
+  await page.request.post("/api/v1/_fixture", {
+    data: { action: "judge-delay", ms: 10000 },
+  });
+  await page.getByRole("button", { name: /Run samples/ }).click();
+  await expect(page.locator(".feedback-heading")).toContainText("queued");
+  await page
+    .getByRole("button", { name: "Close workbench", exact: true })
+    .click();
+  const closedReads = reads;
+  await page.waitForTimeout(2500);
+  expect(reads).toBe(closedReads);
+  expect(posts).toBe(2);
+});
+
+test("a failed terminal capacity read recovers the verdict and run allowance without another action", async ({
+  page,
+}) => {
+  let failedReads = 0,
+    posts = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/runs")) posts++;
+  });
+  await enter(page);
+  await open(page);
+  await page.request.post("/api/v1/_fixture", {
+    data: { action: "judge-delay", ms: 3000 },
+  });
+  await page.getByRole("button", { name: /Run samples/ }).click();
+  await expect(page.locator(".feedback-heading")).toContainText("queued");
+  await expect(
+    page.getByRole("button", { name: /Scanning samples 1\/2/ }),
+  ).toBeVisible();
+  await page.route(`**/bounties/${bounty}`, async (route) => {
+    failedReads++;
+    await route.abort();
+  });
+  await expect
+    .poll(() => failedReads, { timeout: 15000 })
+    .toBeGreaterThanOrEqual(2);
+  await page.unroute(`**/bounties/${bounty}`);
+  await expect(page.locator(".feedback-heading")).toContainText("passed", {
+    timeout: 12000,
+  });
+  await expect(
+    page.getByRole("button", { name: "Run samples 0/2", exact: true }),
+  ).toBeEnabled();
+  expect(posts).toBe(1);
+});
+
+test("a paid hint with a failed content read is recovered without a second purchase or draft replacement", async ({
+  page,
+}) => {
+  let purchases = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      request.url().endsWith(`/bounties/${bounty}/hints`)
+    )
+      purchases++;
+  });
+  await enter(page);
+  await open(page);
+  const code = page.getByRole("textbox", {
+    name: "Your private code",
+    exact: true,
+  });
+  await code.fill("// keep my hint investigation\n");
+  await page.getByRole("button", { name: /^hints/ }).click();
+  await page.route(`**/bounties/${bounty}/hints`, async (route) => {
+    if (route.request().method() === "GET") await route.abort();
+    else await route.continue();
+  });
+  await page
+    .locator(".hint")
+    .first()
+    .getByRole("button", { name: "Purchase hint" })
+    .click();
+  await page
+    .getByRole("button", { name: "Confirm purchase", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "hints 1/3", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".hint").first()).toContainText(
+    "Purchased / content pending",
+  );
+  await expect(
+    page
+      .locator(".hint")
+      .first()
+      .getByRole("button", { name: "Purchase hint" }),
+  ).toHaveCount(0);
+  await expect(page.locator(".hud-score.wallet strong")).toHaveText("1,165");
+  await page.unroute(`**/bounties/${bounty}/hints`);
+  await page
+    .getByRole("button", { name: "Retry challenge", exact: true })
+    .click();
+  await expect(
+    page.getByText("Check the arithmetic operation on the two inputs.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(code).toHaveValue("// keep my hint investigation\n");
+  await expect(page.locator(".hud-score.wallet strong")).toHaveText("1,165");
+  expect(purchases).toBe(1);
+});
+
+test("WebGL failure preserves keyboard challenge access and private editing", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      kind: string,
+      ...args: any[]
+    ) {
+      if (kind.includes("webgl")) return null;
+      return original.call(this, kind as any, ...args);
+    } as typeof original;
+  });
+  await enter(page);
+  const target = page.getByRole("button", { name: /01 The silent overflow/ });
+  await target.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "The silent overflow", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Plain text", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Your private code", exact: true })
+    .fill("// accessible without WebGL\n");
+  await page
+    .getByRole("button", { name: "Close workbench", exact: true })
+    .click();
+  await expect(target).toBeFocused();
+});
+
 test("keyboard target entry focuses the workbench and closing returns to the same bounty", async ({
   page,
 }) => {
@@ -248,7 +506,7 @@ test("a solved target waits for IDE exit, terminates visibly once and remains re
   await enter(page);
   await open(page);
   await page.request.post("/api/v1/_fixture", {
-    data: { action: "judge-delay", ms: 1500 },
+    data: { action: "judge-delay", ms: 6000 },
   });
   await page.getByRole("button", { name: "Submit fix", exact: true }).click();
   const validating = page.getByRole("button", {

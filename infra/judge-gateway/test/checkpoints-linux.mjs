@@ -162,6 +162,12 @@ test("capsule journal records cannot be overwritten, copied to another binding o
   const intent = { version: 1, nonce: randomUUID(), image_id: `sha256:${"a".repeat(64)}`, release_sha256: "b".repeat(64) };
   try {
     await store.reserveCapsule(p, intent, signal()); await store.saveCapsule(p, "container", { id: "c".repeat(64) });
+    assert.equal(await store.readCapsuleRecord(p, "storage_ack"), null);
+    await store.saveCapsule(p, "storage_ack", { receipt: "original" });
+    assert.deepEqual(await store.readCapsuleRecord(p, "storage_ack"), { receipt: "original" });
+    await assert.rejects(store.readCapsuleRecord(p, "../binding"));
+    await assert.rejects(store.readCapsuleRecord({ ...p, owner: randomUUID() }, "storage_ack"));
+    await assert.rejects(store.saveCapsule(p, "storage_ack", { receipt: "replacement" }));
     await assert.rejects(store.saveCapsule(p, "container", { id: "d".repeat(64) }));
     await assert.rejects(store.capsule({ ...p, owner: randomUUID() }));
     const folder = `${CHECKPOINT_DIRECTORY}/capsule-${p.hostEpochId}-${p.attemptId}`;

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "supervisor_database_url": "postgresql://RESTRICTED_SUPERVISOR:PRIVATE_PASSWORD@127.0.0.1/JUDGE_DATABASE",
+  "publisher_database_url": "postgresql://RESTRICTED_PUBLISHER:PRIVATE_PASSWORD@127.0.0.1/JUDGE_DATABASE",
+  "host_epoch_id": "REPLACE_WITH_REGISTERED_HOST_EPOCH_UUID",
+  "boot_id": "REPLACE_WITH_ACTUAL_LINUX_BOOT_UUID",
+  "launcher_sha256": "REPLACE_WITH_REVIEWED_FIXED_LAUNCHER_SHA256",
+  "runtimes": {
+    "c": { "key": "FROZEN_C_KEY", "digest": "FROZEN_C_DIGEST" },
+    "cpp": { "key": "FROZEN_CPP_KEY", "digest": "FROZEN_CPP_DIGEST" },
+    "java": { "key": "FROZEN_JAVA_KEY", "digest": "FROZEN_JAVA_DIGEST" },
+    "python": { "key": "FROZEN_PYTHON_KEY", "digest": "FROZEN_PYTHON_DIGEST" },
+    "javascript": { "key": "FROZEN_JAVASCRIPT_KEY", "digest": "FROZEN_JAVASCRIPT_DIGEST" }
+  },
+  "redis": { "address": "127.0.0.1", "port": 6379, "password": "REPLACE_WITH_GENERATED_64_HEX_PASSWORD" }
+}

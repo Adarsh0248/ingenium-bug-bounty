@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "database_url": "postgresql://RESTRICTED_GATEWAY:PRIVATE_PASSWORD@127.0.0.1/JUDGE_DATABASE",
+  "host_epoch_id": "REPLACE_WITH_REGISTERED_HOST_EPOCH_UUID",
+  "boot_id": "REPLACE_WITH_ACTUAL_LINUX_BOOT_UUID",
+  "listen_address": "10.42.0.3",
+  "port": 2359,
+  "runtimes": {
+    "c": { "key": "FROZEN_C_KEY", "digest": "FROZEN_C_DIGEST" },
+    "cpp": { "key": "FROZEN_CPP_KEY", "digest": "FROZEN_CPP_DIGEST" },
+    "java": { "key": "FROZEN_JAVA_KEY", "digest": "FROZEN_JAVA_DIGEST" },
+    "python": { "key": "FROZEN_PYTHON_KEY", "digest": "FROZEN_PYTHON_DIGEST" },
+    "javascript": { "key": "FROZEN_JAVASCRIPT_KEY", "digest": "FROZEN_JAVASCRIPT_DIGEST" }
+  },
+  "tls": {
+    "server_name": "judge.ingenium.internal",
+    "worker_address": "10.42.0.4",
+    "worker_certificate_sha256": "REPLACE_WITH_AUTHORISED_WORKER_LEAF_CERTIFICATE_SHA256",
+    "ca_pem": "REPLACE_WITH_PRIVATE_CA_PEM",
+    "certificate_pem": "REPLACE_WITH_SERVER_CERTIFICATE_PEM",
+    "private_key_pem": "REPLACE_WITH_SERVER_PRIVATE_KEY_PEM"
+  }
+}

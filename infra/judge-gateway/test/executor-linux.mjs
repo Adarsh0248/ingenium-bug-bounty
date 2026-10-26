@@ -18,6 +18,7 @@ const claim = { payload: { hostEpochId: settings.hostEpochId, attemptId: randomU
   owner: randomUUID(), providerToken: randomUUID() };
 
 test("Linux executes the verified open launcher inode through its inherited descriptor and accepts bound synthetic evidence", async () => {
+  assert.deepEqual(await client.readiness(signal()), Buffer.alloc(32, 0xcc));
   await client.assertReady(signal());
   const request = executionRequest(claim, settings.bootId, runtimes, "EXECUTE");
   const result = await client.exchange(request, signal());

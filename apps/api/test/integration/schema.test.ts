@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { lstat } from "node:fs/promises";
+import { lstat,mkdir,readFile,writeFile } from "node:fs/promises";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -26,6 +26,15 @@ import { competitionChecks } from "./competition.checks.js";
 import { backupFixture, backupDocker } from "./backup-fixture.js";
 import { staffRecoveryLinuxChecks } from "./staff-recovery-linux.checks.js";
 import { linuxLoadChecks } from "./load-linux.checks.js";
+import {runLocalRoundFlow} from "../fixtures/host-round-flow.js";
+import type {RuntimeManifestFixture} from "../fixtures/host-round-flow.js";
+import {createAuthoringJudgeDriver} from "../../src/content/judge-driver.js";
+import type {JudgeDriverSettings} from "../../src/content/judge-driver.js";
+import {LANGUAGES} from "../../src/access/credentials.js";
+import type {Language} from "../../src/access/credentials.js";
+import {acceptJudgeReply} from "../../src/content/judge-protocol.js";
+import {judgeReply} from "../fixtures/judge.js";
+import type {TrustedAuthoringDriver} from "../../src/content/execution-policy.js";
 
 const exec = promisify(execFile);
 const IMAGE = "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826";
@@ -53,7 +62,7 @@ async function waitForDatabase(connectionString: string): Promise<void> {
 }
 
 // The complete matrix includes real 150-second cooldown and 45-second expiry checks; operation limits are unchanged.
-test("registration migrations work on isolated PostgreSQL and preserve their constraints on repeat application", { timeout: 900000 }, async (t) => {
+test("registration migrations work on isolated PostgreSQL and preserve their constraints on repeat application", { timeout: process.env.INGENIUM_TEST_SUITE === "load-soak-linux" ? 4300000 : process.env.INGENIUM_TEST_SUITE?.includes("compiler-burst") ? 1700000 : 900000 }, async (t) => {
   assert.equal((await lstat(roleScript)).isFile(), true, "The reviewed role script must be a regular file before mounting it.");
   const nonce = randomUUID();
   const password = randomBytes(24).toString("hex");
@@ -73,11 +82,12 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     "--mount", `type=bind,src=${roleScript},dst=/docker-entrypoint-initdb.d/01-api-role.sql,readonly`,
     "--log-driver", "json-file", "--log-opt", "max-size=1m", "--log-opt", "max-file=1",
     ...(backup ? ["--env", "POSTGRES_INITDB_ARGS=--data-checksums", ...backup.mounts()] : []), selectedImage,
-    ...(backup ? ["postgres", "-c", "config_file=/etc/ingenium-backup/postgresql.conf", "-c", "listen_addresses=*", "-c", "max_wal_size=64MB", "-c", "shared_buffers=64MB"] : ["load","load-linux","race-load-linux"].includes(process.env.INGENIUM_TEST_SUITE ?? "") ? ["postgres", "-c", "max_connections=40", "-c", "track_functions=all"] : [])],
+    ...(backup ? ["postgres", "-c", "config_file=/etc/ingenium-backup/postgresql.conf", "-c", "listen_addresses=*", "-c", "max_wal_size=64MB", "-c", "shared_buffers=64MB"] : ["load","load-linux","load-soak-linux","race-load","race-load-linux"].includes(process.env.INGENIUM_TEST_SUITE ?? "") ? ["postgres", "-c", "max_connections=40", "-c", "track_functions=all", "-c", "track_commit_timestamp=on"] : [])],
   { ...process.env, POSTGRES_PASSWORD: password, POSTGRES_API_PASSWORD: apiPassword });
   assert.match(container, /^[a-f0-9]{64}$/);
   let owner: Pool | undefined;
   let api: Pool | undefined;
+  let preserveRealFlow=false;
   try {
     await docker(["start", container]);
     const port = await docker(["inspect", "--format", '{{(index (index .NetworkSettings.Ports "5432/tcp") 0).HostPort}}', container]);
@@ -101,16 +111,53 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     url.password = apiPassword;
     const apiUrl = url.toString();
     api = new Pool({ connectionString: apiUrl, max: 4, connectionTimeoutMillis: 2000 });
+    if(process.env.INGENIUM_TEST_SUITE==="event-capacity"){
+      await t.test("event capacity preserves existing slots, refuses a ninth slot and stays owner-only",async()=>{
+        const before=(await owner!.query("SELECT * FROM execution_capacity_slots ORDER BY id")).rows;
+        assert.equal(before.length,2);
+        await assert.rejects(api!.query("INSERT INTO execution_capacity_slots(id) VALUES(3)"),{code:"42501"});
+        const script=await readFile(fileURLToPath(new URL("../../../../infra/app-host/event-capacity.sql",import.meta.url)),"utf8");
+        await owner!.query(script);await owner!.query(script);
+        const after=(await owner!.query("SELECT * FROM execution_capacity_slots ORDER BY id")).rows;
+        assert.deepEqual(after.slice(0,2),before);assert.deepEqual(after.map(s=>s.id),[1,2,3,4,5,6,7,8]);
+        await owner!.query("UPDATE judge_control SET id=id WHERE id=1");
+        await assert.rejects(owner!.query("DELETE FROM execution_capacity_slots WHERE id=8"),{code:"P0001"});
+        assert.equal((await owner!.query("SELECT count(*)::int n FROM execution_capacity_slots")).rows[0].n,8);
+        await assert.rejects(owner!.query("INSERT INTO execution_capacity_slots(id) VALUES(9)"),{code:"23514"});
+      });return;
+    }
+    if(["real-round-flow","round-flow-preflight","real-compiler-burst","compiler-burst-preflight"].includes(process.env.INGENIUM_TEST_SUITE??"")){
+      const mode=process.env.INGENIUM_TEST_SUITE==="real-round-flow"?"REAL":process.env.INGENIUM_TEST_SUITE==="real-compiler-burst"?"REAL_BURST":process.env.INGENIUM_TEST_SUITE==="compiler-burst-preflight"?"SYNTHETIC_BURST":"SYNTHETIC_PREFLIGHT";
+      let driver:TrustedAuthoringDriver,manifests:RuntimeManifestFixture[];
+      if(mode==="REAL"||mode==="REAL_BURST"){
+        const path=process.env.INGENIUM_REAL_JUDGE_FIXTURE;assert.ok(path,"The one-use private test bridge descriptor is required.");
+        const bytes=await readFile(path);assert.ok(bytes.length<65536);
+        const raw=JSON.parse(bytes.toString("utf8")) as Omit<JudgeDriverSettings,"runtimes"|"ca"|"certificate"|"privateKey">&{runtimes:[Language,{key:string;digest:string}][];ca:string;certificate:string;privateKey:string;manifests:RuntimeManifestFixture[]};
+        driver=createAuthoringJudgeDriver({...raw,runtimes:new Map(raw.runtimes),ca:Buffer.from(raw.ca),certificate:Buffer.from(raw.certificate),privateKey:Buffer.from(raw.privateKey)});manifests=raw.manifests;
+      }else{
+        manifests=await Promise.all(LANGUAGES.map(async language=>{const manifest={synthetic_round_preflight:language},digest=(await owner!.query("SELECT encode(sha256(convert_to($1::jsonb::text,'UTF8')),'hex') digest",[JSON.stringify(manifest)])).rows[0].digest;return {language,key:`preflight-${language}`,digest,manifest};}));
+        driver={hostEpochId:randomUUID(),endpointRef:"synthetic-round-preflight",runtimes:new Map(manifests.map(row=>[row.language,{key:row.key,digest:row.digest}])),async assertReady(){},async submit(p){const nonce=randomUUID(),stdout=Buffer.from(p.source.toString().includes("a+b+1")?"13\n":"12\n");return acceptJudgeReply(judgeReply(p,nonce,stdout),p,nonce,200);},async observe(p){return this.submit(p,new AbortController().signal);}};
+      }
+      const directory=fileURLToPath(new URL(`../../test-results/real-round-flow-${nonce}/`,import.meta.url));await mkdir(directory,{mode:0o700});
+      preserveRealFlow=true;
+      await t.test(`${mode}: local isolated application database`,{timeout:mode.endsWith("BURST")?1500000:600000},()=>runLocalRoundFlow(ownerUrl,apiUrl,driver,manifests,mode,async(name,value)=>{assert.match(name,/^[a-z-]+$/);await writeFile(`${directory}/${name}.json`,JSON.stringify(value)+"\n",{flag:"wx",mode:0o600});}));
+      // Node's subtest failure is recorded on the context rather than rethrown by t.test.
+      preserveRealFlow=!(await lstat(`${directory}/completed.json`).then(()=>true,()=>false));
+      return;
+    }
     if(process.env.INGENIUM_TEST_SUITE === "load-linux") { await linuxLoadChecks(t, ownerUrl, apiUrl, container); return; }
+    if(process.env.INGENIUM_TEST_SUITE === "load-soak-linux") { await linuxLoadChecks(t, ownerUrl, apiUrl, container, "load-soak"); return; }
     if(process.env.INGENIUM_TEST_SUITE === "race-load-linux") { await linuxLoadChecks(t, ownerUrl, apiUrl, container, "race-load"); return; }
     if(process.env.INGENIUM_TEST_SUITE === "operations-linux") { await staffRecoveryLinuxChecks(t, ownerUrl, apiUrl, container, "operations"); return; }
+    if(process.env.INGENIUM_TEST_SUITE === "staff-recovery-linux") { await staffRecoveryLinuxChecks(t, ownerUrl, apiUrl, container); return; }
     if(process.env.INGENIUM_TEST_SUITE==="staff-recovery"){await staffRecoveryChecks(t,ownerUrl,apiUrl,container);return;}
     if(process.env.INGENIUM_TEST_SUITE==="staff-management"){await staffManagementChecks(t,ownerUrl,apiUrl);return;}
     if (["clock","worker-clock","clock-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await clockChecks(t,ownerUrl,apiUrl); return; }
     if(["worker-validation","diagnostics","diagnostics-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){await validationChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="imports"){await registrationImportChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="teams"){await teamManagementChecks(t,ownerUrl,apiUrl);return;}
-    if (["load", "race-load", "operations", "operations-browser", "restore", "backup", "https", "competition", "worker", "maintenance", "participant", "live", "workbench", "history", "history-browser", "judging", "judging-browser", "review", "review-browser", "audit", "audit-browser", "announcements", "announcements-browser", "team-access", "team-access-browser", "results", "results-browser", "retention", "browser", "registration-browser", "discipline", "discipline-browser", "cancellation", "cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await competitionChecks(t, ownerUrl, apiUrl, backup ? { fixture: backup, container } : undefined); return; }
+    if(process.env.INGENIUM_TEST_SUITE==="judge-supervisor"){await judgeGatewayChecks(t,ownerUrl);return;}
+    if (["load", "load-soak", "race-load", "operations", "operations-browser", "restore", "backup", "https", "competition", "worker", "maintenance", "participant", "live", "workbench", "history", "history-browser", "judging", "judging-browser", "review", "review-browser", "audit", "audit-browser", "announcements", "announcements-browser", "team-access", "team-access-browser", "results", "results-browser", "retention", "browser", "registration-browser", "discipline", "discipline-browser", "cancellation", "cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await competitionChecks(t, ownerUrl, apiUrl, backup ? { fixture: backup, container } : undefined); return; }
     if (process.env.INGENIUM_TEST_SUITE !== "foundation") {
       await teamManagementChecks(t,ownerUrl,apiUrl);
       await registrationImportChecks(t,ownerUrl,apiUrl);
@@ -206,8 +253,11 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     await owner?.end();
     const identity = await docker(["inspect", "--format", '{{index .Config.Labels "ingenium.schema-test"}}|{{.Config.Image}}', container]);
     assert.equal(identity, `${nonce}|${selectedImage}`, "Test container ownership changed; do not remove it.");
-    await docker(["stop", "--time", "5", container]);
-    assert.equal(await docker(["inspect", "--format", "{{.State.Running}}", container]), "false");
-    await docker(["rm", container]);
+    if(preserveRealFlow)console.error(`Retained failed round-flow database container ${container}; inspect before any rerun.`);
+    else{
+      await docker(["stop", "--time", "5", container]);
+      assert.equal(await docker(["inspect", "--format", "{{.State.Running}}", container]), "false");
+      await docker(["rm", container]);
+    }
   }
 });

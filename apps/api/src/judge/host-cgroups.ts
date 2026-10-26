@@ -72,6 +72,13 @@ async function openRoot(root: CgroupRoot) {
   if (!mounts.some(row => row.path === root.path && row.mount_id === root.mount_id)) return fail();
   await protectedDirectory(root.path); return directory(root.path, { device: root.device, inode: root.inode });
 }
+export async function assertHostCgroupAbsent(root: CgroupRoot, parent: string) {
+  const name = parentName(parent), top = await openRoot(root);
+  try {
+    try { await lstat(`${fd(top)}/${name}`); } catch (error) { if (absent(error)) return; throw error; }
+    return fail();
+  } finally { await top.close(); }
+}
 export async function inspectHostCgroups(bootId: string): Promise<Record<string, CgroupRoot>> {
   if (process.platform !== "linux" || process.getuid?.() !== 0 || (await readFile("/proc/sys/kernel/random/boot_id", "ascii")).trim() !== bootId) return fail();
   const roots: Record<string, CgroupRoot> = {};

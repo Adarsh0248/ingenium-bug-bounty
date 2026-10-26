@@ -20,6 +20,19 @@ export interface TrustedProtectedExecutor {
   exchange(request: ReturnType<typeof executionRequest>, signal: AbortSignal): Promise<unknown>;
 }
 
+export function readinessRequest(settings: Pick<ExecutorSettings, "hostEpochId" | "bootId" | "runtimes">) {
+  return { protocol: EXECUTOR_PROTOCOL, operation: "READY", request_id: randomUUID(), host_epoch_id: uuid(settings.hostEpochId),
+    boot_id: uuid(settings.bootId), runtimes: runtimeRecord(settings.runtimes) };
+}
+export function acceptReadinessReply(value: unknown, request: ReturnType<typeof readinessRequest>): Buffer {
+  const row = exact(value, [...Object.keys(request), "ready", "proof_digest"]);
+  for (const key of ["protocol", "operation", "request_id", "host_epoch_id", "boot_id"] as const)
+    if (row[key] !== request[key]) throw new Error("Foreign launcher readiness.");
+  if (row.ready !== true || judgeJson(row.runtimes) !== judgeJson(request.runtimes)
+    || typeof row.proof_digest !== "string" || !/^[0-9a-f]{64}$/.test(row.proof_digest)) throw new Error("Unverified launcher readiness.");
+  return Buffer.from(row.proof_digest, "hex");
+}
+
 function exact(value: unknown, fields: string[]): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length !== fields.length || fields.some(key => !Object.hasOwn(value, key))) throw new Error("Unusable protected executor reply.");
   return value as Record<string, unknown>;
@@ -49,16 +62,16 @@ export async function exchangeProtectedProcess(command: { file: string; args: re
     const child = spawn(command.file, [...command.args], { shell: false, windowsHide: true, cwd: process.platform === "win32" ? undefined : "/",
       env: { PATH: "/usr/sbin:/usr/bin:/sbin:/bin", LANG: "C.UTF-8", ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot } : {}) },
       stdio: ["pipe", "pipe", "pipe", ...descriptors] });
-    let failed = false, size = 0, diagnostic = 0; const chunks: Buffer[] = [];
+    let failed = false, size = 0, diagnostic = 0; const chunks: Buffer[] = [], diagnostics: Buffer[] = [];
     const fail = () => { failed = true; child.stdin!.destroy(); child.stdout!.destroy(); child.stderr!.destroy(); child.kill("SIGKILL"); };
     const timer = setTimeout(fail, TIMEOUT_MS);
     signal.addEventListener("abort", fail, { once: true }); if (signal.aborted) fail();
     child.on("error", fail); child.stdin!.on("error", fail); child.stdout!.on("error", fail); child.stderr!.on("error", fail);
     child.stdout!.on("data", (chunk: Buffer) => { size += chunk.length; if (size > JUDGE_BODY_LIMIT) fail(); else chunks.push(chunk); });
-    child.stderr!.on("data", (chunk: Buffer) => { diagnostic += chunk.length; if (diagnostic > 16384) fail(); });
+    child.stderr!.on("data", (chunk: Buffer) => { if(diagnostic<4096)diagnostics.push(Buffer.from(chunk.subarray(0,4096-diagnostic))); diagnostic += chunk.length; if (diagnostic > 16384) fail(); });
     child.on("close", (code, cause) => {
       clearTimeout(timer); signal.removeEventListener("abort", fail);
-      if (failed || code !== 0 || cause !== null || diagnostic !== 0) reject(new Error("Protected launcher failed; execution and cleanup remain uncertain."));
+      if (failed || code !== 0 || cause !== null || diagnostic !== 0) reject(new Error("Protected launcher failed; execution and cleanup remain uncertain.", {cause:{exit_code:code,signal:cause,diagnostic_bytes:diagnostic,diagnostic_prefix:Buffer.concat(diagnostics).toString("utf8")}}));
       else resolve(Buffer.concat(chunks, size));
     });
     // A fast read-only command may exit before an unnecessary zero-byte pipe write.
@@ -66,7 +79,7 @@ export async function exchangeProtectedProcess(command: { file: string; args: re
   });
 }
 
-export function createProtectedExecutorClient(settings: ExecutorSettings): TrustedProtectedExecutor {
+export function createProtectedExecutorClient(settings: ExecutorSettings): TrustedProtectedExecutor & { readiness(signal: AbortSignal): Promise<Buffer> } {
   if (process.platform !== "linux" || process.getuid?.() !== 0 || !/^[0-9a-f]{64}$/.test(settings.launcherSha256)) throw new Error("Protected execution requires the reviewed root-owned Linux installation.");
   const epoch = uuid(settings.hostEpochId), boot = uuid(settings.bootId), expected = settings.launcherSha256;
   const runtimes = new Map([...settings.runtimes].map(([key, value]) => [key, { ...value }])); runtimeRecord(runtimes);
@@ -89,18 +102,18 @@ export function createProtectedExecutorClient(settings: ExecutorSettings): Trust
       signal.throwIfAborted();
       // Execute the verified open inode, not a path that could be replaced between verification and exec.
       return readJudgeJson(await exchangeProtectedProcess({ file: "/proc/self/fd/3", args: [`--${operation.toLowerCase()}`], inheritedFds: [executable.fd] }, data, signal));
-    } catch { throw new Error("Protected launcher unavailable or unusable; retain any consumed execution permit."); }
+    } catch(error) { throw new Error("Protected launcher unavailable or unusable; retain any consumed execution permit.",{cause:error}); }
     finally { await executable?.close(); busy = false; }
+  }
+  async function readiness(signal: AbortSignal) {
+    const request = readinessRequest({ hostEpochId: epoch, bootId: boot, runtimes });
+    return acceptReadinessReply(await exchange("READY", Buffer.from(judgeJson(request)), signal), request);
   }
   return {
     hostEpochId: epoch, bootId: boot,
     get runtimes() { return new Map([...runtimes].map(([key, value]) => [key, { ...value }])); },
-    async assertReady(signal: AbortSignal) {
-      const request = { protocol: EXECUTOR_PROTOCOL, operation: "READY", request_id: randomUUID(), host_epoch_id: epoch, boot_id: boot, runtimes: runtimeRecord(runtimes) };
-      const row = exact(await exchange("READY", Buffer.from(judgeJson(request)), signal), [...Object.keys(request), "ready", "proof_digest"]);
-      for (const key of ["protocol", "operation", "request_id", "host_epoch_id", "boot_id"] as const) if (row[key] !== request[key]) throw new Error("Foreign launcher readiness.");
-      if (row.ready !== true || judgeJson(row.runtimes) !== judgeJson(request.runtimes) || typeof row.proof_digest !== "string" || !/^[0-9a-f]{64}$/.test(row.proof_digest)) throw new Error("Unverified launcher readiness.");
-    },
+    readiness,
+    async assertReady(signal: AbortSignal) { await readiness(signal); },
     async exchange(request, signal) {
       const frozen = readJudgeJson(Buffer.from(judgeJson(request))) as ReturnType<typeof executionRequest>;
       exact(frozen, ["protocol", "operation", "request_id", "host_epoch_id", "boot_id", "permit_owner", "provider_token", "payload"]);

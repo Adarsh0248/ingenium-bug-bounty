@@ -89,7 +89,7 @@ test(
     assert.match(container, /^[a-f0-9]{64}$/);
     try {
       const output = await docker(["start", "--attach", container]);
-      assert.match(output, /# pass 4\b/);
+      assert.match(output, /# pass 6\b/);
       assert.match(output, /# fail 0\b/);
     } finally {
       const config = JSON.parse(

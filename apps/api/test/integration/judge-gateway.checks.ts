@@ -13,9 +13,11 @@ import { createAuthoringJudgeDriver } from "../../src/content/judge-driver.js";
 import { acceptJudgeReply, authoringRequest } from "../../src/content/judge-protocol.js";
 import { buildJudgeGateway } from "../../src/judge/gateway.js";
 import { createJudgePublisherStore, createJudgeRegistry, createJudgeSupervisorStore } from "../../src/judge/registry.js";
+import { JUDGE_DATABASE_POOLS } from "../../src/judge/database-role.js";
 import { judgeQueueChecks } from "./judge-queue.checks.js";
 import { judgeExecutionChecks } from "./judge-execution.checks.js";
 import { judgeLauncherChecks } from "./judge-launcher.checks.js";
+import { judgeSupervisorChecks } from "./judge-supervisor.checks.js";
 import { judgePayload, judgeReply, judgeRuntimes } from "../fixtures/judge.js";
 import { createTestTls } from "../fixtures/tls.js";
 
@@ -37,12 +39,14 @@ export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
     await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/003_execution_lookup.sql", import.meta.url)), "utf8"));
     await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/004_launch_gate.sql", import.meta.url)), "utf8"));
     await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/005_participant_payloads.sql", import.meta.url)), "utf8"));
+    await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/006_supervisor_service.sql", import.meta.url)), "utf8"));
     const accounts = [];
     for (const [name, role] of [["ingenium_gateway_test_ingress", "ingenium_judge_gateway"], ["ingenium_gateway_test_runner", "ingenium_judge_supervisor"], ["ingenium_gateway_test_publisher", "ingenium_judge_publisher"]]) {
       const password = randomBytes(24).toString("hex");
       const statement = (await owner.query("SELECT format('CREATE ROLE %I LOGIN PASSWORD %L IN ROLE %I', $1::text,$2::text,$3::text) AS sql", [name, password, role])).rows[0].sql;
       await owner.query(statement); const url = new URL(target); url.username = name!; url.password = password;
-      accounts.push(new Pool({ connectionString: url.toString(), max: 4, connectionTimeoutMillis: 2000 }));
+      const max = role === "ingenium_judge_gateway" ? JUDGE_DATABASE_POOLS.gateway : role === "ingenium_judge_supervisor" ? JUDGE_DATABASE_POOLS.supervisor : JUDGE_DATABASE_POOLS.publisher;
+      accounts.push(new Pool({ connectionString: url.toString(), max, connectionTimeoutMillis: 2000 }));
     }
     [ingress, runner, publisherPool] = accounts; assert.ok(ingress && runner && publisherPool);
     const config = { hostEpochId: randomUUID(), bootId: randomUUID(), runtimes: judgeRuntimes() };
@@ -57,6 +61,34 @@ export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
     const register = async (p: AuthoringPayload) => (await registry.admit(p, randomUUID())).value.provider_token!;
     const envelope = (p: AuthoringPayload) => { const { request_id: _id, ...value } = authoringRequest(p, randomUUID(), config.runtimes); return value; };
     let first: AuthoringPayload, firstToken: string, firstOwner: string;
+    await t.test("whole-host retirement inspections serialize without a permit change and release on failure or cancellation",async()=>{
+      let active=0,maximum=0,completed=0;
+      const signal=AbortSignal.timeout(10000);
+      await Promise.all(Array.from({length:8},()=>supervisor.withRetirementInspection(signal,async current=>{
+        current.throwIfAborted();active++;maximum=Math.max(maximum,active);
+        await new Promise(resolve=>setTimeout(resolve,25));active--;completed++;
+      })));
+      assert.equal(maximum,1);assert.equal(completed,8);
+      await assert.rejects(supervisor.withRetirementInspection(signal,async()=>{throw new Error("Fixed inspection refusal");}),/Fixed inspection refusal/);
+      const cancelled=new AbortController();cancelled.abort();
+      await assert.rejects(supervisor.withRetirementInspection(cancelled.signal,async()=>{assert.fail("Cancelled inspection entered");}));
+      let enter!:()=>void,release!:()=>void;
+      const entered=new Promise<void>(resolve=>{enter=resolve;}),held=new Promise<void>(resolve=>{release=resolve;});
+      const firstInspection=supervisor.withRetirementInspection(signal,async()=>{enter();await held;});
+      await entered;
+      const waiting=new AbortController(),blocked=supervisor.withRetirementInspection(waiting.signal,async()=>{assert.fail("Interrupted waiter entered");});
+      await new Promise(resolve=>setTimeout(resolve,40));waiting.abort();
+      await assert.rejects(blocked);release();await firstInspection;
+      await assert.rejects(supervisor.withRetirementInspection(signal,async current=>{
+        const holders=(await owner.query("SELECT pid FROM pg_catalog.pg_locks WHERE locktype='advisory' AND classid=$1::oid AND objid=$2::oid AND objsubid=2 AND granted AND database=(SELECT oid FROM pg_catalog.pg_database WHERE datname=current_database())",[0x494e4745,0x52455449])).rows;
+        assert.equal(holders.length,1);
+        assert.equal((await owner.query("SELECT pg_catalog.pg_terminate_backend($1) stopped",[holders[0].pid])).rows[0].stopped,true);
+        const deadline=performance.now()+2000;while(!current.aborted){assert.ok(performance.now()<deadline);await new Promise(resolve=>setTimeout(resolve,5));}
+        current.throwIfAborted();
+      }));
+      await supervisor.withRetirementInspection(signal,async current=>current.throwIfAborted());
+      assert.equal((await owner.query("SELECT count(*)::int n FROM public.submissions")).rows[0].n,1);
+    });
     await t.test("judge registry starts unavailable, with no host supplied by migration and no provider or outbox side effect", async () => {
       assert.equal(await registry.ready(), false);
       await assert.rejects(register(payload()), { code: "55000" });
@@ -64,6 +96,7 @@ export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
       assert.equal((await owner.query("SELECT count(*)::integer AS n FROM ingenium_judge.outbox")).rows[0].n, 0);
       await fresh(); assert.equal(await registry.ready(), true);
     });
+    await judgeSupervisorChecks(t, { owner, runner, ingress, publisherPool, registry, supervisor, publisher: createJudgePublisherStore(publisherPool, config), fresh, payload, config });
     await judgeQueueChecks(t, { owner, publisherPool, registry, supervisor, publisher: createJudgePublisherStore(publisherPool, config), fresh, payload, config });
     await judgeExecutionChecks(t, { owner, publisherPool, registry, supervisor, publisher: createJudgePublisherStore(publisherPool, config), fresh, payload, config });
     await t.test("SQL and application payload digests agree across five languages, exact Base64 bytes and fractional provider envelopes", async () => {
@@ -206,6 +239,18 @@ export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
       } finally { await gateway.close(); }
     });
     await judgeLauncherChecks(t, { owner, publisherPool, registry, supervisor, publisher: createJudgePublisherStore(publisherPool, config), fresh, payload, config });
+    await t.test("eight-slot migration preserves old holds and atomically refuses a ninth potential execution",async()=>{
+      const before=(await owner.query("SELECT to_jsonb(a) row FROM ingenium_judge.attempts a ORDER BY attempt_id")).rows;
+      await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/007_eight_slots.sql",import.meta.url)),"utf8"));
+      assert.deepEqual((await owner.query("SELECT to_jsonb(a) row FROM ingenium_judge.attempts a ORDER BY attempt_id")).rows,before);
+      const held=await supervisor.held(),jobs=[];
+      await fresh();
+      for(let i=0;i<9-held.length;i++){const p=payload();jobs.push({p,token:await register(p),owner:randomUUID()});}
+      const claims=await Promise.all(jobs.map(j=>supervisor.claim(j.p.attemptId,j.token,j.owner)));
+      assert.equal(claims.filter(Boolean).length,8-held.length);assert.equal((await supervisor.held()).length,8);
+      for(let i=0;i<jobs.length;i++)if(claims[i]){const j=jobs[i]!;assert.ok(await supervisor.beginLaunch(j.p.attemptId,j.token,j.owner));await supervisor.seal(j.p,j.token,j.owner,judgeReply(j.p,randomUUID(),Buffer.from("12\n"),j.token).evidence);}
+      assert.deepEqual(new Set(await supervisor.held()),new Set(held));
+    });
     await t.test("authoring queue refuses its 121st unresolved record atomically and fencing cannot be undone or imply cleanup", async () => {
       await fresh(); const current = (await owner.query("SELECT count(*)::integer AS n FROM ingenium_judge.attempts WHERE drain IS NULL")).rows[0].n;
       for (let i = current; i < 120; i++) await register(payload());

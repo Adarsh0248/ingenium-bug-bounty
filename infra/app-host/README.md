@@ -50,6 +50,20 @@ readable. V8 needs executable JIT memory; do not add `MemoryDenyWriteExecute`.
 
 ## Resource and Shutdown Policy
 
+The application starts with two physical execution slots for development. After
+applying all migrations, the schema owner can run `event-capacity.sql` to enable
+eight slots for an isolated judge that has passed eight-slot qualification.
+The operation only inserts the six missing slots; it preserves every original
+slot, revision and held attempt. Repeating it has no further effect. The API and
+worker roles cannot change the slot roster. Deferred integrity permits only a
+complete two-slot or eight-slot layout; a ninth slot is refused. Do not enable
+eight merely because a host has eight worker processes.
+
+The larger 100-team compiler rehearsal failed and the user deferred further runs.
+Its worker fault is still unresolved. Retain the two-slot default until the
+intended event workload is qualified; the earlier twenty-program batch alone
+does not certify sustained eight-slot capacity.
+
 The API's initial ceiling matches its Linux-local load harness: one CPU, 768 MiB
 and 128 tasks, with twelve API plus two clock-monitor database connections.
 The coordinator has a half-CPU/384 MiB/64-task ceiling and four DB connections.

@@ -8,6 +8,7 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+__pycache__/
 
 # Local environment files; example files must contain placeholders only
 .env

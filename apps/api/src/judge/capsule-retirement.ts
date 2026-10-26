@@ -15,7 +15,7 @@ export interface RetirementRequest {
   container_id: string; cgroup_parent: string; release_sha256: string; context_sha256: string; evidence_sha256: string; nonce: string;
 }
 // Read-only, trusted host code only: it must prove full visibility, containment and irreversible no-future-start.
-// No production implementation/installation supplies this authority yet; receipts or caller flags cannot replace it.
+// Receipts or caller flags cannot replace live host observations and the original consumed permit.
 export interface TrustedHostRetirementAuthority {
   readonly hostEpochId: string; readonly bootId: string; readonly releaseSha256: string;
   prove(request: Readonly<RetirementRequest>, signal: AbortSignal): Promise<unknown>;
@@ -28,34 +28,36 @@ function object(value: unknown, keys: readonly string[]) {
 }
 function hex(value: unknown): string { if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) return fail(); return value; }
 
+export async function retirementContext(checkpoints: ExecutionCheckpoints, release: CapsuleRelease, plan: ExecutionPlan) {
+  const row = await checkpoints.capsule(plan); if (!row) return fail();
+  const ref = capsuleReference(plan, row.intent);
+  if (ref.intent.image_id !== release.imageId || ref.intent.release_sha256 !== release.digest) return fail();
+  const physical = physicalIdentity(await checkpoints.physical(plan));
+  if (physical.cgroup_parent !== ref.parent) return fail();
+  for (const name of ["container", "start", "stopped", "remove", "removed"] as const) if (object(row[name], ["id"]).id !== physical.container_id) return fail();
+  if (row.resource_intent === null || row.resources === null) return fail();
+  const resources = object(row.resources, ["intent_sha256", "configuration", "groups"]);
+  if (resources.intent_sha256 !== digest(row.resource_intent)) return fail();
+  const removal = { version: 1, boot_id: checkpoints.bootId, container_id: physical.container_id, resources_sha256: digest(row.resources) };
+  if (judgeJson(row.resource_remove) !== judgeJson(removal) || judgeJson(row.resource_removed) !== judgeJson(removal)) return fail();
+  const phase = retainedPhaseGroups(plan, checkpoints.bootId, physical, row); if (phase.groups === null) return fail();
+  retainedStorage(plan, checkpoints.bootId, physical, row.storage);
+  const saved = await checkpoints.read(plan); if (!saved.begun || !saved.evidence) return fail();
+  const evidence = checkedExecutionEvidence(plan, saved.evidence), originalDrain = evidence.metadata.drain;
+  evidence.metadata.drain = null;
+  const { retirement, ...records } = row;
+  const common = { version: 1 as const, host_epoch_id: checkpoints.hostEpochId, boot_id: checkpoints.bootId, attempt_id: plan.attemptId,
+    plan_sha256: ref.labels["ingenium.executor.plan"]!, container_id: physical.container_id, cgroup_parent: ref.parent,
+    release_sha256: release.digest, context_sha256: digest({ records, physical }), evidence_sha256: digest(evidence) };
+  return { ref, common, evidence, originalDrain, retirement };
+}
+
 export function createCapsuleRetirement(checkpoints: ExecutionCheckpoints, driver: CapsuleDriver, release: CapsuleRelease, authority: TrustedHostRetirementAuthority) {
   const pinned = { imageId: release.imageId, digest: hex(release.digest), epoch: uuid(authority.hostEpochId), boot: uuid(authority.bootId) };
   const prove = authority.prove.bind(authority);
   if (pinned.epoch !== checkpoints.hostEpochId || pinned.boot !== checkpoints.bootId || authority.releaseSha256 !== pinned.digest
     || !/^sha256:[0-9a-f]{64}$/.test(pinned.imageId)) return fail();
-  async function context(plan: ExecutionPlan) {
-    const row = await checkpoints.capsule(plan); if (!row) return fail();
-    const ref = capsuleReference(plan, row.intent);
-    if (ref.intent.image_id !== pinned.imageId || ref.intent.release_sha256 !== pinned.digest) return fail();
-    const physical = physicalIdentity(await checkpoints.physical(plan));
-    if (physical.cgroup_parent !== ref.parent) return fail();
-    for (const name of ["container", "start", "stopped", "remove", "removed"] as const) if (object(row[name], ["id"]).id !== physical.container_id) return fail();
-    if (row.resource_intent === null || row.resources === null) return fail();
-    const resources = object(row.resources, ["intent_sha256", "configuration", "groups"]);
-    if (resources.intent_sha256 !== digest(row.resource_intent)) return fail();
-    const removal = { version: 1, boot_id: pinned.boot, container_id: physical.container_id, resources_sha256: digest(row.resources) };
-    if (judgeJson(row.resource_remove) !== judgeJson(removal) || judgeJson(row.resource_removed) !== judgeJson(removal)) return fail();
-    const phase = retainedPhaseGroups(plan, pinned.boot, physical, row); if (phase.groups === null) return fail();
-    retainedStorage(plan, pinned.boot, physical, row.storage);
-    const saved = await checkpoints.read(plan); if (!saved.begun || !saved.evidence) return fail();
-    const evidence = checkedExecutionEvidence(plan, saved.evidence), originalDrain = evidence.metadata.drain;
-    evidence.metadata.drain = null;
-    const { retirement, ...records } = row;
-    const common = { version: 1 as const, host_epoch_id: pinned.epoch, boot_id: pinned.boot, attempt_id: plan.attemptId,
-      plan_sha256: ref.labels["ingenium.executor.plan"]!, container_id: physical.container_id, cgroup_parent: ref.parent,
-      release_sha256: pinned.digest, context_sha256: digest({ records, physical }), evidence_sha256: digest(evidence) };
-    return { ref, common, evidence, originalDrain, retirement };
-  }
+  const context = (plan: ExecutionPlan) => retirementContext(checkpoints, pinned, plan);
   function receipt(value: unknown, common: Omit<RetirementRequest, "nonce">) {
     const row = object(value, ["request", "observation_sha256"]), request = object(row.request, [...Object.keys(common), "nonce"]);
     const expected: RetirementRequest = { ...common, nonce: uuid(request.nonce) };

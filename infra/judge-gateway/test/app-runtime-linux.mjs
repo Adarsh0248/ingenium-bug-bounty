@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   mkdir,
+  readFile,
   writeFile,
   chown,
   chmod,
@@ -10,7 +11,7 @@ import {
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { test } from "node:test";
-import { privateRuntimeJson } from "/workspace/apps/api/dist/runtime/private-file.js";
+import { privateRuntimeJson, rootRuntimeJson } from "/workspace/apps/api/dist/runtime/private-file.js";
 import {
   readOperatorCandidate,
   writeOperatorCandidate,
@@ -19,6 +20,18 @@ import {
 // Disposable fixture setup only; no production runtime, database or submitted source is available.
 const root = "/run/app-runtime-fixture";
 await mkdir(root, { mode: 0o700 });
+await writeFile(`${root}/root.json`, '{"fixture":"root-only"}', { mode: 0o400 });
+assert.deepEqual(await rootRuntimeJson(`${root}/root.json`, 8192), { fixture: "root-only" });
+let startupFailure;
+try {
+  await promisify(execFile)(process.execPath, ["/workspace/apps/api/dist/judge/supervisor-server.js"], {
+    env: { PATH: "/usr/local/bin:/usr/bin:/bin", JUDGE_SUPERVISOR_RUNTIME_FILE: `${root}/root.json` }, timeout: 10000, maxBuffer: 8192,
+  });
+} catch (error) { startupFailure = error; }
+const tasks = await readFile("/sys/fs/cgroup/pids.events", "ascii").catch(() => "unavailable");
+assert.equal(startupFailure?.code, 1, JSON.stringify({ code: startupFailure?.code, killed: startupFailure?.killed, signal: startupFailure?.signal, tasks }));
+assert.match(startupFailure.stderr, /Judge supervisor refused or stopped/);
+assert.doesNotMatch(startupFailure.stderr, /root-only|postgres:\/\/|password/);
 for (const [name, value, mode] of [
   ["valid.json", '{"schema_version":1}', 0o600],
   ["wide.json", "{}", 0o644],
@@ -30,6 +43,8 @@ for (const [name, value, mode] of [
   await chown(`${root}/${name}`, 1000, 1000);
 }
 await symlink(`${root}/valid.json`, `${root}/symlink.json`);
+await assert.rejects(rootRuntimeJson(`${root}/valid.json`, 8192));
+await assert.rejects(rootRuntimeJson(`${root}/symlink.json`, 8192));
 await promisify(execFile)("/usr/bin/mkfifo", [
   "-m",
   "600",
@@ -48,6 +63,7 @@ await assert.rejects(
 await chown(root, 1000, 1000);
 process.setgid(1000);
 process.setuid(1000);
+await assert.rejects(rootRuntimeJson(`${root}/root.json`, 8192));
 await link(`${root}/linked.json`, `${root}/hardlink.json`);
 
 test("Linux runtime accepts only a bounded private owned regular JSON file in protected parents", async () => {
@@ -89,6 +105,25 @@ test("actual standalone worker startup refuses incomplete private configuration 
       return true;
     },
   );
+});
+
+test("actual judge supervisor startup refuses an unprivileged caller without exposing private configuration", async () => {
+  await assert.rejects(promisify(execFile)(process.execPath, ["/workspace/apps/api/dist/judge/supervisor-server.js"], {
+    env: { PATH: "/usr/local/bin:/usr/bin:/bin", JUDGE_SUPERVISOR_RUNTIME_FILE: `${root}/valid.json` }, timeout: 10000, maxBuffer: 8192,
+  }), error => {
+    assert.match(error.stderr, /Judge supervisor refused or stopped/);
+    assert.doesNotMatch(error.stderr, /schema_version|postgres:\/\/|password/); return true;
+  });
+});
+
+test("actual judge gateway startup refuses incomplete private settings without exposing their contents", async () => {
+  await assert.rejects(promisify(execFile)(process.execPath, ["/workspace/apps/api/dist/judge/gateway-server.js"], {
+    env: { PATH: "/usr/local/bin:/usr/bin:/bin", JUDGE_GATEWAY_RUNTIME_FILE: `${root}/valid.json` }, timeout: 10000, maxBuffer: 8192,
+  }), error => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /Judge gateway refused or stopped/);
+    assert.doesNotMatch(error.stderr, /schema_version|postgres:\/\/|password/); return true;
+  });
 });
 
 test("operator candidate delivery is private, durable, exclusive and round-trips the original intent without overwriting", async () => {

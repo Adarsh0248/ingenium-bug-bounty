@@ -750,7 +750,10 @@ io.of("/live")
   .on("connection", (socket) => {
     socket.emit("sync", { sync_id: socket.data.sync });
     socket.on("ready", () =>
-      socket.emit("ready", { sync_id: socket.data.sync }),
+      socket.emit("ready", {
+        sync_id: socket.data.sync,
+        heads: states.get(socket.data.sid)!.heads,
+      }),
     );
     socket.on("resync", () => {
       socket.data.sync = randomUUID();

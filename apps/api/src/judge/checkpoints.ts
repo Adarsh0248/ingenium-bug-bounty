@@ -10,7 +10,7 @@ import type { ExecutionPlan } from "./execution-plan.js";
 export const CHECKPOINT_DIRECTORY = "/var/lib/ingenium/judge-executor/checkpoints";
 const capsuleRecords = { intent: 4096, container: 4096, start: 4096, stopped: 4096, remove: 4096, removed: 4096,
   resource_intent: 32768, resources: 32768, resource_remove: 4096, resource_removed: 4096,
-  compile_init: 4096, compile_groups: 4096, run_init: 4096, run_groups: 4096, storage: 4096, retirement: 4096 } as const;
+  compile_init: 4096, compile_groups: 4096, run_init: 4096, run_groups: 4096, storage: 4096, storage_ack: 4096, retirement: 4096 } as const;
 const fail = (): never => { throw new Error("Protected checkpoint unavailable or inconsistent; retain the execution reservation."); };
 const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === "ENOENT";
 const descriptor = (file: FileHandle) => `/proc/self/fd/${file.fd}`;
@@ -173,6 +173,14 @@ export async function openExecutionCheckpoints(hostEpochId: string, bootId: stri
           const bytes = await readRecord(folder, name, capsuleRecords[name]); rows[name] = bytes === null ? null : readJudgeJson(bytes);
         }
         return rows;
+      } finally { await folder.close(); }
+    },
+    async readCapsuleRecord(plan: ExecutionPlan, name: keyof typeof capsuleRecords) {
+      if (!Object.hasOwn(capsuleRecords, name)) return fail();
+      const folder = await entry(plan, true); if (!folder) return null;
+      try {
+        const bytes = await readRecord(folder, name, capsuleRecords[name]);
+        return bytes === null ? null : readJudgeJson(bytes);
       } finally { await folder.close(); }
     },
     async saveCapsule(plan: ExecutionPlan, name: Exclude<keyof typeof capsuleRecords, "intent">, value: unknown) {

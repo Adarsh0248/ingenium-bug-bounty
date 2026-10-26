@@ -6,6 +6,27 @@ const streams=(head="0"):StreamHead[]=>["round","team","member"].map(stream_id=>
 const event=(sequence:string,patch:Record<string,unknown>={type:"INVALIDATE",projection:"competition"},stream_id="team"):LiveEvent=>({stream_id,sequence,event_id:`id-${sequence}`,resource_revision:sequence,schema_version:1,patch});
 function fixture(){let now=0;const invalidations:string[]=[],awards:string[]=[],replica=new LiveReplica(()=>now,s=>invalidations.push(s),s=>awards.push(s));replica.begin("sync");replica.snapshot("sync",streams());
   return{replica,invalidations,awards,time(value:number){now=value;}};}
+
+for(const changed of [null,"member"]){
+  test(`synchronisation establishes one server barrier and reads only streams with missing events (${changed})`,async()=>{
+    const listeners=new Map<string,(value:any)=>void>(),requests:string[]=[],awards:string[]=[];
+    const barrier=streams().map(s=>s.stream_id===changed?{...s,head:"1"}:s);
+    const client=connectLive("PARTICIPANT",null,{now:()=>0,
+      post:async(path,body:any)=>{
+        if(path.endsWith("tickets"))return{ticket:"ticket"};
+        if(path.endsWith("snapshot"))return{sync_id:"sync",streams:streams()};
+        assert.ok(path.endsWith("replay"));requests.push(body.stream_id);
+        return{sync_id:"sync",events:body.stream_id===changed?[event("1",{type:"AWARD",award_id:"historical"},changed!)]:[],next:body.stream_id===changed?"1":"0",through:body.stream_id===changed?"1":"0",heads:barrier};
+      },
+      transport(){return{connected:true,on(name,fn){listeners.set(name,fn);},connect(){listeners.get("sync")!({sync_id:"sync"});},disconnect(){},volatile:{emit(name){if(name==="ready")listeners.get("ready")!({sync_id:"sync",heads:barrier});}}};},
+      install(){},invalidate(){},award(id){awards.push(id);},presence(){},state(){}});
+    try{
+      for(let i=0;i<40;i++)await Promise.resolve();
+      assert.equal(client.replica.phase,"READY");assert.deepEqual(requests,changed?["round",changed]:["round"]);
+      assert.equal(client.replica.cursors.get("member"),changed?"1":"0");assert.deepEqual(awards,[]);
+    }finally{client.close();}
+  });
+}
 test("a live replica merges buffered and replayed duplicates by stream and consecutive sequence",()=>{
   const {replica,invalidations}=fixture();replica.event("sync",event("2"),true);replica.event("sync",event("1"),true);replica.event("sync",event("1"),true);
   assert.equal(replica.ready("sync",streams().map(s=>s.stream_id==="team"?{...s,head:"2"}:s)),true);assert.equal(replica.cursors.get("team"),"2");assert.equal(invalidations.length,2);
@@ -81,6 +102,7 @@ for (const scenario of [{status:503,code:"CAPACITY_UNAVAILABLE",failures:1},{sta
   const {failures,...failure}=scenario;
   test(`read projection ${failure.code} with ${failures} refusals has bounded recovery`,async t=>{
     t.mock.timers.enable({apis:["setTimeout","setInterval"]});
+    t.mock.method(Math,"random",()=>0);
     const listeners=new Map<string,(value:any)=>void>();
     let reads=0,connections=0,installs=0;
     const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
@@ -112,6 +134,65 @@ for (const scenario of [{status:503,code:"CAPACITY_UNAVAILABLE",failures:1},{sta
   });
 }
 
+for(const mode of ["NONE","REPLY","FAILURE"])test(`a current pushed projection suppresses duplicate reads and fences old HTTP/sync replies (${mode})`,async t=>{
+  const pending=mode!=="NONE";
+  t.mock.timers.enable({apis:["setTimeout","setInterval"]});
+  const listeners=new Map<string,(value:any)=>void>(),installed:string[]=[];let reads=0,reply:((value:any)=>void)|undefined,refuse:((error:unknown)=>void)|undefined;
+  const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
+  const client=connectLive("PARTICIPANT",null,{now:()=>0,
+    post:async(path)=>{
+      if(path.endsWith("tickets"))return{ticket:"ticket"};
+      if(path.endsWith("snapshot"))return{sync_id:"sync",streams:streams(),marker:"initial"};
+      if(path.endsWith("projection")){reads++;return new Promise((resolve,reject)=>{reply=resolve;refuse=reject;});}
+      return{sync_id:"sync",events:[],next:"0",through:"0",heads:streams()};
+    },
+    transport(){return{connected:true,on(name,fn){listeners.set(name,fn);},connect(){listeners.get("sync")!({sync_id:"sync"});},disconnect(){},
+      volatile:{emit(name){if(name==="ready")listeners.get("ready")!({sync_id:"sync",heads:streams()});}}};},
+    install(value){installed.push(value.marker as string);},invalidate(){},award(){},presence(){},state(){}});
+  try{
+    await flush();assert.equal(client.replica.phase,"READY");
+    listeners.get("event")!({...event("1",{projection:"competition"},"round"),sync_id:"sync",replay:false});
+    if(pending){t.mock.timers.tick(100);await flush();assert.equal(reads,1);}
+    const heads=streams().map(head=>head.stream_id==="round"?{...head,head:"1"}:head);
+    assert.equal(typeof listeners.get("projection"),"function");
+    listeners.get("projection")!({sync_id:"sync",streams:heads,marker:"current"});
+    listeners.get("projection")!({sync_id:"old-sync",streams:heads,marker:"foreign"});
+    listeners.get("projection")!({sync_id:"sync",streams:streams(),marker:"old-push"});
+    if(mode==="FAILURE")refuse?.({status:401,code:"AUTHORITY_REQUIRED"});else reply?.({sync_id:"sync",streams:streams(),marker:"old-http"});await flush();
+    t.mock.timers.tick(1000);await flush();assert.equal(reads,pending?1:0);
+    assert.deepEqual(installed,["initial","current"]);assert.equal(client.replica.phase,"READY");
+  }finally{client.close();}
+});
+
+for(const kind of ["HTTP_CAPACITY","HTTP_RATE","SNAPSHOT_CAPACITY","SOCKET_CAPACITY","NETWORK"] as const){
+  for(const random of [0,0.5])test(`explicit ${kind} backpressure spreads retries without delaying ordinary network recovery (${random})`,async t=>{
+    t.mock.timers.enable({apis:["setTimeout","setInterval"]});t.mock.method(Math,"random",()=>random);
+    const listeners=new Map<string,(value:any)=>void>();let attempts=0;
+    const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
+    const client=connectLive("PARTICIPANT",null,{now:()=>0,
+      post:async(path)=>{
+        if(path.endsWith("tickets")){
+          attempts++;
+          if(kind==="HTTP_CAPACITY")throw{status:503,code:"CAPACITY_UNAVAILABLE"};
+          if(kind==="HTTP_RATE")throw{status:429,code:"RATE_LIMITED"};
+          if(kind==="NETWORK")throw new Error("Synthetic network failure");
+          return{ticket:"ticket"};
+        }
+        assert.equal(kind,"SNAPSHOT_CAPACITY");throw{status:503,code:"CAPACITY_UNAVAILABLE"};
+      },
+      transport(){return{connected:true,on(name,fn){listeners.set(name,fn);},
+        connect(){if(kind==="SOCKET_CAPACITY")listeners.get("connect_error")!({data:{code:"CAPACITY_UNAVAILABLE"}});else listeners.get("sync")!({sync_id:"sync"});},
+        disconnect(){},volatile:{emit(){}}};},
+      install(){},invalidate(){},award(){},presence(){},state(){}});
+    try{
+      await flush();assert.equal(attempts,1);
+      const wait=kind==="NETWORK"?250+1000*random:Math.max(1000,250+30000*random);
+      t.mock.timers.tick(wait-1);await flush();assert.equal(attempts,1);
+      t.mock.timers.tick(1);await flush();assert.equal(attempts,2);assert.equal(client.replica.phase,"STALE");
+    }finally{client.close();}
+  });
+}
+
 for(const random of [0,0.9]){
   test(`reconnect backoff staggers readers across a shared network (${random})`,async t=>{
     t.mock.timers.enable({apis:["setTimeout","setInterval"]});
@@ -122,8 +203,12 @@ for(const random of [0,0.9]){
       transport(){throw new Error("No ticket was issued");},install(){},invalidate(){},award(){},presence(){},state(){}});
     try{
       await flush();assert.equal(attempts,1);
-      t.mock.timers.tick(249+1000*random);await flush();assert.equal(attempts,1);
-      t.mock.timers.tick(1);await flush();assert.equal(attempts,2);
+      for(let retry=0;retry<6;retry++){
+        const wait=250+Math.min(30000,1000*2**Math.min(retry,5))*random;
+        t.mock.timers.tick(wait-1);await flush();assert.equal(attempts,retry+1);
+        t.mock.timers.tick(1);await flush();assert.equal(attempts,retry+2);
+        assert.equal(client.replica.phase,"STALE");
+      }
     }finally{client.close();}
   });
 }
@@ -179,3 +264,36 @@ test("idle heads need no acknowledgement, but pending heads repeat it after a lo
     assert.equal(commands.filter(e=>e==="ack").length,3,"Older servers retain the conservative acknowledgement behaviour");
   }finally{client.close();}
 });
+
+for(const mode of ["DELAYED","INVALID","GAP","BUFFERED"] as const){
+  test(`the server ready acknowledgement verifies heads and liveness (${mode})`,async t=>{
+    t.mock.timers.enable({apis:["setTimeout","setInterval"]});
+    const listeners=new Map<string,(value:any)=>void>(),commands:string[]=[];
+    let now=0,awards=0,tickets=0;
+    const client=connectLive("PARTICIPANT",null,{now:()=>now,
+      post:async(path)=>{
+        if(path.endsWith("tickets")){tickets++;return{ticket:"ticket"};}
+        if(path.endsWith("snapshot"))return{sync_id:"sync",streams:streams()};
+        return{sync_id:"sync",events:[],next:"0",through:"0",heads:streams()};
+      },
+      transport(){return{connected:true,on(name,listener){listeners.set(name,listener);},connect(){listeners.get("sync")!({sync_id:"sync"});},disconnect(){},volatile:{emit(name){commands.push(name);}}};},
+      install(){},invalidate(){},award(){awards++;},presence(){},state(){}});
+    try{
+      for(let i=0;i<30;i++)await Promise.resolve();
+      assert.equal(client.replica.phase,"SYNCING");client.edit("bug");now=12000;
+      if(mode==="BUFFERED")for(const stream of streams())listeners.get("event")!({...event("1",{type:"AWARD",award_id:"already-recorded",bounty_id:"bug"}),stream_id:stream.stream_id,sync_id:"sync"});
+      const readyHeads=mode==="INVALID"?[streams()[0]!,streams()[0]!,streams()[1]!]:streams(mode==="GAP"||mode==="BUFFERED"?"1":"0");
+      listeners.get("ready")!({sync_id:"sync",heads:readyHeads});
+      if(mode==="INVALID")assert.equal(client.replica.phase,"STALE");
+      else if(mode==="GAP"){
+        assert.equal(client.replica.phase,"SYNCING");assert.ok(commands.includes("resync"));
+      }else{
+        assert.equal(client.replica.writable(),true);
+        assert.ok(commands.includes("presence"));
+        if(mode==="BUFFERED")assert.ok([...client.replica.cursors.values()].every(cursor=>cursor==="1"));
+      }
+      assert.equal(tickets,1);assert.equal(awards,0);
+      if(mode==="INVALID"||mode==="GAP")assert.ok(!commands.includes("presence"));
+    }finally{client.close();}
+  });
+}

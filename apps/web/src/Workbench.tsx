@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   Check,
@@ -29,7 +29,7 @@ import { bugPath, label, languages, judgingPending } from "./types";
 import type { createWorkspace } from "./workspace";
 import { IconButton, Modal } from "./ui";
 import { displayOutput } from "./output";
-const Editor = lazy(() => import("./Editor"));
+import Editor from "./Editor";
 type Workspace = ReturnType<typeof createWorkspace>;
 type Tab = "PROBLEM" | "HINTS" | "SUBMISSIONS";
 export default function Workbench({
@@ -58,6 +58,10 @@ export default function Workbench({
   const path = bugPath(session.round_id, bug.bounty_id),
     [meta, setMeta] = useState<Metadata | null>(null),
     [statement, setStatement] = useState(""),
+    [loadVersion, setLoadVersion] = useState(0),
+    [loading, setLoading] = useState(true),
+    [loadFailed, setLoadFailed] = useState(false),
+    [feedbackError, setFeedbackError] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [sending, setSending] = useState<"runs" | "submissions" | null>(null),
@@ -69,6 +73,7 @@ export default function Workbench({
     [submissions, setSubmissions] = useState<any[]>([]),
     [after, setAfter] = useState<string | null>(null),
     [feedback, setFeedback] = useState<Feedback | null>(null),
+    [feedbackId, setFeedbackId] = useState<string | null>(null),
     [viewSource, setViewSource] = useState<any>(null),
     [buy, setBuy] = useState<number | null>(null),
     [conflict, setConflict] = useState<any>(null);
@@ -115,6 +120,8 @@ export default function Workbench({
       bug.difficulty * [1, 3, roundKind === 1 ? 4 : 8][level - 1];
   useEffect(() => {
     let gone = false;
+    setLoadFailed(false);
+    setLoading(true);
     void Promise.all([
       api.request<Metadata>(path),
       api.request<{ statement: string }>(`${path}/statement`),
@@ -129,12 +136,18 @@ export default function Workbench({
         }
       })
       .catch((e) => {
-        if (!gone) setError(errorText(e));
+        if (!gone) {
+          setError(errorText(e));
+          setLoadFailed(true);
+        }
+      })
+      .finally(() => {
+        if (!gone) setLoading(false);
       });
     return () => {
       gone = true;
     };
-  }, [bug.bounty_id]);
+  }, [bug.bounty_id, loadVersion]);
   useEffect(() => {
     let gone = false;
     void Promise.all([
@@ -148,38 +161,26 @@ export default function Workbench({
         }
       })
       .catch((e) => {
-        if (!gone) setError(errorText(e));
+        if (!gone) {
+          setError(errorText(e));
+          setLoadFailed(true);
+        }
       });
     return () => {
       gone = true;
     };
   }, [judgingVersion, bug.claimed, bug.hint_tier, ready]);
-  useEffect(() => {
-    if (feedback) return;
-    const recent = judging
+  const selectedFeedbackId =
+    feedbackId ??
+    judging
       .filter(
         (job) =>
           job.bounty_id === bug.bounty_id &&
           (job.lane === "OFFICIAL" ||
             job.member_round_id === session.member_round_id),
       )
-      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-    if (!recent) return;
-    let gone = false;
-    void api
-      .request<Feedback>(
-        `/api/v1/competition/rounds/${session.round_id}/judging/${recent.parent_id}`,
-      )
-      .then((value) => {
-        if (!gone) setFeedback(value);
-      })
-      .catch((e) => {
-        if (!gone) setError(errorText(e));
-      });
-    return () => {
-      gone = true;
-    };
-  }, [judgingVersion, feedback]);
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
+      ?.parent_id;
   async function perform(work: () => Promise<void>) {
     if (busy) return;
     setBusy(true);
@@ -202,47 +203,70 @@ export default function Workbench({
       );
       return;
     }
-    if (result.result.run_id || result.result.submission_id) {
-      const id = result.result.run_id ?? result.result.submission_id;
-      setFeedback(
-        await api.request(
-          `${`/api/v1/competition/rounds/${session.round_id}`}/judging/${id}`,
-        ),
-      );
+    try {
+      if (result.result.run_id || result.result.submission_id) {
+        const id = result.result.run_id ?? result.result.submission_id;
+        setFeedbackId(id!);
+        setFeedback(null);
+      }
+      if (
+        result.result.status === "PURCHASED" ||
+        result.result.status === "ALREADY_OWNED"
+      )
+        setHints(await api.request(`${path}/hints`));
+      await refreshMetadata();
+    } catch (error) {
+      setLoadFailed(true);
+      throw error;
     }
-    if (
-      result.result.status === "PURCHASED" ||
-      result.result.status === "ALREADY_OWNED"
-    )
-      setHints(await api.request(`${path}/hints`));
-    await refreshMetadata();
   }
   useEffect(() => {
-    if (!feedback || !judgingPending(feedback.status)) return;
+    if (
+      !selectedFeedbackId ||
+      !ready ||
+      (feedback?.id === selectedFeedbackId && !judgingPending(feedback.status))
+    )
+      return;
     let gone = false;
-    const timer = setTimeout(
-      () =>
-        void api
-          .request<Feedback>(
-            `/api/v1/competition/rounds/${session.round_id}/judging/${feedback.id}`,
-          )
-          .then((value) => {
-            if (!gone) {
-              setFeedback(value);
-              if (!judgingPending(value.status))
-                void refreshMetadata().catch((e) => setError(errorText(e)));
-            }
-          })
-          .catch((e) => {
-            if (!gone) setError(errorText(e));
-          }),
-      2000,
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      let pending = true;
+      try {
+        const value = await api.request<Feedback>(
+          `/api/v1/competition/rounds/${session.round_id}/judging/${selectedFeedbackId}`,
+        );
+        if (gone) return;
+        const waiting = judgingPending(value.status);
+        if (!waiting) {
+          const metadata = await api.request<Metadata>(path);
+          if (gone) return;
+          setMeta(metadata);
+        }
+        setFeedback(value);
+        setFeedbackError("");
+        pending = waiting;
+      } catch (e) {
+        if (!gone) setFeedbackError(errorText(e));
+      } finally {
+        // Only reads are retried; never replay a run or submission here.
+        if (!gone && pending) timer = setTimeout(() => void poll(), 2000);
+      }
+    }
+    timer = setTimeout(
+      () => void poll(),
+      feedback?.id === selectedFeedbackId ? 2000 : 0,
     );
     return () => {
       gone = true;
       clearTimeout(timer);
     };
-  }, [feedback, judgingVersion]);
+  }, [
+    selectedFeedbackId,
+    feedback?.id,
+    feedback?.status,
+    judgingVersion,
+    ready,
+  ]);
   async function judge(action: "runs" | "submissions") {
     if (busy) return;
     setSending(action);
@@ -385,12 +409,13 @@ export default function Workbench({
                 <h3>Field intelligence</h3>
                 {[1, 2, 3].map((level) => {
                   const owned = hints.find((h) => h.level === level),
+                    purchased = level <= hintTier,
                     locked = level > hintTier + 1;
                   return (
                     <section className="hint" key={level}>
                       <div>
                         <span>
-                          {owned ? (
+                          {purchased ? (
                             <Check size={16} />
                           ) : locked ? (
                             <LockKeyhole size={16} />
@@ -403,6 +428,8 @@ export default function Workbench({
                       </div>
                       {owned ? (
                         <p>{owned.content}</p>
+                      ) : purchased ? (
+                        <p role="status">Purchased / content pending</p>
                       ) : (
                         <button
                           disabled={
@@ -502,24 +529,20 @@ export default function Workbench({
               </IconButton>
             </div>
           </div>
-          <Suspense
-            fallback={<div className="editor-loading">Loading editor…</div>}
-          >
-            {item && (
-              <Editor
-                source={source}
-                language={session.language}
-                readOnly={readOnly}
-                onChange={(text) => {
-                  try {
-                    item.editor.edit(text);
-                  } catch (e) {
-                    setError(errorText(e));
-                  }
-                }}
-              />
-            )}
-          </Suspense>
+          {item && (
+            <Editor
+              source={source}
+              language={session.language}
+              readOnly={readOnly}
+              onChange={(text) => {
+                try {
+                  item.editor.edit(text);
+                } catch (e) {
+                  setError(errorText(e));
+                }
+              }}
+            />
+          )}
           {(state?.state === "CONFLICT" || state?.state === "UNRESOLVED") && (
             <div className="save-recovery">
               {state.state === "CONFLICT" ? (
@@ -679,9 +702,21 @@ export default function Workbench({
           </button>
         </div>
       )}
-      {error && (
+      {(loadFailed || hintTier > hints.length) && (
+        <button
+          disabled={loading || busy}
+          aria-busy={loading}
+          onClick={() => {
+            setError("");
+            setLoadVersion((version) => version + 1);
+          }}
+        >
+          <RefreshCw size={15} /> Retry challenge
+        </button>
+      )}
+      {(error || feedbackError) && (
         <div role="alert" className="error workbench-error">
-          {error}
+          {error || feedbackError}
         </div>
       )}
       {buy !== null && (

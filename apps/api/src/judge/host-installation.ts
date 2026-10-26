@@ -10,6 +10,8 @@ import type { CapsuleReference, CapsuleRelease } from "./capsule-lifecycle.js";
 import { verifyDockerReports } from "./docker-host.js";
 import type { DockerReportPins } from "./docker-host.js";
 import { ISOLATE_CONFIGURATION, protectedDirectory } from "./isolate-context.js";
+import { observeDockerImage } from "./inspect-image.js";
+import { hashImageStream } from "./image-stream.js";
 
 export const HOST_INSTALLATION = "/opt/ingenium/judge-executor";
 export interface HostReleaseManifest extends DockerReportPins {
@@ -82,7 +84,7 @@ async function inspectInstallation(manifest: HostReleaseManifest, signal: AbortS
       directories.get(parent)!.add(part); parent = parent ? `${parent}/${part}` : part;
     }
   }
-  async function entries(file: FileHandle) {
+  async function entries(file: FileHandle, signal: AbortSignal) {
     const names: string[] = [], directory = await opendir(fd(file));
     for await (const entry of directory) { signal.throwIfAborted(); if (names.length >= 32768) return fail(); names.push(entry.name); }
     return JSON.stringify(names.sort());
@@ -90,7 +92,8 @@ async function inspectInstallation(manifest: HostReleaseManifest, signal: AbortS
   const verified = new Map<string, string>(), directoryStamps = new Map<string, string>();
   const retained = new Map<ExecutableName, FileHandle>(); let seccompSha256 = "";
   const root = await open(HOST_INSTALLATION, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-  async function directory(path: string) {
+  let keepRoot = false;
+  async function directory(path: string, signal: AbortSignal) {
     let current = await open(`${fd(root)}/.`, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
     try {
       for (const part of path ? path.split("/") : []) {
@@ -103,20 +106,34 @@ async function inspectInstallation(manifest: HostReleaseManifest, signal: AbortS
       return current;
     } catch (error) { await current.close(); throw error; }
   }
+  async function verifyMetadata(signal: AbortSignal) {
+    signal.throwIfAborted(); await protectedDirectory(HOST_INSTALLATION);
+    for (const [path, original] of directoryStamps) {
+      signal.throwIfAborted(); const handle = await directory(path, signal);
+      try {
+        const current = await lstat(path ? `${HOST_INSTALLATION}/${path}` : HOST_INSTALLATION, { bigint: true });
+        if (stamp(current) !== original || stamp(current) !== stamp(await handle.stat({ bigint: true }))
+          || await entries(handle, signal) !== JSON.stringify([...directories.get(path)!].sort())) return fail();
+      } finally { await handle.close(); }
+    }
+    for (const [path, original] of verified) {
+      signal.throwIfAborted(); if (original !== stamp(await lstat(`${HOST_INSTALLATION}/${path}`, { bigint: true }))) return fail();
+    }
+  }
   try {
     for (const [path, names] of directories) {
       signal.throwIfAborted();
-      const handle = await directory(path);
+      const handle = await directory(path, signal);
       try {
         const info = await handle.stat({ bigint: true }); directoryStamps.set(path, stamp(info));
         if (!info.isDirectory() || info.uid !== 0n || info.gid !== 0n || (info.mode & 0o7777n) !== 0o555n
-          || await entries(handle) !== JSON.stringify([...names].sort())) return fail();
+          || await entries(handle, signal) !== JSON.stringify([...names].sort())) return fail();
       } finally { await handle.close(); }
     }
     for (const expected of manifest.files) {
       signal.throwIfAborted();
       const split = expected.path.lastIndexOf("/"), parent = split < 0 ? "" : expected.path.slice(0, split), name = expected.path.slice(split + 1);
-      const handle = await directory(parent);
+      const handle = await directory(parent, signal);
       let file: FileHandle;
       try { file = await open(`${fd(handle)}/${name}`, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
       finally { await handle.close(); }
@@ -127,7 +144,7 @@ async function inspectInstallation(manifest: HostReleaseManifest, signal: AbortS
           || before.size !== BigInt(expected.size)) return fail();
         const policy = ["security/isolate", "security/seccomp.json", "docker-client/config.json"].includes(expected.path);
         if (policy && before.size > 1048576n) return fail();
-        const hash = createHash("sha256"), chunks: Buffer[] = [], buffer = Buffer.alloc(65536); let size = 0;
+        const hash = createHash("sha256"), chunks: Buffer[] = [], buffer = Buffer.alloc(1048576); let size = 0;
         while (true) {
           signal.throwIfAborted();
           const result = await file.read(buffer, 0, buffer.length, size); if (!result.bytesRead) break;
@@ -151,22 +168,12 @@ async function inspectInstallation(manifest: HostReleaseManifest, signal: AbortS
         if ((executableNames as readonly string[]).includes(expected.path)) { retained.set(expected.path as ExecutableName, file); keep = true; }
       } finally { if (!keep) await file.close(); }
     }
-    for (const [path, original] of directoryStamps) {
-      signal.throwIfAborted();
-      const handle = await directory(path);
-      try {
-        const current = await lstat(path ? `${HOST_INSTALLATION}/${path}` : HOST_INSTALLATION, { bigint: true });
-        if (stamp(current) !== original || stamp(current) !== stamp(await handle.stat({ bigint: true }))
-          || await entries(handle) !== JSON.stringify([...directories.get(path)!].sort())) return fail();
-      } finally { await handle.close(); }
-    }
-    for (const [path, original] of verified) {
-      signal.throwIfAborted(); if (original !== stamp(await lstat(`${HOST_INSTALLATION}/${path}`, { bigint: true }))) return fail();
-    }
+    await verifyMetadata(signal);
     if (retained.size !== executableNames.length || !seccompSha256) return fail();
-    return { executables: retained, seccompSha256 };
+    keepRoot = true;
+    return { executables: retained, seccompSha256, verifyMetadata, closeRoot: () => root.close() };
   } catch (error) { for (const file of retained.values()) await file.close(); throw error; }
-  finally { await root.close(); }
+  finally { if (!keepRoot) await root.close(); }
 }
 
 // The peer wrapper adds kernel listener checks, not loaded-policy/initial-host visibility or drain certification.
@@ -187,7 +194,7 @@ export async function openHostInstallation(value: unknown, release: CapsuleRelea
     command = localDockerCommand(installed.executables.get("docker")!.fd, installed.executables.get("dockerd")!.fd, installed.executables.get("peer-exec")!.fd);
     await verifyDockerReports(command, pinned.imageId, manifest, signal);
     signal.throwIfAborted(); if (socket !== await socketIdentity() || original !== await stamps(installed.executables)) return fail();
-  } catch (error) { await closeFiles(installed.executables); throw error; }
+  } catch (error) { await closeFiles(installed.executables); await installed.closeRoot(); throw error; }
   async function bound(signal: AbortSignal) {
     signal.throwIfAborted();
     if (closed || socket !== await socketIdentity() || original !== await stamps(installed.executables)) return fail();
@@ -195,9 +202,9 @@ export async function openHostInstallation(value: unknown, release: CapsuleRelea
   async function verify(signal: AbortSignal) {
     active++;
     try {
-      await bound(signal); const current = await inspectInstallation(manifest, signal);
-      try { if (original !== await stamps(current.executables) || current.seccompSha256 !== installed.seccompSha256) return fail(); }
-      finally { await closeFiles(current.executables); }
+      await bound(signal);
+      // Hash once per open installation; kernel ctime/inode/mode stamps must remain identical for every later check.
+      await installed.verifyMetadata(signal);
       await verifyDockerReports(command, pinned.imageId, manifest, signal);
       await bound(signal);
     } finally { active--; }
@@ -213,6 +220,26 @@ export async function openHostInstallation(value: unknown, release: CapsuleRelea
   };
   return {
     verify,
+    async observeImage(nonce: string, expected: string, signal: AbortSignal) {
+      active++;
+      const handles: FileHandle[] = [];
+      try {
+        await verify(signal);
+        for (const [name, mode] of [["python", 0o555], ["image-tree.py", 0o444]] as const) {
+          const expected = manifest.files.find(file => file.path === name);
+          if (!expected || expected.mode !== mode || expected.size > 16777216) return fail();
+          const file = await open(`${HOST_INSTALLATION}/${name}`, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+          handles.push(file); const info = await file.stat({ bigint: true });
+          if (!info.isFile() || info.uid !== 0n || info.gid !== 0n || info.nlink !== 1n || (info.mode & 0o7777n) !== BigInt(mode)
+            || info.size !== BigInt(expected.size) || createHash("sha256").update(await file.readFile()).digest("hex") !== expected.sha256
+            || stamp(info) !== stamp(await file.stat({ bigint: true }))) return fail();
+        }
+        const proof = await observeDockerImage(checkedCommand, (id, signal) => hashImageStream(
+          { file: "/proc/self/fd/3", args: ["export", id], inheritedFds: [installed.executables.get("peer-exec")!.fd, installed.executables.get("docker")!.fd, installed.executables.get("dockerd")!.fd] },
+          { file: "/proc/self/fd/3", args: ["-I", "/proc/self/fd/4"], inheritedFds: handles.map(file => file.fd) }, signal), pinned.imageId, nonce, expected, signal);
+        await verify(signal); return proof;
+      } finally { for (const file of handles) await file.close(); active--; }
+    },
     driver(prepared: (reference: CapsuleReference, signal: AbortSignal) => Promise<void>) {
       return createDockerCapsuleDriver(checkedCommand, installed.seccompSha256, async (ref, signal) => {
         if (ref.intent.image_id !== pinned.imageId || ref.intent.release_sha256 !== pinned.digest) return fail();
@@ -222,7 +249,7 @@ export async function openHostInstallation(value: unknown, release: CapsuleRelea
     },
     async close() {
       if (active) return fail();
-      if (!closed) { closed = true; await closeFiles(installed.executables); }
+      if (!closed) { closed = true; await closeFiles(installed.executables); await installed.closeRoot(); }
     },
   };
 }

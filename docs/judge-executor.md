@@ -9,6 +9,12 @@ actual cgroup-v1 execution path still needs VM verification. Historical lab
 controllers are unchanged and must not become general-purpose executors. Normal
 application startup still cannot run source.
 
+The separate [continuous supervisor and private gateway](judge-supervisor.md)
+now have guarded service entry points. The production full-host proof producer
+and retirement composition are also implemented in `host-cli.ts`,
+`host-verification.ts` and `host-backend.ts`. Their positive real-host evidence
+and installation remain pending; see the [verification plan](judge-host-verification.md).
+
 The native pre-exec handoff, bounded phase pipe collector and fixed Isolate
 command builder, source workspace preparer and read-only cgroup-v1 observer are
 implemented too. The backend connects them, but local component tests are not
@@ -21,7 +27,8 @@ the guarded launcher. It delegates actual host readiness, sends one original
 request through the fixed capsule lifecycle, reads validated results from the
 protected checkpoint rather than Docker output, and explicitly stops/removes the
 container. It does **not** grant its own readiness lease or invent parent drain.
-No production startup currently constructs it.
+The explicit root host CLI constructs it after verified host preparation;
+ordinary application startup does not. No host service has been installed yet.
 
 `capsule-lifecycle.ts` and the separate `capsule-<epoch>-<attempt>` journal provide:
 

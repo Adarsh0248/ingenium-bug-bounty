@@ -34,7 +34,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
   await bootstrap.connect(); try { await bootstrap.query(`CREATE DATABASE "${name}"`); } finally { await bootstrap.end(); }
   const ownerUrl = new URL(ownerConnection), apiUrl = new URL(apiConnection); ownerUrl.pathname = apiUrl.pathname = `/${name}`;
   await migrateDatabase(ownerUrl.toString());
-  const owner = new Pool({ connectionString: ownerUrl.toString(), max: 2 }), api = ["load", "race-load"].includes(process.env.INGENIUM_TEST_SUITE ?? "")
+  const owner = new Pool({ connectionString: ownerUrl.toString(), max: 2 }), api = ["load", "load-soak", "race-load"].includes(process.env.INGENIUM_TEST_SUITE ?? "")
     ? createDatabase(apiUrl.toString(), () => { healthy = false; }, 12).pool
     : new Pool({ connectionString: apiUrl.toString(), max: 4 });
   let healthy = true;
@@ -226,7 +226,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
           const bugs = (await owner.query("SELECT id FROM bounties WHERE round_id=$1 ORDER BY position", [current])).rows;
           return { round: current, aa: aa.sessionCookie, ab: ab.sessionCookie, ba: ba.sessionCookie, bb: bb.sessionCookie, x: bugs[0].id as string, y: bugs[1].id as string };
         } };
-      if(process.env.INGENIUM_TEST_SUITE==="load"){const {loadChecks}=await import("./load.checks.js");await loadChecks(t,context);return;}
+      if(["load","load-soak"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {loadChecks}=await import("./load.checks.js");await loadChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="race-load"){const {raceLoadChecks}=await import("./race-load.checks.js");await raceLoadChecks(t,context);return;}
       if(["operations","operations-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {operationsChecks}=await import("./operations.checks.js");await operationsChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="restore"){const {restoreChecks}=await import("./restore.checks.js");await restoreChecks(t,context);return;}
@@ -259,7 +259,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {resultsExportChecks}=await import("./results-export.checks.js");await resultsExportChecks(t,context);}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {retentionChecks}=await import("./retention.checks.js");await retentionChecks(t,context);}
     }
-    if (["load","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
+    if (["load","load-soak","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
     let emptyWalletKey: string, emptyWalletReceipt: unknown;
     await t.test("an unaffordable hint rejection is durable and malformed or unconfigured submissions allocate no receipt or priority", async () => {
       await budgets(); emptyWalletKey = randomUUID();

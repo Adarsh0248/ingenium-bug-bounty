@@ -129,7 +129,8 @@ export async function staffRecoveryLinuxChecks(
         const result = exec(
           "docker",
           ["start", "--attach", "--interactive", container],
-          { timeout: 45000, maxBuffer: 32768, windowsHide: true },
+          // The lifecycle runs multiple commands, each retaining its own ten-second limit.
+          { timeout: 120000, maxBuffer: 32768, windowsHide: true },
         );
         result.child.stdin!.end(
           JSON.stringify({ owner: owner.toString(), api: api.toString() }),

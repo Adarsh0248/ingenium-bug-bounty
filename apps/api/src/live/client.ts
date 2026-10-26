@@ -2,6 +2,7 @@ import { decimal, LIVE_LIMITS } from "./protocol.js";
 import type { LiveEvent, StreamHead } from "./protocol.js";
 const bytes=(event:LiveEvent)=>new TextEncoder().encode(JSON.stringify(event)).byteLength;
 const validHead=(s:StreamHead)=>s&&typeof s.stream_id==="string"&&s.schema_version===1&&decimal(s.head)&&decimal(s.retained_from)&&BigInt(s.retained_from)>=1n&&BigInt(s.retained_from)<=BigInt(s.head)+1n;
+const backpressured=(error:unknown)=>{const failure=error as {status?:number;code?:string}|null;return failure?.status===503&&failure.code==="CAPACITY_UNAVAILABLE"||failure?.status===429&&failure.code==="RATE_LIMITED";};
 
 // Browser-independent state: an editor's dirty source never belongs in a server snapshot.
 export class LiveReplica {
@@ -84,19 +85,18 @@ interface ClientHooks {
 export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,hooks:ClientHooks){
   const replica=new LiveReplica(hooks.now,projection=>{hooks.invalidate(projection);dirty=true;queueRefresh();},hooks.award),prefix=audience==="STAFF"?"/api/v1/staff/live":"/api/v1/live";
   let socket:LiveTransport|null=null,stopped=false,working=false,connecting=false,generation=0,retry:ReturnType<typeof setTimeout>|undefined,handshake:ReturnType<typeof setTimeout>|undefined,editor:string|null=null,renewed=0,attempt=0;
-  let dirty=false,refreshing=false,refreshFailures=0,refreshTimer:ReturnType<typeof setTimeout>|undefined;
+  let dirty=false,refreshing=false,refreshFailures=0,projectionVersion=0,refreshTimer:ReturnType<typeof setTimeout>|undefined;
   const notify=()=>hooks.state(replica.phase);
   const send=(event:string,value:unknown)=>{if(socket?.connected)socket.volatile.emit(event,value);};
   function queueRefresh(){if(stopped||working||refreshing||refreshTimer||!dirty||replica.phase!=="READY")return;
     refreshTimer=setTimeout(()=>{refreshTimer=undefined;void refresh();},refreshFailures ? 1000+Math.random()*1000 : 100);}
   async function refresh(){
-    if(stopped||!socket?.connected||!replica.writable())return;refreshing=true;dirty=false;const sync=replica.syncId;
-    try{const state:Snapshot=await hooks.post(`${prefix}/projection`,{sync_id:sync});if(!stopped&&sync===replica.syncId&&state.sync_id===sync){refreshFailures=0;hooks.install(state);}}
-    catch(error){if(sync===replica.syncId){
-      const failure=error as {status?:number;code?:string};
+    if(stopped||!socket?.connected||!replica.writable())return;refreshing=true;dirty=false;const sync=replica.syncId,version=projectionVersion;
+    try{const state:Snapshot=await hooks.post(`${prefix}/projection`,{sync_id:sync});if(!stopped&&sync===replica.syncId&&state.sync_id===sync&&version===projectionVersion){refreshFailures=0;hooks.install(state);}}
+    catch(error){if(sync===replica.syncId&&version===projectionVersion){
       // These are read-only projections: bounded backoff avoids turning one full HTTP queue into a reconnect storm.
-      if(!stopped && refreshFailures<2 && (failure?.status===503 && failure.code==="CAPACITY_UNAVAILABLE" || failure?.status===429 && failure.code==="RATE_LIMITED")){refreshFailures++;dirty=true;}
-      else reconnect();
+      if(!stopped && refreshFailures<2 && backpressured(error)){refreshFailures++;dirty=true;}
+      else reconnect(backpressured(error));
     }}
     finally{refreshing=false;queueRefresh();}
   }
@@ -109,7 +109,7 @@ export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,h
       const ticket=await hooks.post(`${prefix}/tickets`,audience==="STAFF"?{round_id:roundId}:{});
       if(stopped||current!==generation)return;socket=hooks.transport(ticket.ticket);const active=socket;
       active.on("sync",value=>{if(socket!==active||stopped)return;connecting=false;if(handshake)clearTimeout(handshake);handshake=undefined;
-        void synchronise(value.sync_id).catch(()=>{if(socket===active&&!stopped)reconnect();});});
+        void synchronise(value.sync_id).catch(error=>{if(socket===active&&!stopped)reconnect(backpressured(error));});});
       active.on("event",value=>{if(socket!==active||stopped)return;const {sync_id,replay,...event}=value;
         if(!replica.event(sync_id,event,replay===true))return reconnect();notify();});
       active.on("heads",value=>{if(socket!==active||stopped||working)return;
@@ -117,11 +117,22 @@ export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,h
         if(replica.gaps(value.heads).length){replica.stale();notify();void synchroniseFresh();}
         else {if(value.ack_required!==false)send("ack",{sync_id:replica.syncId,heads:replica.acknowledgements()});notify();}});
       active.on("presence",value=>{if(socket===active&&value.sync_id===replica.syncId)hooks.presence(value.editors);});
+      active.on("projection",(value:Snapshot)=>{
+        if(socket!==active||stopped||value?.sync_id!==replica.syncId||!replica.writable())return;
+        if(!Array.isArray(value.streams)||value.streams.length!==replica.cursors.size||new Set(value.streams.map(s=>s?.stream_id)).size!==replica.cursors.size
+          ||value.streams.some(s=>!validHead(s)||replica.cursors.get(s.stream_id)!==s.head))return;
+        projectionVersion++;dirty=false;refreshFailures=0;if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=undefined;hooks.install(value);
+      });
       active.on("ready",value=>{if(socket!==active||stopped||value.sync_id!==replica.syncId)return;
-        replica.phase="READY";notify();queueRefresh();if(editor){send("presence",{action:"ENTER",bounty_id:editor});renewed=hooks.now();}});
-      for(const event of ["disconnect","connect_error","resync_required","stale"])active.on(event,()=>{if(socket===active&&!stopped)reconnect();});
+        // Validate the final authorised heads and refresh liveness, not just the earlier HTTP barrier.
+        if(!replica.ready(value.sync_id,value.heads)){
+          if(replica.phase==="STALE")reconnect();else void synchroniseFresh();return;
+        }
+        attempt=0;notify();queueRefresh();if(editor){send("presence",{action:"ENTER",bounty_id:editor});renewed=hooks.now();}});
+      active.on("connect_error",error=>{if(socket===active&&!stopped)reconnect(error?.data?.code==="CAPACITY_UNAVAILABLE");});
+      for(const event of ["disconnect","resync_required","stale"])active.on(event,()=>{if(socket===active&&!stopped)reconnect();});
       active.connect();
-    }catch{if(current===generation&&!stopped)reconnect();}
+    }catch(error){if(current===generation&&!stopped)reconnect(backpressured(error));}
   }
   async function synchronise(sync:string){
     if(working)return;working=true;replica.begin(sync);notify();
@@ -129,21 +140,23 @@ export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,h
       const snapshot:Snapshot=await hooks.post(`${prefix}/snapshot`,{sync_id:sync});
       if(stopped||replica.syncId!==sync)return;
       if(!replica.snapshot(sync,snapshot.streams))throw new Error("Snapshot mismatch");hooks.install(snapshot);
-      let barrier:StreamHead[]=snapshot.streams;
+      let barrier:StreamHead[]=snapshot.streams,established=false;
       for(const stream of snapshot.streams){
         let after=replica.cursors.get(stream.stream_id)!;
+        // The first replay establishes the server's barrier for every stream; unchanged streams need no extra read.
+        if(established&&barrier.some(s=>s.stream_id===stream.stream_id&&s.head===after))continue;
         do{
           const page:Replay=await hooks.post(`${prefix}/replay`,{sync_id:sync,stream_id:stream.stream_id,after});
           if(stopped||replica.syncId!==sync)return;
           if(page.sync_id!==sync || !decimal(page.next) || BigInt(page.next)<BigInt(after))throw new Error("Replay mismatch");
           for(const event of page.events)if(!replica.event(sync,event,true))throw new Error("Replay gap");
           if(page.next===after && BigInt(after)<BigInt(page.through))throw new Error("Replay did not advance");
-          after=page.next;barrier=page.heads;
+          after=page.next;barrier=page.heads;established=true;
           if(BigInt(after)>=BigInt(page.through))break;
         }while(true);
       }
       if(!replica.ready(sync,barrier))throw new Error("Replay incomplete");
-      replica.phase="SYNCING";send("ready",{sync_id:sync,heads:replica.acknowledgements()});attempt=0;notify();
+      replica.phase="SYNCING";send("ready",{sync_id:sync,heads:replica.acknowledgements()});notify();
     }finally{if(replica.syncId===sync)working=false;}
   }
   async function synchroniseFresh(){if(socket?.connected){
@@ -152,11 +165,13 @@ export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,h
     handshake=setTimeout(()=>{if(current===generation&&!stopped)reconnect();},LIVE_LIMITS.syncMs);
     send("resync",{});
   }else reconnect();}
-  function reconnect(){
+  function reconnect(busy=false){
     generation++;connecting=false;if(handshake)clearTimeout(handshake);handshake=undefined;
     replica.stale();replica.syncId="";working=false;refreshFailures=0;notify();hooks.presence([]);const previous=socket;socket=null;previous?.disconnect();
     if(stopped||retry)return;
-    retry=setTimeout(()=>{retry=undefined;void connect();},Math.min(5000,250*2**Math.min(attempt++,5)+Math.random()*1000));
+    if(busy)attempt=Math.max(attempt,5);
+    // Keep jitter across the whole capped window instead of synchronising repeated failures at one fixed delay.
+    retry=setTimeout(()=>{retry=undefined;void connect();},Math.max(busy?1000:0,250+Math.random()*Math.min(30000,1000*2**Math.min(attempt++,5))));
   }
   const timer=setInterval(()=>{
     if(!replica.writable()){notify();if(replica.phase==="STALE"&&!working&&!connecting&&!retry)reconnect();return;}

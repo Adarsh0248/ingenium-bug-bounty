@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { createExecutionPlan, EXECUTION_PLAN_SHA256 } from "../src/judge/execution-plan.js";
 import { createIsolateBackend, runIsolatePhases } from "../src/judge/isolate-backend.js";
-import { readCapsuleRequest } from "../src/judge/capsule-cli.js";
+import { readCapsuleRequest } from "../src/judge/capsule-request.js";
 import { executionRequest } from "../src/judge/executor.js";
 import { checkCapsuleMounts, checkCapsuleProcess, ISOLATE_BINARIES } from "../src/judge/isolate-context.js";
 import { isolatePhaseEvidence, readIsolateMetadata, sourceCompilationError } from "../src/judge/isolate-evidence.js";
@@ -129,6 +129,11 @@ test("capsule process checks refuse ordinary Docker, v2, changed capabilities, f
   for (const changed of [status.replace("00000000002c00e3", "000001ffffffffff"), status.replace("NoNewPrivs:\t1", "NoNewPrivs:\t0"), status.replace("Seccomp:\t2", "Seccomp:\t0")]) assert.throws(() => checkCapsuleProcess(changed, groups, profile));
   for (const changed of ["0::/\n", groups.replace(/ingenium-exec-/g, "other-"), groups.replace("1:pids:", "1:devices:")]) assert.throws(() => checkCapsuleProcess(status, changed, profile));
   assert.throws(() => checkCapsuleProcess(status, groups, "unconfined\n"));
+});
+test("capsule membership accepts the real named systemd hierarchy without weakening memory, CPU or PID parent checks",()=>{
+  const named=groups+`4:name=systemd:${parent}/docker/${container}\n0::/\n`,profile="ingenium-isolate-executor-v1 (enforce)\n";
+  assert.deepEqual(checkCapsuleProcess(status,named,profile),{parent,container});
+  for(const changed of [named+`5:name=systemd:/\n`,named.replace("name=systemd","name=other"),named.replace("1:pids:","1:devices:")])assert.throws(()=>checkCapsuleProcess(status,changed,profile));
 });
 const mounts = () => ["1 0 0:1 / / ro - overlay overlay ro", ...["memory", "cpuacct", "pids"].map((key, i) => `${i + 2} 1 0:${i + 2} ${parent} /run/ingenium/parent/${key} ro,nosuid,nodev,noexec - cgroup cgroup rw,${key === "cpuacct" ? "cpu,cpuacct" : key}`),
   ...["memory", "cpuacct"].map((key, i) => `${i + 5} 1 0:${i + 2} ${parent}/jobs /run/ingenium/cgroups/${key} rw,nosuid,nodev,noexec - cgroup cgroup rw,${key}`)].join("\n") + "\n";

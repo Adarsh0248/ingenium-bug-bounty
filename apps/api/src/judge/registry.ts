@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Pool, PoolClient } from "pg";
 import { uuid } from "../access/credentials.js";
 import type { AuthoringPayload } from "../content/execution-policy.js";
@@ -59,6 +60,35 @@ export function createJudgeSupervisorStore(pool: Pool, settings: RegistrySetting
   return {
     ...deliveryStore(pool, config),
     get runtimes() { return new Map([...config.runtimes].map(([key, value]) => [key, { ...value }])); },
+    async withRetirementInspection<T>(signal: AbortSignal, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+      signal.throwIfAborted();
+      const client = await pool.connect(), lost = new AbortController();
+      const failed = () => lost.abort(), bounded = AbortSignal.any([signal, lost.signal]);
+      client.on("error", failed);
+      try {
+        // The session lock orders full-host scans only; it grants no execution or drain authority.
+        while (true) {
+          bounded.throwIfAborted();
+          const locked = (await client.query("SELECT pg_catalog.pg_try_advisory_lock($1::integer,$2::integer) AS locked", [0x494e4745, 0x52455449])).rows[0]?.locked;
+          bounded.throwIfAborted();
+          if (locked === true) break;
+          if (locked !== false) throw new Error("Retirement inspection lock unverified.");
+          await delay(25, undefined, { signal: bounded });
+        }
+        const value = await work(bounded); bounded.throwIfAborted(); return value;
+      } finally {
+        client.removeListener("error", failed);
+        // Destroying this original connection also releases an uncertain lock after lost acknowledgement.
+        client.release(true);
+      }
+    },
+    async held(): Promise<string[]> {
+      return transaction(pool, async client => {
+        const value = (await client.query("SELECT ingenium_judge.held_executions($1,$2) AS value", args)).rows[0].value;
+        if (!Array.isArray(value) || value.length > 8 || new Set(value).size !== value.length) throw new Error("Invalid held-execution inventory.");
+        return value.map(uuid);
+      });
+    },
     async heartbeat(proof: Buffer) {
       if (proof.length !== 32) throw new Error("Invalid readiness evidence.");
       await transaction(pool, client => client.query("SELECT ingenium_judge.heartbeat($1,$2,$3)", [...args, proof]));

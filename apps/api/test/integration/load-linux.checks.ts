@@ -23,12 +23,14 @@ export async function linuxLoadChecks(
   ownerConnection: string,
   apiConnection: string,
   databaseContainer: string,
-  suite: "load" | "race-load" = "load",
+  suite: "load" | "race-load" | "load-soak" = "load",
 ) {
   await t.test(
-    `${suite === "load" ? "100-team independent arena" : "50-team shared race"} runs within a private Linux namespace and two aggregate test CPUs`,
+    `${suite !== "race-load" ? "100-team arena" : "50-team shared race"} with separate browser generators and three aggregate CPUs runs within a private Linux namespace`,
     async () => {
       assert.match(databaseContainer, /^[a-f0-9]{64}$/);
+      const nonce = randomUUID();
+      const code = `../../test-results/linux-code-${nonce}`;
       await exec(
         process.execPath,
         [
@@ -42,13 +44,14 @@ export async function linuxLoadChecks(
           fileURLToPath(
             new URL("../../tsconfig.test-build.json", import.meta.url),
           ),
+          "--outDir",
+          fileURLToPath(new URL(code, import.meta.url)),
         ],
         { timeout: 45000, maxBuffer: 65536, windowsHide: true },
       );
-      const nonce = randomUUID();
       const bindings = [
-        ["../../test-results/linux-code/src", "/workspace/src"],
-        ["../../test-results/linux-code/test", "/workspace/test"],
+        [`${code}/src`, "/workspace/src"],
+        [`${code}/test`, "/workspace/test"],
         ["../../../../node_modules", "/workspace/node_modules"],
         ["../../package.json", "/workspace/package.json"],
         ["../../drizzle", "/workspace/drizzle"],
@@ -56,6 +59,7 @@ export async function linuxLoadChecks(
           "../../../../infra/maintenance/test/load-linux.mjs",
           "/fixture/test.mjs",
         ],
+        ["../../../../infra/maintenance/test/load-generator-linux.mjs", "/fixture/generator.mjs"],
       ].flatMap(([path, target]) => [
         "--mount",
         `type=bind,src=${fileURLToPath(new URL(path!, import.meta.url))},dst=${target},readonly`,
@@ -115,17 +119,38 @@ export async function linuxLoadChecks(
         JSON.stringify({ state: "INCOMPLETE", controller_run_id: nonce }) +
           "\n",
       );
+      let generator: string | undefined;
+      let generatorRun: Promise<{ stdout: string; stderr: string; failed: boolean }> | undefined;
       try {
+        {
+          generator = await docker(["create", "--pull=never", "--name", `ingenium-linux-generator-${nonce}`, "--label", `ingenium.linux-load=${nonce}`,
+            "--restart", "no", "--network", `container:${databaseContainer}`, "--read-only", "--user", "1000:1000", "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
+            "--memory", "768m", "--memory-swap", "768m", "--cpus", "1", "--pids-limit", "64", ...bindings,
+            "--log-opt", "max-size=1m", "--log-opt", "max-file=1", "--interactive", "--entrypoint", "/usr/local/bin/node", IMAGE, "/fixture/generator.mjs"]);
+          assert.match(generator, /^[a-f0-9]{64}$/);
+          const task = exec("docker", ["start", "--attach", "--interactive", generator], { timeout: suite === "load-soak" ? 4200000 : 510000, maxBuffer: 16384, windowsHide: true });
+          generatorRun = task.then(result => ({ ...result, failed: false }), () => ({ stdout: "", stderr: "", failed: true }));
+          const ready = new Promise<void>((resolve, reject) => {
+            let output = "";
+            const timer = setTimeout(() => reject(new Error("Separate generator startup deadline")), 10000);
+            task.child.stdout!.on("data", chunk => { output += chunk; if (output === "INGENIUM_GENERATOR_READY\n") { clearTimeout(timer); resolve(); } });
+            task.child.once("error", () => { clearTimeout(timer); reject(new Error("Separate generator startup failed")); });
+            task.child.once("close", () => { clearTimeout(timer); reject(new Error("Separate generator exited during startup")); });
+          });
+          task.child.stdin!.end(JSON.stringify({ name: `ingenium-load-${nonce}`, ...(suite === "load-soak" ? { soak: true } : {}) }));
+          await ready;
+        }
         const running = exec(
           "docker",
           ["start", "--attach", "--interactive", container],
-          { timeout: 500000, maxBuffer: 65536, windowsHide: true },
+          { timeout: suite === "load-soak" ? 4100000 : 500000, maxBuffer: 65536, windowsHide: true },
         );
         running.child.stdin!.end(
           JSON.stringify({
             owner: owner.toString(),
             api: api.toString(),
             suite,
+            ...(generator ? { generator: `ingenium-load-${nonce}` } : {}),
           }),
         );
         let failed = false;
@@ -212,7 +237,20 @@ export async function linuxLoadChecks(
         assert.equal(report.execution_platform, "linux");
         assert.equal(report.real_judge_execution, false);
         assert.equal(report.event_launch_authorised, false);
+        if (generatorRun) {
+          assert.equal(report.clients_share_api_cpu, false); assert.equal(report.generator_cpu_limit, 1);
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            const result = await Promise.race([generatorRun, new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Separate generator shutdown deadline")), 10000); })]);
+            assert.equal(result.failed, false); assert.equal(result.stderr, ""); assert.equal(result.stdout, "INGENIUM_GENERATOR_READY\n");
+          } finally { clearTimeout(timer); }
+        }
       } finally {
+        if (generator) {
+          const config = JSON.parse(await docker(["inspect", "--format", "{{json .Config}}", generator]));
+          assert.equal(config.Image, IMAGE); assert.equal(config.Labels["ingenium.linux-load"], nonce);
+          await docker(["stop", "--timeout", "2", generator]); await docker(["rm", generator]); await generatorRun;
+        }
         const config = JSON.parse(
           await docker(["inspect", "--format", "{{json .Config}}", container]),
         );

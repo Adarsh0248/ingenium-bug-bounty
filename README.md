@@ -4,6 +4,15 @@ A gamified bug-fixing competition platform for Ingenium, the college technical f
 
 ## Status
 
+Current update, 25 October: roughly **91%** complete; event deployment remains on
+hold. Individual real executions pass for all five languages, and the approved
+6-CPU/24-GiB test VM is running the five-hour concurrent judge rehearsal. The
+endurance, real full-round integration and measured event-capacity gates remain
+open. See [current verification evidence](docs/build-status.md) for the latest
+status; percentages and pending statements in the historical batches below refer
+to their original dates. `npm run build:release` creates an offline application
+candidate with a SHA-256 inventory; it does not deploy or certify readiness.
+
 Delivery target: **22 October 2026**, with the complete approved initial scope;
 no additional features are silently dropped. See the current
 [build and launch checklist](docs/build-status.md). The target is not a readiness

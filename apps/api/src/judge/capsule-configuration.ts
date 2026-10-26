@@ -6,7 +6,7 @@ import { authoringPayloadDigest } from "../content/execution-policy.js";
 import { judgeJson, runtimeRecord } from "../content/judge-protocol.js";
 import { capsuleReference } from "./capsule-lifecycle.js";
 import type { CapsuleReference } from "./capsule-lifecycle.js";
-import { readCapsuleRequest } from "./capsule-cli.js";
+import { readCapsuleRequest } from "./capsule-request.js";
 import { EXECUTION_PLAN_SHA256, reviewedExecutionPlan } from "./execution-plan.js";
 import type { ExecutionPlan } from "./execution-plan.js";
 import { executionRequest } from "./executor.js";
@@ -87,6 +87,13 @@ export async function verifyCapsuleConfiguration(reference: CapsuleReference, by
     if ((await readdir(fd(folder))).join(",") !== "capsule.json") return bad();
     await originalFile(folder, identity, bytes);
   } finally { await folder?.close(); await parent.close(); }
+}
+export async function assertCapsuleConfigurationAbsent(reference: CapsuleReference) {
+  const name = uuid(reference.intent.nonce), parent = await root();
+  try {
+    try { await lstat(`${fd(parent)}/${name}`); } catch (error) { if (missing(error)) return; throw error; }
+    return bad();
+  } finally { await parent.close(); }
 }
 // Only the host retirement authority may call this after durable removal intent and verified container absence.
 export async function removeCapsuleConfiguration(reference: CapsuleReference, bytes: Buffer, identity: ConfigurationIdentity) {

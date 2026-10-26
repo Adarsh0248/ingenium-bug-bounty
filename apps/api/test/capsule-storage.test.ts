@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { captureStorage, linuxDevice, mountRecords, retainedStorage, storageRecord, temporaryMounts } from "../src/judge/capsule-storage.js";
+import { captureStorage, linuxDevice, mountRecords, retainedStorage, storageRecord, storageAcknowledgement, temporaryMounts } from "../src/judge/capsule-storage.js";
 import { checkMountReferences, checkProcessGroups, checkReference, verifyNoCapsuleReferences } from "../src/judge/capsule-residue.js";
 import { CAPSULE_TMPFS } from "../src/judge/docker-capsule.js";
 import { createExecutionPlan } from "../src/judge/execution-plan.js";
 import { judgeJson, readJudgeJson } from "../src/content/judge-protocol.js";
 import { judgePayload, judgeRuntimes } from "./fixtures/judge.js";
+import { waitForStorageAcknowledgement } from "../src/judge/capsule-cli.js";
+import type { ExecutionCheckpoints } from "../src/judge/checkpoints.js";
 
 const physical = { container_id: "a".repeat(64), cgroup_parent: `/ingenium-exec-${"b".repeat(32)}`,
   pid_namespace: "pid:[1234]", mount_namespace: "mnt:[1235]", network_namespace: "net:[1236]", ipc_namespace: "ipc:[1237]" };
@@ -16,6 +18,29 @@ function fixture() {
   return { plan, boot, saved: storageRecord(plan, boot, physical, table()) };
 }
 const devices = new Set(["0:200", "0:201", "0:202", "0:203"]);
+
+test("host storage acknowledgement binds the original physical storage without authorising a verdict or drain",()=>{
+  const {plan,boot,saved}=fixture(),ack=storageAcknowledgement(plan,boot,physical,saved);
+  assert.equal(ack.attempt_id,plan.attemptId);assert.equal(ack.boot_id,boot);assert.equal(ack.container_id,physical.container_id);
+  assert.match(ack.storage_sha256,/^[0-9a-f]{64}$/);assert.doesNotMatch(JSON.stringify(ack),/source|stdin|stdout|drain|PASSED/);
+  assert.deepEqual(storageAcknowledgement(plan,boot,physical,structuredClone(saved)),ack);
+  assert.throws(()=>storageAcknowledgement({...plan,attemptId:randomUUID()},boot,physical,saved));
+  assert.throws(()=>storageAcknowledgement(plan,randomUUID(),physical,saved));
+  assert.throws(()=>storageAcknowledgement(plan,boot,{...physical,container_id:"f".repeat(64)},saved));
+  assert.throws(()=>storageAcknowledgement(plan,boot,physical,null));
+});
+
+test("capsule exit waits for its exact host acknowledgement and rejects cancellation or foreign receipts",async()=>{
+  const {plan,boot,saved}=fixture(),ack=storageAcknowledgement(plan,boot,physical,saved);let reads=0;
+  const store={bootId:boot,async physical(){return physical;},async readCapsuleRecord(_plan:unknown,name:string){return name==="storage"?saved:++reads<3?null:ack;}} as unknown as ExecutionCheckpoints;
+  await waitForStorageAcknowledgement(store,plan,AbortSignal.timeout(1000));assert.equal(reads,3);
+  for(const wrong of [{...ack,boot_id:randomUUID()},{...ack,attempt_id:randomUUID()},{...ack,storage_sha256:"f".repeat(64)},{...ack,extra:true}]){
+    await assert.rejects(waitForStorageAcknowledgement({...store,async readCapsuleRecord(_p,name){return name==="storage"?saved:wrong;}},plan,AbortSignal.timeout(1000)));
+  }
+  await assert.rejects(waitForStorageAcknowledgement({...store,async readCapsuleRecord(_p,name){return name==="storage"?saved:null;}},plan,AbortSignal.timeout(10)));
+  const cancelled=new AbortController();cancelled.abort();
+  await assert.rejects(waitForStorageAcknowledgement({} as ExecutionCheckpoints,plan,cancelled.signal));
+});
 
 test("storage records bind all four distinct temporary filesystems to the original plan, boot and physical capsule without source", () => {
   const { plan, boot, saved } = fixture();
@@ -57,6 +82,16 @@ test("an aliased temporary mount or owned cgroup bind mount blocks retirement re
     assert.throws(() => checkMountReferences(physical, devices, `1 2 0:999 ${root} /elsewhere rw - cgroup cgroup rw,memory\n`));
   }
   assert.equal(checkMountReferences(physical, devices, `1 2 0:999 ${physical.cgroup_parent}0 /elsewhere rw - cgroup cgroup rw,memory\n`), undefined);
+});
+
+test("real namespace mounts are parsed and retained capsule namespace handles still block retirement", () => {
+  const record = (root: string, fs = "nsfs") => `459 442 0:4 ${root} /run/example.mnt rw - ${fs} nsfs rw\n`;
+  assert.equal(checkMountReferences(physical, devices, record("mnt:[9999]")), undefined);
+  for (const root of [physical.pid_namespace, physical.mount_namespace, physical.network_namespace, physical.ipc_namespace]) {
+    assert.throws(() => checkMountReferences(physical, devices, record(root)));
+  }
+  for (const root of ["mnt:[0]", "mnt:[01]", "unknown:[1234]", "relative"]) assert.throws(() => mountRecords(record(root)));
+  assert.throws(() => mountRecords(record("mnt:[9999]", "cgroup")));
 });
 test("all original cgroup descendants are refused without substring false positives or accepting malformed membership", () => {
   for (const path of [physical.cgroup_parent, `${physical.cgroup_parent}/docker/x`, `${physical.cgroup_parent}/jobs/box-0`]) {

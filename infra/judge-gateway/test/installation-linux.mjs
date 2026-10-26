@@ -11,9 +11,22 @@ import { capsuleReference } from "/workspace/apps/api/dist/judge/capsule-lifecyc
 import { createExecutionPlan } from "/workspace/apps/api/dist/judge/execution-plan.js";
 import { dockerDaemonDigest, dockerImageConfigDigest } from "/workspace/apps/api/dist/judge/docker-host.js";
 import { localDockerCommand } from "/workspace/apps/api/dist/judge/docker-capsule.js";
+import { createHostContextObserver } from "/workspace/apps/api/dist/judge/host-context.js";
 
 const hash = value => createHash("sha256").update(value).digest("hex"), signal = () => AbortSignal.timeout(15000);
 const exec = promisify(execFile);
+test("execution and recovery yield CPU priority while fresh readiness retains its normal priority",async()=>{
+  const hook="import{getPriority}from'node:os';import{writeSync}from'node:fs';process.on('exit',()=>writeSync(3,String(getPriority(0))));";
+  for(const [operation,priority]of [["--ready",0],["--prepare-host",0],["--execute",10],["--recover",10],["--retire",10],["--foreign",0]]){
+    const result=await new Promise((resolve,reject)=>{
+      const child=spawn(process.execPath,["--import",`data:text/javascript,${encodeURIComponent(hook)}`,"/workspace/apps/api/dist/judge/host-cli.js",operation],{stdio:["ignore","pipe","pipe","pipe"]});
+      const output=["","",""];const timer=setTimeout(()=>{child.kill("SIGKILL");reject(new Error("Priority refusal probe exceeded its bound."));},10000);
+      for(let i=0;i<3;i++)child.stdio[i+1].on("data",bytes=>{output[i]+=bytes.toString();if(output[i].length>1024){child.kill("SIGKILL");reject(new Error("Oversized priority probe."));}});
+      child.on("error",reject);child.on("close",(code,signal)=>{clearTimeout(timer);resolve({code,signal,output});});
+    });
+    assert.equal(result.code,125);assert.equal(result.signal,null);assert.deepEqual(result.output,["","Protected host refused; preserve original attempts, inspection intents and physical holds.\n",String(priority)],operation);
+  }
+});
 const reports = JSON.parse(await readFile("/fixture/docker-reports.json", "utf8"));
 const daemonLine = JSON.stringify(reports.daemon) + "\n", imageLine = JSON.stringify(reports.image) + "\n";
 const wrongDaemonLine = JSON.stringify({ ...reports.daemon, ID: "replacement-daemon" }) + "\n";
@@ -43,6 +56,15 @@ int main(void) {
 `);
 await exec("gcc", ["-Wall", "-Wextra", "-Werror", "-O2", "/tmp/daemon-fixture.c", "-o", `${root}/dockerd`]);
 await exec("gcc", ["-std=c17", "-Wall", "-Wextra", "-Werror", "-O2", "-static", "/fixture/docker-peer-exec.c", "-o", `${root}/peer-exec`]);
+await exec("gcc", ["-std=c17", "-Wall", "-Wextra", "-Werror", "-O2", "-static", "/fixture/host-observe.c", "-o", `${root}/host-observe`]);
+await exec("gcc", ["-std=c17", "-Wall", "-Wextra", "-Werror", "-O2", "-static", "/fixture/launch.c", "-o", "/opt/ingenium/launch-native"]);
+test("fixed native launcher rejects foreign operations without reading requests or starting code", async () => {
+  for (const args of [["--shell"], ["--execute", "extra"]]) {
+    await assert.rejects(exec("/opt/ingenium/launch-native", args), error => {
+      assert.equal(error.code, 125); assert.equal(error.stdout, ""); assert.equal(error.stderr, "Protected host launcher unavailable; retain original execution state.\n"); return true;
+    });
+  }
+});
 await writeFile("/tmp/docker-fixture.c", `#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,12 +104,13 @@ const content = new Map([
   ["docker", dockerBytes], ["docker-client/config.json", Buffer.from("{}\n")], ["dockerd", await readFile(`${root}/dockerd`)],
   ["launch", Buffer.from("#!/opt/ingenium/judge-executor/node\n// fixture\n")], ["node", dockerBytes],
   ["peer-exec", await readFile(`${root}/peer-exec`)],
+  ["host-observe", await readFile(`${root}/host-observe`)],
   ["security/apparmor", Buffer.from("# synthetic, never loaded\n")], ["security/isolate", Buffer.from(ISOLATE_CONFIGURATION)],
   ["security/seccomp.json", Buffer.from('{"defaultAction":"SCMP_ACT_ERRNO","syscalls":[]}\n')],
 ]);
 const folders = ["", "app", "app/dependency", "app/judge", "docker-client", "security"];
 for (const path of folders.slice(1)) await mkdir(`${root}/${path}`, { recursive: true, mode: 0o755 });
-const mode = path => ["docker", "dockerd", "launch", "node", "peer-exec"].includes(path) ? 0o555 : 0o444;
+const mode = path => ["docker", "dockerd", "launch", "node", "peer-exec", "host-observe"].includes(path) ? 0o555 : 0o444;
 for (const [path, bytes] of content) { await writeFile(`${root}/${path}`, bytes); await chmod(`${root}/${path}`, mode(path)); }
 for (const path of folders) await chmod(path ? `${root}/${path}` : root, 0o555);
 const manifest = { version: 3, image_id: reports.image.Id, daemon_sha256: dockerDaemonDigest(Buffer.from(daemonLine)),
@@ -128,6 +151,16 @@ test("real protected release tree hashes every dependency and executes only the 
   } finally { await installation.close(); }
 });
 
+test("later verification uses its own cancellation signal after the installation-open request finishes", async () => {
+  const opened = new AbortController(), installation = await openHostInstallation(manifest, release, opened.signal);
+  try {
+    opened.abort();
+    await installation.verify(signal());
+    const cancelled = new AbortController(); cancelled.abort();
+    await assert.rejects(installation.verify(cancelled.signal));
+  } finally { await installation.close(); }
+});
+
 test("changed dependency bytes or modes stop creation before invoking the separate preparation authority", async () => {
   const installation = await open(); let preparations = 0;
   const driver = installation.driver(async () => { preparations++; }), path = `${root}/app/dependency/index.js`;
@@ -138,6 +171,16 @@ test("changed dependency bytes or modes stop creation before invoking the separa
   } finally {
     await chmod(path, 0o644); await writeFile(path, content.get("app/dependency/index.js")); await chmod(path, 0o444); await installation.close();
   }
+});
+
+test("an open verified installation refuses even an identical dependency rewrite instead of silently accepting a new change stamp", async () => {
+  const installation = await open(), path = `${root}/app/dependency/index.js`;
+  try {
+    await installation.verify(signal());
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await chmod(path, 0o644); await writeFile(path, content.get("app/dependency/index.js")); await chmod(path, 0o444);
+    await assert.rejects(installation.verify(signal()));
+  } finally { await installation.close(); }
 });
 
 test("unlisted files, empty directories and writable installation parents are rejected without deletion", async () => {
@@ -309,6 +352,28 @@ test("unsupported commands and endpoint overrides never run, and cancellation st
       assert.deepEqual(await readFile("/opt/ingenium/created-ids"), before);
     } finally { controller.abort(); await running; await unlink("/opt/ingenium/hold-on-create"); await unlink("/opt/ingenium/command-child"); }
   } finally { for (const file of files) await file.close(); }
+});
+
+test("a real root-owned native observer refuses this container instead of claiming full initial-host visibility", async () => {
+  const settings = { bootId: randomUUID(), kernelRelease: "6.8.0-fixture", observerSha256: hash(content.get("host-observe")) };
+  const observer = createHostContextObserver(settings);
+  await assert.rejects(observer.observe(signal()), /Protected launcher failed/);
+  const failure = await exec(`${root}/host-observe`, ["--observe", "not-a-uuid"]).then(() => assert.fail("Invalid observer arguments accepted"), error => error);
+  assert.equal(failure.code, 70); assert.equal(failure.stdout, ""); assert.match(failure.stderr, /host context unavailable/);
+});
+
+test("the rootfs hash reader validates bounded TAR fixtures on Linux without extracting or executing image files", async () => {
+  const result = await exec("/usr/bin/python3", ["-I", "/fixture/test/test_image_tree.py"], { timeout: 15000, maxBuffer: 16384 });
+  assert.match(result.stderr, /Ran 9 tests/); assert.match(result.stderr, /OK/); assert.equal(result.stdout, "");
+});
+
+test("native host observation refuses changed executable hashes, modes and an aborted request", async () => {
+  const settings = { bootId: randomUUID(), kernelRelease: "6.8.0-fixture", observerSha256: hash(content.get("host-observe")) };
+  await assert.rejects(createHostContextObserver({ ...settings, observerSha256: "0".repeat(64) }).observe(signal()));
+  await assert.rejects(createHostContextObserver(settings).observe(AbortSignal.abort()));
+  await chmod(`${root}/host-observe`, 0o755);
+  try { await assert.rejects(createHostContextObserver(settings).observe(signal())); }
+  finally { await chmod(`${root}/host-observe`, 0o555); }
 });
 
 test("non-root-accessible or replaced Unix sockets invalidate the installation rather than reconnecting to another daemon", async () => {

@@ -53,6 +53,20 @@ function checkedState(value: CapsuleState) {
   return value;
 }
 
+export async function readCapsuleJournal(checkpoints: ExecutionCheckpoints, release: CapsuleRelease, plan: ExecutionPlan) {
+  const safe = reviewedExecutionPlan(plan), row = await checkpoints.capsule(safe); if (!row?.intent || safe.hostEpochId !== checkpoints.hostEpochId) return fail();
+  const ref = capsuleReference(safe, row.intent);
+  if (ref.intent.image_id !== release.imageId || ref.intent.release_sha256 !== release.digest) return fail();
+  let id: string | null = null;
+  if (row.container !== null) id = containerId(object(row.container, ["id"]).id);
+  for (const name of ["start", "stopped", "remove", "removed"] as const)
+    if (row[name] !== null && (id === null || object(row[name], ["id"]).id !== id)) return fail();
+  if (row.remove !== null && row.stopped === null || row.removed !== null && row.remove === null) return fail();
+  const physical = await checkpoints.physical(safe);
+  if (physical !== null && (physical.container_id !== id || physical.cgroup_parent !== ref.parent)) return fail();
+  return { row, ref, id };
+}
+
 // Docker removal proves only capsule removal. Parent groups/storage and positive drain are separate host duties.
 export function createCapsuleLifecycle(checkpoints: ExecutionCheckpoints, driver: CapsuleDriver, release: CapsuleRelease, resources: CapsuleResources) {
   if (!/^sha256:[0-9a-f]{64}$/.test(release.imageId) || !/^[0-9a-f]{64}$/.test(release.digest)) return fail();
@@ -64,17 +78,7 @@ export function createCapsuleLifecycle(checkpoints: ExecutionCheckpoints, driver
     return result;
   }
   async function saved(plan: ExecutionPlan) {
-    const row = await checkpoints.capsule(plan); if (!row || !row.intent) return fail();
-    const ref = reference(plan, row.intent);
-    let id: string | null = null;
-    if (row.container !== null) id = containerId(object(row.container, ["id"]).id);
-    for (const name of ["start", "stopped", "remove", "removed"] as const) {
-      if (row[name] !== null && (id === null || object(row[name], ["id"]).id !== id)) return fail();
-    }
-    if (row.remove !== null && row.stopped === null || row.removed !== null && row.remove === null) return fail();
-    const physical = await checkpoints.physical(plan);
-    if (physical !== null && (physical.container_id !== id || physical.cgroup_parent !== ref.parent)) return fail();
-    return { row, ref, id };
+    return readCapsuleJournal(checkpoints, pinned, plan);
   }
   async function reconcile(plan: ExecutionPlan, signal: AbortSignal) {
     signal.throwIfAborted(); const record = await saved(plan), state = await driver.find(record.ref, signal);

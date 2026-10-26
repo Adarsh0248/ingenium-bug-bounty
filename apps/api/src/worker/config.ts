@@ -14,7 +14,7 @@ export function runtimeObject(
     !value ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    Object.keys(value).sort().join() !== keys.sort().join()
+    Object.keys(value).sort().join() !== [...keys].sort().join()
   )
     throw invalid();
   return value as Record<string, unknown>;

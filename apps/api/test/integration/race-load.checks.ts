@@ -4,14 +4,14 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import type { TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
-import { io } from "socket.io-client";
+import { liveLoadDriver } from "./live-load-driver.js";
 import { createArenaService } from "../../src/access/arena-service.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
 import { LANGUAGES } from "../../src/access/credentials.js";
 import { createEntryService } from "../../src/access/entry-service.js";
 import { buildApp } from "../../src/app.js";
 import type { CompetitionCommand } from "../../src/competition/service.js";
-import { connectLive } from "../../src/live/client.js";
+import { remoteLiveDriver } from "./live-load-bridge.js";
 import type { participantJudgingChecks } from "./participant-judging.checks.js";
 
 export async function raceLoadChecks(
@@ -22,6 +22,7 @@ export async function raceLoadChecks(
     assess(id: string, verdict?: string): Promise<unknown>;
   },
 ) {
+  const tabsPerMember = 3, recipients = 100 * tabsPerMember;
   const query = async (sql: string, args: unknown[] = []) =>
     (await c.owner.query(sql, args)).rows;
   async function control(
@@ -126,19 +127,25 @@ export async function raceLoadChecks(
     (warn as Function)(value, ...args);
   }) as typeof app.log.warn;
   const address = await app.listen({ host: "127.0.0.1", port: 0 });
-  const clients: ReturnType<typeof connectLive>[] = [];
+  const live=process.env.INGENIUM_LOAD_GENERATOR?remoteLiveDriver(process.env.INGENIUM_LOAD_GENERATOR):liveLoadDriver();
   const report: Record<string, unknown> = {
     schema_version: 1,
     run_id: randomUUID(),
     state: "INCOMPLETE",
     teams: 50,
     members: 100,
+    tabs_per_member: tabsPerMember,
+    live_sockets: recipients,
+    active_editors: 100,
+    observer_tabs: recipients - 100,
     api_pool_limit: c.api.options.max,
     execution_platform: process.platform,
     clock_trust: "SYNTHETIC_FIXTURE",
     real_judge_execution: false,
     production_tls: false,
     event_launch_authorised: false,
+    clients_share_api_cpu: !process.env.INGENIUM_LOAD_GENERATOR,
+    generator_cpu_limit: process.env.INGENIUM_LOAD_GENERATOR ? 1 : null,
   };
   const output = fileURLToPath(
     new URL("../../test-results/race-load.json", import.meta.url),
@@ -155,14 +162,8 @@ export async function raceLoadChecks(
     jar: Map<string, string>;
     csrf: string;
   };
-  const sessions: Session[] = [],
-    views = new Map<number, any>(),
-    states = new Map<number, string>();
-  const claims = new Set<number>(),
-    animations = new Map<number, number>(),
-    refusals = new Map<string, number>();
-  let passed = 0,
-    opened = 0;
+  const sessions: Session[] = [], refusals=new Map<string,number>();
+  let passed=0;
   const prefix = `/api/v1/competition/rounds/${round}/bounties/${bounty}`;
   async function request(
     s: Pick<Session, "jar" | "csrf">,
@@ -195,16 +196,6 @@ export async function raceLoadChecks(
       refusals.set(key, (refusals.get(key) ?? 0) + 1);
     }
     return { status: response.status, value };
-  }
-  async function until(done: () => boolean, limit = 20000) {
-    const end = performance.now() + limit;
-    while (!done()) {
-      assert.ok(
-        performance.now() < end,
-        "Fifty-team live race exceeded its bounded wait",
-      );
-      await delay(100);
-    }
   }
   try {
     assert.equal(c.api.options.max, 12);
@@ -279,7 +270,7 @@ export async function raceLoadChecks(
         sessions.push(s);
       }
     await t.test(
-      "one hundred distinct members keep independent locked languages and authenticated live views",
+      "one hundred distinct members keep three live tabs each with one active editor and independent locked languages",
       async () => {
         assert.equal(new Set(sessions.map((s) => s.cookie)).size, 100);
         assert.deepEqual(
@@ -292,71 +283,12 @@ export async function raceLoadChecks(
           [20, 20, 20, 20, 20],
         );
         await c.budgets();
-        for (let i = 0; i < sessions.length; i += 2)
-          await Promise.all(
-            sessions.slice(i, i + 2).map(async (s, offset) => {
-              const index = i + offset;
-              const client = connectLive("PARTICIPANT", null, {
-                now: () => performance.now(),
-                post: async (path, body) => {
-                  const reply = await request(s, path, body);
-                  if (reply.status !== 200)
-                    throw Object.assign(
-                      new Error("Synthetic live race refusal"),
-                      { status: reply.status, code: reply.value.error?.code },
-                    );
-                  return reply.value.data;
-                },
-                transport: (ticket) => {
-                  assert.ok(++opened <= 200, "Unbounded live race reconnects");
-                  const socket = io(`${address}/live`, {
-                    path: "/api/v1/live/socket",
-                    autoConnect: false,
-                    forceNew: true,
-                    reconnection: false,
-                    transports: ["websocket"],
-                    auth: { ticket },
-                    extraHeaders: {
-                      Origin: browser.origin,
-                      Cookie: [...s.jar]
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join("; "),
-                    },
-                  });
-                  socket.on("event", (event) => {
-                    if (
-                      event.patch.type === "CLAIM" &&
-                      event.patch.bounty_id === bounty
-                    )
-                      claims.add(index);
-                  });
-                  return socket;
-                },
-                install: (snapshot: any) => {
-                  assert.equal(snapshot.actor.round_id, round);
-                  assert.equal(snapshot.actor.language, s.language);
-                  assert.doesNotMatch(
-                    JSON.stringify(snapshot),
-                    /PRIVATE-RACE-SOURCE|source_code|reference_code|expected_output|proof_verifier/,
-                  );
-                  views.set(index, snapshot);
-                },
-                invalidate() {},
-                presence() {},
-                award: () =>
-                  animations.set(index, (animations.get(index) ?? 0) + 1),
-                state: (state) => states.set(index, state),
-              });
-              clients.push(client);
-              await until(() => states.get(index) === "READY");
-              client.edit(bounty);
-            }),
-          );
-        await until(
-          () =>
-            states.size === 100 &&
-            [...states.values()].every((s) => s === "READY"),
-        );
+        const enrolled=new Map((await query("SELECT m.member_id,m.id,m.team_round_id FROM member_rounds m WHERE m.round_id=$1",[round])).map(row=>[row.member_id,row]));
+        const initial=await live.initialise({address,origin:browser.origin,round,bounty,sessions:sessions.map(s=>{
+          const member=teams.find(team=>team.id===s.teamId)!.members[s.member]!,entry=enrolled.get(member);
+          assert.ok(entry);return {csrf:s.csrf,cookies:[...s.jar],language:s.language,memberRound:entry.id,teamRound:entry.team_round_id};
+        })});
+        assert.equal(initial.sockets,recipients);assert.equal(await live.fourth(),true);
         passed++;
       },
     );
@@ -435,8 +367,8 @@ export async function raceLoadChecks(
           )[0].n,
           0,
         );
-        assert.equal(claims.size, 0);
-        const started = performance.now();
+        assert.equal((await live.state()).claim_events, 0);
+        const started = performance.now(), requestedAt = Date.now();
         await c.assess(ordered[0].id, "WRONG_ANSWER");
         const winner = (
           await query("SELECT * FROM bounty_awards WHERE bounty_id=$1", [
@@ -444,21 +376,35 @@ export async function raceLoadChecks(
           ])
         )[0];
         assert.equal(winner.submission_id, ordered[1].id);
-        await until(
-          () =>
-            claims.size === 100 &&
-            [...views.values()].filter((v) =>
-              v.bounties.some((b: any) => b.bounty_id === bounty && b.claimed),
-            ).length === 100,
-        );
+        const observed=await live.claims(),claimAt=new Map(observed.events),projectionAt=new Map(observed.projections),animations=new Map(observed.awards);
         report.assessment_request_to_all_claim_projections_ms = Math.round(
           performance.now() - started,
         );
-        report.claim_recipients = claims.size;
+        // Only this disposable database enables PostgreSQL's actual transaction commit timestamps.
+        const committed = Number((await query(
+          "SELECT extract(epoch FROM pg_xact_commit_timestamp(xmin))*1000 AS committed_ms FROM bounty_awards WHERE bounty_id=$1",
+          [bounty],
+        ))[0].committed_ms);
+        assert.ok(Number.isFinite(committed) && committed >= requestedAt - 5 && committed <= Date.now() + 5);
+        const before = Date.now(), databaseNow = Number((await query("SELECT extract(epoch FROM clock_timestamp())*1000 AS now_ms"))[0].now_ms), after = Date.now();
+        assert.ok(databaseNow >= before - 5 && databaseNow <= after + 5, "Load generator and database clocks are not aligned.");
+        const timing = (values: Map<number, number>) => {
+          assert.equal(values.size, recipients);
+          const sorted = [...values.values()].map(at => at - committed).sort((a, b) => a - b);
+          assert.ok(sorted[0]! >= -5, "Claim arrived before the recorded database commit.");
+          return { recipients: sorted.length, p95_ms: Math.ceil(sorted[Math.ceil(recipients * .95) - 1]!), p99_ms: Math.ceil(sorted[Math.ceil(recipients * .99) - 1]!), max_ms: Math.ceil(sorted.at(-1)!) };
+        };
+        const eventTiming = timing(claimAt), projectionTiming = timing(projectionAt);
+        report.commit_to_claim_event = eventTiming;
+        report.commit_to_claim_projection = projectionTiming;
+        report.claim_latency_target_met = eventTiming.p95_ms <= 1000 && eventTiming.p99_ms <= 3000
+          && projectionTiming.p95_ms <= 1000 && projectionTiming.p99_ms <= 3000;
+        report.commit_clock = "POSTGRESQL_TRANSACTION_COMMIT_SAME_HOST_REALTIME";
+        report.claim_recipients = observed.events.length;
         assert.deepEqual(
           [...animations.keys()].sort((a, b) => a - b),
           sessions.flatMap((s, i) =>
-            s.teamId === admitted.get(ordered[1].id)!.session.teamId ? [i] : [],
+            s.teamId === admitted.get(ordered[1].id)!.session.teamId ? Array.from({length:tabsPerMember},(_,tab)=>i*tabsPerMember+tab) : [],
           ),
         );
         assert.ok([...animations.values()].every((n) => n === 1));
@@ -511,7 +457,7 @@ export async function raceLoadChecks(
         passed++;
       },
     );
-    for (const client of clients) client.close();
+    report.generator=await live.state();await live.close();
     await t.test(
       "all admitted work drains without a second award and both frozen round results remain independently inspectable",
       async () => {
@@ -575,12 +521,12 @@ export async function raceLoadChecks(
       6,
       "A failed subcheck must not produce a PASSED race report.",
     );
+    assert.equal(report.claim_latency_target_met, true, "The actual commit-to-claim latency target remains unmet.");
     report.state = "PASSED";
   } finally {
-    for (const client of clients) client.close();
+    await live.close();
     await app.close();
     report.completed_checks = passed;
-    report.opened_connections = opened;
     report.http_refusals = Object.fromEntries(refusals);
     report.warnings = Object.fromEntries(warnings);
     await writeFile(output, JSON.stringify(report, null, 2) + "\n");

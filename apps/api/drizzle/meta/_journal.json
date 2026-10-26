@@ -526,6 +526,20 @@
       "when": 1792725211327,
       "tag": "0074_retention_batch_budget",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792972534435,
+      "tag": "0075_event_execution_capacity",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792984698769,
+      "tag": "0076_event_capacity_integrity",
+      "breakpoints": true
     }
   ]
 }

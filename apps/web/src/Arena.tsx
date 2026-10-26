@@ -1,5 +1,4 @@
-import { Component, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   AdditiveBlending,
@@ -10,6 +9,7 @@ import {
   Vector3,
 } from "three";
 import type { Bounty, Termination } from "./types";
+import { Boundary } from "./ui";
 
 const accents = ["#baff51", "#49f1ed", "#ffbd5c", "#ff477e"];
 
@@ -378,19 +378,6 @@ function Strike({ bountyId }: { bountyId: string }) {
       </group>
     </group>
   );
-}
-
-class Boundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
 }
 
 export default function Arena({

@@ -1,0 +1,2 @@
+ALTER TABLE "execution_capacity_slots" DROP CONSTRAINT "development_slot_bounds";--> statement-breakpoint
+ALTER TABLE "execution_capacity_slots" ADD CONSTRAINT "physical_slot_bounds" CHECK ("execution_capacity_slots"."id" between 1 and 8 and "execution_capacity_slots"."revision">=0);

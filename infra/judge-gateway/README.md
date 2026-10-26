@@ -50,6 +50,14 @@ deliberately not rerunnable and have no drop/reset or startup auto-migrate
 path. Failure rolls back the installer. Do not apply it to the old experiment
 database or any existing environment merely to try it.
 
+`005_participant_payloads.sql` adds the strict sample/official payload roles;
+`006_supervisor_service.sql` adds singleton service ownership, renewal and narrow
+held-attempt inventory. `007_eight_slots.sql` installs the architecture's bounded
+eight-permit ceiling while preserving every old owner/result/hold. Production
+starts eight independent workers and nine queue clients; actual host calibration
+is a separate gate. Fresh installers include all seven files, never an automatic
+startup migration. The retained historical test databases are not upgraded.
+
 - The installer creates no host, runtime mapping, LOGIN/password or credential.
   It creates only NOLOGIN privilege groups: `ingenium_judge_gateway` for
   readiness/admission/lookups and `ingenium_judge_supervisor` for heartbeat,
@@ -64,8 +72,11 @@ database or any existing environment merely to try it.
   archive drift invalidates readiness, new registration and dispatch.
 - There is initially no readiness. A trusted supervisor must first verify its
   environment and then renew a thirty-second lease with its proof digest. Its
-  actual verification/heartbeat daemon is not implemented here. Calling heartbeat
-  with fabricated evidence is not a supported way to enable a real event.
+  continuous [supervisor](../../docs/judge-supervisor.md) now obtains fresh
+  challenge-bound launcher evidence before renewing that lease. Its production
+  full-host verifier/retirement composition is implemented, but its positive
+  [real-host calibration](../../docs/judge-host-verification.md) and installation remain pending.
+  Calling heartbeat with fabricated evidence cannot enable a real event safely.
 - ACTIVE may become FENCED, never the reverse. Epoch/boot/runtime identity cannot
   be repurposed. Fencing blocks new admission/claims/deliveries but retains old
   reads and matching late cleanup. It does not stop a previously permitted
@@ -80,8 +91,10 @@ database or any existing environment merely to try it.
 - Gateway process bounds are sixteen in-flight HTTP requests, two POST bodies,
   2 MiB body, 16 KiB headers and a ten-second request lifetime. Authority is checked
   before body parsing. Database functions are transactional with bounded lock and
-  statement waits. The eventual process must also set bounded connection/query
-  timeouts, private listen address, OS/network connection limits and disk monitoring.
+  statement waits. The standalone gateway entry point now fixes a four-connection
+  pool, one-second connection and 2.5-second query deadlines, a private listener,
+  current Linux boot and restricted database-role preflight. Installed OS/network
+  connection limits, disk monitoring and real-host calibration remain required.
 
 The provider insert was checked against the upstream
 [Judge0 1.13.1 schema](https://raw.githubusercontent.com/judge0/judge0/v1.13.1/db/schema.rb)
@@ -91,15 +104,16 @@ expected output, per-process budgets, network, extra flags/files and stderr merg
 are not enabled. CPU milliseconds retain their fractional seconds. The provider
 envelope uses at least one wall second and 2,048 KiB to satisfy its model floor;
 the immutable actual execution payload retains its original exact lower limits.
-The future protected executor must enforce those exact payload values. Neither
+The protected executor enforces those exact payload values. Neither
 the provider envelope nor a stock worker may override them.
 
 The new outbox/Redis stream is not the stock automatic `IsolateJob` queue. No code
-publishes or starts a stock worker here. Before integration, review the actual
-deployed provider schema/configuration/image, implement the protected
-executor, and verify the provider result/accounting mirror. Registered stock rows
-are queue placeholders until that path is implemented; ordinary stock status is
-not this protocol's result authority.
+publishes or starts a stock worker here. The protected executor and the bound
+result/accounting mirror are implemented, with installed five-language evidence
+and separately documented concurrency limits. Before deployment, qualify the
+actual provider schema/configuration/image; the clean-host rehearsal uses an
+explicit structural provider fixture. Registered stock rows remain queue
+placeholders; ordinary stock status is not this protocol's result authority.
 
 ## Judge-Only Queue
 

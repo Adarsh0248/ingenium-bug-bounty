@@ -5,7 +5,7 @@ import { cgroupMounts, cpusetRange } from "../src/judge/host-cgroups.js";
 import { capsuleConfiguration } from "../src/judge/capsule-configuration.js";
 import { capsuleReference } from "../src/judge/capsule-lifecycle.js";
 import { createHostCapsuleResources } from "../src/judge/host-resources.js";
-import { readCapsuleRequest } from "../src/judge/capsule-cli.js";
+import { readCapsuleRequest } from "../src/judge/capsule-request.js";
 import type { ExecutionCheckpoints } from "../src/judge/checkpoints.js";
 import { createExecutionPlan } from "../src/judge/execution-plan.js";
 import { executionRequest } from "../src/judge/executor.js";

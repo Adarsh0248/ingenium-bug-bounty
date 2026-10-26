@@ -4,10 +4,10 @@ import { judgeJson, runtimeRecord } from "../content/judge-protocol.js";
 import type { ExecutionCheckpoints } from "./checkpoints.js";
 import { capsuleReference } from "./capsule-lifecycle.js";
 import type { CapsuleReference, CapsuleResources } from "./capsule-lifecycle.js";
-import { capsuleConfiguration, prepareCapsuleConfiguration, removeCapsuleConfiguration, verifyCapsuleConfiguration } from "./capsule-configuration.js";
+import { assertCapsuleConfigurationAbsent, capsuleConfiguration, prepareCapsuleConfiguration, removeCapsuleConfiguration, verifyCapsuleConfiguration } from "./capsule-configuration.js";
 import type { ConfigurationIdentity, InodeIdentity } from "./capsule-configuration.js";
 import type { ExecutionPlan } from "./execution-plan.js";
-import { inspectHostCgroups, prepareHostCgroup, removeHostCgroup, verifyHostCgroup, cpusetRange } from "./host-cgroups.js";
+import { assertHostCgroupAbsent, inspectHostCgroups, prepareHostCgroup, removeHostCgroup, verifyHostCgroup, cpusetRange } from "./host-cgroups.js";
 import type { CgroupAllocation, CgroupRoot } from "./host-cgroups.js";
 import type { IsolateSettings } from "./isolate-context.js";
 import { retainedPhaseGroups } from "./phase-resources.js";
@@ -51,7 +51,10 @@ function allocated(value: unknown, expected: Record<string, CgroupRoot>) {
   }
   return found;
 }
-export function createHostCapsuleResources(checkpoints: ExecutionCheckpoints, settings: IsolateSettings): CapsuleResources {
+export function createHostCapsuleResources(checkpoints: ExecutionCheckpoints, settings: IsolateSettings,
+  observeReferences: typeof verifyNoCapsuleReferences = verifyNoCapsuleReferences): CapsuleResources & {
+  assertRetired(plan: ExecutionPlan, reference: CapsuleReference, signal: AbortSignal): Promise<void>;
+} {
   const copied: IsolateSettings = { hostEpochId: uuid(settings.hostEpochId), bootId: uuid(settings.bootId), binaries: { ...settings.binaries },
     runtimes: new Map([...settings.runtimes].map(([key, value]) => [key, { ...value }])) };
   runtimeRecord(copied.runtimes);
@@ -84,6 +87,19 @@ export function createHostCapsuleResources(checkpoints: ExecutionCheckpoints, se
     for (const group of Object.values(saved.groups)) { signal.throwIfAborted(); await verifyHostCgroup(group, ref.parent); }
   }
   return {
+    async assertRetired(plan, reference, signal) {
+      const { row, ref, configuration } = await state(plan, reference, signal);
+      const saved = manifest(row, configuration), physical = await checkpoints.physical(plan);
+      if (!physical || physical.cgroup_parent !== ref.parent) return fail();
+      const receipt = { version: 1, boot_id: copied.bootId, container_id: physical.container_id, resources_sha256: saved.digest };
+      if (judgeJson(row.resource_remove) !== judgeJson(receipt) || judgeJson(row.resource_removed) !== judgeJson(receipt)) return fail();
+      retainedPhaseGroups(plan, copied.bootId, physical, row); retainedStorage(plan, copied.bootId, physical, row.storage);
+      if (judgeJson(await inspectHostCgroups(copied.bootId)) !== judgeJson(Object.fromEntries(Object.entries(saved.groups).map(([key, value]) => [key, value.root])))) return fail();
+      for (const group of Object.values(saved.groups)) { signal.throwIfAborted(); await assertHostCgroupAbsent(group.root, ref.parent); }
+      await assertCapsuleConfigurationAbsent(ref);
+      await observeReferences(plan, copied.bootId, physical, row.storage, signal);
+      signal.throwIfAborted();
+    },
     async prepare(plan, reference, signal) {
       const { row, ref, configuration } = await state(plan, reference, signal);
       if (row.resource_intent !== null) { if (row.resources === null) return fail(); await verify(plan, ref, signal); return; }
@@ -117,7 +133,7 @@ export function createHostCapsuleResources(checkpoints: ExecutionCheckpoints, se
         await removeHostCgroup(group, ref.parent, child ?? null);
       }
       signal.throwIfAborted(); await removeCapsuleConfiguration(ref, configuration, saved.config);
-      if (physical !== null) await verifyNoCapsuleReferences(plan, copied.bootId, physical, row.storage, signal);
+      if (physical !== null) await observeReferences(plan, copied.bootId, physical, row.storage, signal);
       await checkpoints.saveCapsule(plan, "resource_removed", receipt);
       // This receipt covers only owned groups/config, not namespace/image/whole-host readiness or a participant drain verdict.
     },
