@@ -155,7 +155,7 @@ export const contentReceipt = object({ outcome_id: id, action: { type: "string",
   recorded_at: instant, definition_id: nullableId, version_id: nullableId, content_revision: { anyOf: [revision, { type: "null" }] }, case_id: nullableId });
 export const contentOutcomeParams = object({ action: { type: "string", enum: ACTIONS }, target: { anyOf: [id, { type: "string", const: "catalogue" }] }, request_key: id });
 export const contentOutcomeData = object({ status: { type: "string", enum: ["OBSERVED", "NOT_OBSERVED"] }, outcome: { anyOf: [contentReceipt, { type: "null" }] } });
-const contentProperties = { version_id: id, definition_id: id, version_number: { type: "integer", minimum: 1, maximum: 1000 },
+const contentProperties = { category: { anyOf: [{type:"string",enum:["ARRAYS","GRAPHS","SYSTEMS","LOGIC"]},{type:"null"}] }, version_id: id, definition_id: id, version_number: { type: "integer", minimum: 1, maximum: 1000 },
   title: { type: "string", maxLength: 160 }, difficulty: { type: "integer", minimum: 1, maximum: 100 }, base_bounty: { type: "integer", minimum: 10, maximum: 1000 },
   publication_status: { type: "string", enum: ["DRAFT", "PUBLISHED"] }, content_revision: revision, round_type: { type: "integer", enum: [1, 2] }, definition_revision: revision };
 const lang = { type: "string", enum: LANGUAGES }, byteCount = { type: "integer", minimum: 0, maximum: 1048576 }, level = { type: "integer", minimum: 1, maximum: 3 };

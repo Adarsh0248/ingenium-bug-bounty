@@ -1,4 +1,6 @@
 export const AUDIT_FAMILIES = {
+  REPORT_DECISIONS: { label: "Question report decisions", arena: true, superAdmin: false },
+  SCORE_ADJUSTMENTS: { label: "Final score adjustments", arena: true, superAdmin: false },
   ANNOUNCEMENTS: { label: "Announcements", arena: true, superAdmin: false },
   ROUND: { label: "Round controls", arena: true, superAdmin: false },
   ARENA: { label: "Arena setup", arena: true, superAdmin: false },

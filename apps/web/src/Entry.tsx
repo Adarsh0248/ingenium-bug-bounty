@@ -158,11 +158,12 @@ export default function Entry({
       </header>
       <section className="entry-body">
         <div className="entry-rule">
-          <span className="status-dot" /> FIELD ACCESS
+          <span className="status-dot" /> INGENIUM / BUG BOUNTY
         </div>
         <h1>
-          Ingenium<span>Bug bounty arena.</span>
+          HUNT THE<span>GLITCH.</span>
         </h1>
+        <p className="entry-intro">The city has a bug problem.<br />You're the fix.</p>
         <div className="entry-form">
           {state.step === "CODE" && (
             <form

@@ -10,19 +10,27 @@ import { buildApp } from "../../src/app.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
 import type { EntryHttpOptions } from "../../src/access/http.js";
 
-export async function withBrowserApp(
+export async function startBrowserApp(
   options: Omit<EntryHttpOptions, "browser">,
-  work: (
-    browser: Browser,
-    origin: string,
-    policy: ReturnType<typeof browserPolicy>,
-  ) => Promise<void>,
+  port = 0,
+  preview = false,
 ) {
+  assert.ok(Number.isInteger(port) && port >= 0 && port <= 65535);
   let app: ReturnType<typeof buildApp> | undefined,
     vite: Awaited<ReturnType<typeof viteServer>> | undefined;
   const bridge = createServer((req, res) => {
     if (req.url?.startsWith("/api/")) {
+      if (!app) {
+        res.statusCode = 503;
+        res.end();
+        return;
+      }
       app!.server.emit("request", req, res);
+      return;
+    }
+    if (!vite) {
+      res.statusCode = 503;
+      res.end();
       return;
     }
     vite!.middlewares(req, res, () => {
@@ -30,11 +38,25 @@ export async function withBrowserApp(
       res.end();
     });
   });
-  let browser: Browser | undefined;
+  let closed = false;
+  async function close() {
+    if (closed) return;
+    closed = true;
+    const results = await Promise.allSettled([vite?.close(), app?.close()]);
+    bridge.closeAllConnections();
+    if (bridge.listening)
+      await new Promise<void>((resolve) => bridge.close(() => resolve()));
+    for (const result of results)
+      if (result.status === "rejected") throw result.reason;
+  }
   try {
-    await new Promise<void>((resolve) =>
-      bridge.listen(0, "127.0.0.1", resolve),
-    );
+    await new Promise<void>((resolve, reject) => {
+      bridge.once("error", reject);
+      bridge.listen(port, "127.0.0.1", () => {
+        bridge.removeListener("error", reject);
+        resolve();
+      });
+    });
     const address = bridge.address();
     assert.ok(address && typeof address !== "string");
     const origin = `http://127.0.0.1:${address.port}`,
@@ -44,20 +66,12 @@ export async function withBrowserApp(
         cookieKey: randomBytes(32),
         csrfKey: randomBytes(32),
       };
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        "--use-gl=angle",
-        "--use-angle=swiftshader-webgl",
-        "--enable-unsafe-swiftshader",
-      ],
-    });
     vite = await viteServer({
       configFile: false,
       root: fileURLToPath(new URL("../../../web/", import.meta.url)),
       envDir: false,
       plugins: [react()],
-      define: { __PREVIEW__: false },
+      define: { __PREVIEW__: preview },
       server: {
         middlewareMode: true,
         hmr: { server: bridge },
@@ -75,13 +89,38 @@ export async function withBrowserApp(
       if (req.url?.startsWith("/api/"))
         app!.server.emit("upgrade", req, socket, head);
     });
-    await work(browser, origin, browserPolicy(settings));
+    return { origin, policy: browserPolicy(settings), close };
+  } catch (error) {
+    await close();
+    throw error;
+  }
+}
+
+export async function withBrowserApp(
+  options: Omit<EntryHttpOptions, "browser">,
+  work: (
+    browser: Browser,
+    origin: string,
+    policy: ReturnType<typeof browserPolicy>,
+  ) => Promise<void>,
+) {
+  const server = await startBrowserApp(options);
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        "--use-gl=angle",
+        "--use-angle=swiftshader-webgl",
+        "--enable-unsafe-swiftshader",
+      ],
+    });
+    await work(browser, server.origin, server.policy);
   } finally {
-    await browser?.close();
-    await vite?.close();
-    await app?.close();
-    bridge.closeAllConnections();
-    if (bridge.listening)
-      await new Promise<void>((resolve) => bridge.close(() => resolve()));
+    try {
+      await browser?.close();
+    } finally {
+      await server.close();
+    }
   }
 }

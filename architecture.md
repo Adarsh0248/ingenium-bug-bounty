@@ -2937,7 +2937,7 @@ Status: the user confirmed this grouped screen/workflow, in-memory dirty-buffer/
 | --- | --- |
 | Common entry | Private code entry; backend routes staff to their permitted console or a team to its registered member/round-language flow. Restore valid current sessions first. No access code in URLs or client-owned role flags. |
 | Waiting and round entry | Show only separately authorised waiting/availability information before entry is allowed. Eligible first entry creates/restores that member's correct round/language context through the agreed flow; waiting does not expose challenge content, grant early gameplay, or reset clocks. |
-| Arena and HUD | Full-screen roaming 3D targets as the main experience, with team/member identity, locked language, score, wallet, rank, shared countdown, pause/connection state, and a minimisable HUD. Keep score and spendable wallet distinct. Selecting a target opens its workbench without a page reload. |
+| Arena and HUD | A connected stylised 3D cyberpunk city with a fixed isometric camera, pan/zoom and category-specific articulated cyborg bugs as the main experience, with team/member identity, locked language, score, wallet, rank, shared countdown, pause/connection state, and a minimisable HUD. Keep score and spendable wallet distinct. Selecting a target opens its workbench without a page reload. |
 | Bug workbench | Bounty statement, public difficulty/reward, selected-language starter/editor, private working draft/save status, team work/submission status, public samples, separate Run/Submit actions, and sequential paid hints with prices. New actions follow current server gates and caps; opening a target grants no claim priority. |
 | Standings and activity | Authorised round leaderboard with the agreed tie/qualification rules and provisional/final/cancelled labels; own-team wallet/purchase/submission history only. Other teams' private code, wallets, and purchased hints remain unavailable. |
 | Results and recovery | Permitted read-only round history, results-finalising/cancelled information, expiry/revocation handling, and the organiser-approved same-round replacement flow. This does not create anonymous result access or a new closed-round login exception. |
@@ -3694,8 +3694,42 @@ Status: the user approved the complete architecture/local-build direction, commi
 - External inputs are obtained when their feature needs them: the actual registration-export columns/sample before importer mapping, authorised branding/assets and event domain, final reviewed competition content/hints, named staff/operators, real cloud account quota/credit/cost confirmation and approved test/deployment resources. Do not invent registrations, credentials, account access or a successful capacity result. These inputs do not require another general architecture-planning sequence.
 - Deferred initial features remain special shop items/bonus mechanics, function-only submissions, browser HTML/CSS/React grading and multi-API/automatic failover. Custom-input execution, selective rejudge, live published-content repair and arbitrary/post-final economic edits are not enabled. Preserve requested core staff controls and both rounds; a later scope reduction needs explicit approval.
 
+### 12.3 Question Reports and Final Score Corrections (26 October 2026)
+
+- Participants can report each question with an explanation and an optional exact
+  official submission from their own team. One ticket per team/question is shared
+  by both members. The submitted source identity/hash remains fixed; sample runs
+  and opponents' answers cannot be attached. Open reports preserve their attached
+  source until reviewed, within the existing private-review access controls.
+- Owner/Super Admin staff review tickets through the existing audited source
+  review and uphold/dismiss with a required note. Reports do not grant points or
+  change judging outcomes automatically.
+- The organiser explicitly approved adding/deducting points in the final
+  standings after round completion, with an explanatory note and an amount chosen
+  by the admin. Append-only signed corrections require current owner authority,
+  their own staff code and an expected revision. The original automatic result
+  stays intact; corrected standings and exports rerank using existing tie-breaks.
+- Corrections affect score/rank only. They do not change wallets, cumulative solve
+  time, judge verdicts or claimed bugs. Round 1 corrections before qualification
+  affect qualification; an already locked roster and carryovers remain fixed.
+  Notes are visible in participant result history and staff audit. Mistakes are
+  reversed with an opposite adjustment and a new note.
+- This is the explicit exception to the earlier exclusion of post-final economic
+  edits, limited to final points. Arbitrary wallet edits, selective rejudging and
+  live published-content repair remain outside this change. See
+  [question reports](docs/question-reports.md) for the UI and verification flow.
+
 #### Approved Next Step
 
 - The complete core architecture, local-build direction, user-owned architecture commit and implementation branch are confirmed. The first local foundation implements the harmless health/read connection in Section 12.1's teaching-first order. Walk through its files and request path with the user before broadening the milestone; this is not the entire backend or an event-ready system.
 - That approval permits only the agreed implementation scope. The user continues to perform all branch/stage/commit/push/pull/PR actions; explain and guide them without executing those mutations. Cloud spending/provisioning, real competition bug authoring and eventual live launch retain their separate approval/readiness gates.
 - Keep the learning pace during implementation: explain the next small deliverable, implement/verify it, and show what it proves and what remains. The early judge feasibility/security spike retains its isolated-runtime and separate cloud-resource authorisation gate; do not execute participant code in this development database/API environment.
+
+
+Connected-map decision (26 October 2026): question category is shared across all five language variants and frozen in the validation manifest. ARRAYS/strings/searching use the neon city; GRAPHS/trees/traversal use forest; SYSTEMS/memory/references/resource handling use desert ruins; LOGIC/state/concurrency use ice mountains. Categories never depend on a bounty ID or language. Creature size, speed and motion vary by family. One click captures a moving bug; the existing durable workbench-opening ledger shares that capture with its team, scoped to the round. All uncaught overview markers remain visible. Keyboard and reduced-motion access remain supported. See docs/neon-art-direction.md for artwork and detailed rules.
+
+
+Visual revision (26 October 2026): replace painted terrain and flat creature sprites with a stylised 3D cyberpunk/cyborg world. Fix the camera at an isometric angle while keeping pan and zoom. The four connected districts are Neon Megacity (ARRAYS), Data Grid (GRAPHS), Reactor Works (SYSTEMS), and Cryogenic Sector (LOGIC). Model flowing coolant, moving machinery and articulated creature joints as live scene elements. Preserve the existing category, language fairness, team capture, scoring, pause and deferred termination contracts. See docs/neon-art-direction.md.
+
+
+Visual rollback (26 October 2026): restore the earlier four separate areas—Neon District, Ember Foundry, Verdant Circuit and Cryo Vault—with their original SVG scenes, pixel creatures and region navigation. This supersedes the connected-map and isometric-city visual directions above. Retain local admin access, reports, score corrections, shared category metadata, capture receipts and all existing competition rules. The rejected renderer is backed up locally outside the active app.

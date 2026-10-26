@@ -30,6 +30,7 @@ import type { createWorkspace } from "./workspace";
 import { IconButton, Modal } from "./ui";
 import { displayOutput } from "./output";
 import Editor from "./Editor";
+import ReportQuestion from "./ReportQuestion";
 type Workspace = ReturnType<typeof createWorkspace>;
 type Tab = "PROBLEM" | "HINTS" | "SUBMISSIONS";
 export default function Workbench({
@@ -76,7 +77,8 @@ export default function Workbench({
     [feedbackId, setFeedbackId] = useState<string | null>(null),
     [viewSource, setViewSource] = useState<any>(null),
     [buy, setBuy] = useState<number | null>(null),
-    [conflict, setConflict] = useState<any>(null);
+    [conflict, setConflict] = useState<any>(null),
+    [reporting, setReporting] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
@@ -333,6 +335,8 @@ export default function Workbench({
               : `Read only: ${label(meta!.reason ?? "unavailable")}.`}
         </div>
       )}
+      <button className="text-button" onClick={()=>setReporting(true)}>Report question</button>
+      {reporting&&<ReportQuestion api={api} path={path} title={bug.title} close={()=>setReporting(false)}/>}
       <div className="workbench-grid">
         <div className="problem-column">
           <nav className="tabs" aria-label="Challenge views">

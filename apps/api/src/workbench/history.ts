@@ -36,7 +36,7 @@ export function createHistoryService(pool: Pool, clock: ClockGuard) {
         }>(
           c.client,
           `SELECT r.id AS round_id,r.kind,r.state,EXISTS(SELECT 1 FROM round_results WHERE round_id=r.id) AS final,
-            competition_balance($2)::integer AS wallet,COALESCE((SELECT standings FROM round_results WHERE round_id=r.id),competition_standings(r.id)) AS standings
+            competition_balance($2)::integer AS wallet,competition_display_standings(r.id) AS standings
             FROM rounds r WHERE r.id=$1`,
           [round, c.teamRoundId],
         );

@@ -108,7 +108,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
   let judge: ReturnType<typeof createParticipantJudgeWorker>;
   const judgePool = new Pool({ connectionString: ownerUrl.toString(), options: "-c role=ingenium_competition_worker", max: 2 });
   async function published(actor: Person, kind: number, difficulty: number) {
-    const version = (await edit("CREATE", null, { round_type: kind, title: "Synthetic competition bounty", statement: "Synthetic statement", difficulty, checker_mode: "TOKENS" })).version_id!;
+    const version = (await edit("CREATE", null, { round_type: kind, category: "ARRAYS", title: "Synthetic competition bounty", statement: "Synthetic statement", difficulty, checker_mode: "TOKENS" })).version_id!;
     for (const language of LANGUAGES) await edit("VARIANT", version, { language, starter_code: "synthetic wrong", reference_solution_code: "synthetic reference", defect_description: "Synthetic defect",
       runtime_key: `competition-${language}`, cpu_time_limit_ms: 1000, wall_time_limit_ms: 5000, memory_limit_kb: 262144 });
     const sample = (await edit("CASE", version, { case_id: null, position: 1, visibility: "SAMPLE", input_data: "7 5\n", expected_output: "12\n" })).case_id!;
@@ -238,6 +238,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       if(process.env.INGENIUM_TEST_SUITE==="cancellation"){const {cancellationChecks}=await import("./cancellation.checks.js");await cancellationChecks(t,context);return;}
       if(["history","history-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {historyChecks}=await import("./history.checks.js");await historyChecks(t,context);return;}
       if(["judging","judging-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {staffJudgingChecks}=await import("./staff-judging.checks.js");await staffJudgingChecks(t,context);return;}
+      if(process.env.INGENIUM_TEST_SUITE==="reports"){const {reportChecks}=await import("./reports.checks.js");await reportChecks(t,context);return;}
       if(["review","review-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {submissionReviewChecks}=await import("./submission-review.checks.js");await submissionReviewChecks(t,context);return;}
       if(["audit","audit-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {staffAuditChecks}=await import("./staff-audit.checks.js");await staffAuditChecks(t,context);return;}
       if(["announcements","announcements-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {announcementChecks}=await import("./announcements.checks.js");await announcementChecks(t,context);return;}
@@ -258,8 +259,9 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {teamAccessChecks}=await import("./team-access.checks.js");await teamAccessChecks(t,context);}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {resultsExportChecks}=await import("./results-export.checks.js");await resultsExportChecks(t,context);}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {retentionChecks}=await import("./retention.checks.js");await retentionChecks(t,context);}
+      if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {reportChecks}=await import("./reports.checks.js");await reportChecks(t,context);}
     }
-    if (["load","load-soak","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
+    if (["load","load-soak","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","reports","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
     let emptyWalletKey: string, emptyWalletReceipt: unknown;
     await t.test("an unaffordable hint rejection is durable and malformed or unconfigured submissions allocate no receipt or priority", async () => {
       await budgets(); emptyWalletKey = randomUUID();

@@ -26,13 +26,14 @@ export const bugDefinitions = pgTable("bug_definitions", {
 
 export const bugVersions = pgTable("bug_versions", {
   id: id(), definitionId: uuid("definition_id").notNull().references(() => bugDefinitions.id, { onDelete: "restrict" }), versionNumber: integer("version_number").notNull(),
-  title: text("title").notNull(), statement: text("statement").notNull(), difficulty: integer("difficulty").notNull(), baseBounty: integer("base_bounty").notNull(),
+  title: text("title").notNull(), category: text("category"), statement: text("statement").notNull(), difficulty: integer("difficulty").notNull(), baseBounty: integer("base_bounty").notNull(),
   publicationStatus: text("publication_status").notNull(), createdBy: uuid("created_by").notNull().references(() => staffIdentities.id, { onDelete: "restrict" }), createdAt: instant("created_at").notNull(),
   publishedBy: uuid("published_by").references(() => staffIdentities.id, { onDelete: "restrict" }), publishedAt: instant("published_at"),
   submissionFormat: text("submission_format").notNull(), checkerMode: text("checker_mode").notNull(), checkerVersion: text("checker_version").notNull(),
   contentRevision: bigint("content_revision", { mode: "bigint" }).notNull(), contentBytes: bigint("content_bytes", { mode: "bigint" }).notNull(),
   lastSourceId: uuid("last_source_id").notNull().references((): AnyPgColumn => contentOutcomes.id, { onDelete: "restrict" }),
 }, t => [unique("bug_version_number").on(t.definitionId,t.versionNumber), unique("bug_version_definition").on(t.id,t.definitionId),
+  check("bug_category", sql`${t.category} in ('ARRAYS','GRAPHS','SYSTEMS','LOGIC')`),
   check("bug_version_content", sql`${t.versionNumber} between 1 and 1000 and ${t.contentRevision}>=1 and ${t.contentBytes}>=4096
     and octet_length(${t.title}) between 1 and 160 and length(btrim(${t.title}))>0 and octet_length(${t.statement})<=65536
     and ${t.difficulty} between 1 and 100 and ${t.baseBounty}=${t.difficulty}*10 and ${t.submissionFormat}='FULL_PROGRAM'

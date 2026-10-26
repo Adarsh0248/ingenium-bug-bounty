@@ -37,9 +37,11 @@ import StaffAnnouncements from "./StaffAnnouncements";
 import StaffResultsExport from "./StaffResultsExport";
 import StaffMaintenance from "./StaffMaintenance";
 import StaffOperations from "./StaffOperations";
+import StaffReports from "./StaffReports";
+import ScoreCorrections from "./ScoreCorrections";
 
 type Tab =
-  "SETUP" | "BOUNTIES" | "MONITOR" | "JUDGING" | "ACCESS" | "STAFF" | "LIBRARY" | "TEAMS" | "DISCIPLINE" | "INCIDENTS" | "AUDIT" | "ANNOUNCEMENTS" | "MAINTENANCE";
+  "SETUP" | "BOUNTIES" | "MONITOR" | "JUDGING" | "ACCESS" | "STAFF" | "LIBRARY" | "TEAMS" | "DISCIPLINE" | "INCIDENTS" | "AUDIT" | "ANNOUNCEMENTS" | "MAINTENANCE" | "REPORTS";
 type Draft = {
   minutes: string;
   teams: string[];
@@ -721,7 +723,7 @@ export default function StaffConsole({
           <strong>{round?.selected.length ?? 0}</strong>
         </div>
       </section>
-      {manager && !["STAFF", "ACCESS", "LIBRARY", "TEAMS", "AUDIT", "ANNOUNCEMENTS", "MAINTENANCE"].includes(tab) && (
+      {manager && !["STAFF", "ACCESS", "LIBRARY", "TEAMS", "AUDIT", "ANNOUNCEMENTS", "MAINTENANCE", "REPORTS"].includes(tab) && (
         <div className="staff-controls">
           {round && editable && (
             <>
@@ -799,6 +801,7 @@ export default function StaffConsole({
             "BOUNTIES",
             "MONITOR",
             ...(round ? ["JUDGING"] : []),
+            ...(manager && round ? ["REPORTS"] : []),
             "ACCESS",
             ...(data?.instance ? ["ANNOUNCEMENTS"] : []),
             ...(manager ? ["LIBRARY", "TEAMS", "AUDIT", "MAINTENANCE", ...(round && data?.instance ? ["DISCIPLINE", "INCIDENTS"] : [])] : []),
@@ -840,6 +843,7 @@ export default function StaffConsole({
           liveRevision={view?.round?.revision} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved}
           blockNavigation={setAccessBlocked} />
       )}
+      {tab === "REPORTS" && manager && round && <StaffReports key={round.round_id} api={api} round={round.round_id} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} blockNavigation={setAccessBlocked}/>}
       {tab === "MAINTENANCE" && manager && <><StaffOperations api={api} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} /><StaffMaintenance api={api} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} /></>}
       {tab === "TEAMS" && manager && (
         <StaffTeams
@@ -1056,7 +1060,7 @@ export default function StaffConsole({
         <section className="staff-section">
           <div className="staff-section-heading">
             <h2>Published bugs / Round {round?.kind ?? 1}</h2>
-            <strong>{draft?.snapshots.length ?? 0} / 40 selected</strong>
+            <strong>{draft?.snapshots.length ?? 0} / 50 selected</strong>
             <button
               disabled={
                 locked ||
@@ -1109,7 +1113,7 @@ export default function StaffConsole({
                             !manager ||
                             !editable ||
                             family ||
-                            (!chosen && (draft?.snapshots.length ?? 0) >= 40)
+                            (!chosen && (draft?.snapshots.length ?? 0) >= 50)
                           }
                           onChange={(e) =>
                             edit({
@@ -1227,6 +1231,7 @@ export default function StaffConsole({
                 </tbody>
               </table>
             </div>
+            {round?.state==="CLOSED"&&<ScoreCorrections key={round.round_id} api={api} round={round.round_id} staff controls={manager?round:undefined} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} blockNavigation={setAccessBlocked}/>}
           </section>
           <section className="staff-section">
             <h2>Recent judging</h2>

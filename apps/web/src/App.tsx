@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowRight, RefreshCw } from "lucide-react";
 import { ApiError, createApi, errorText } from "./api";
-import type { Audience, Session, StaffSession } from "./types";
+import type { Audience, Session, StaffSession, Category } from "./types";
 import { Brand } from "./ui";
 import Entry from "./Entry";
 import type { EntryState } from "./Entry";
@@ -10,16 +10,16 @@ const Participant = lazy(() => import("./Participant")),
   ClockRecovery = lazy(() => import("./ClockRecovery")),
   Arena = lazy(() => import("./Arena"));
 const api = createApi();
-const decorative = [
-  {
-    bounty_id: "entry",
-    title: "",
-    difficulty: 28,
-    base_bounty: 0,
-    claimed: false,
-    hint_tier: 0,
-  },
-];
+const decorative = [0, 1, 2, 3].map((index) => ({
+  bounty_id: `entry-${index}`,
+  category: (["ARRAYS", "GRAPHS", "SYSTEMS", "LOGIC"] as Category[])[index],
+  captured: false,
+  title: "",
+  difficulty: 25 + index * 20,
+  base_bounty: 0,
+  claimed: false,
+  hint_tier: 0,
+}));
 declare const __PREVIEW__: boolean;
 export default function App() {
   const [screen, setScreen] = useState("BOOT"),
@@ -34,9 +34,17 @@ export default function App() {
     setScreen("BOOT");
     setError("");
     try {
-      if (entryOnly) { setStaff(null); setSession(null); api.clear(); }
+      if (entryOnly) {
+        setStaff(null);
+        setSession(null);
+        api.clear();
+      }
       await api.bootstrap("ANONYMOUS");
-      if (entryOnly) { setEntry({step:"CODE"}); setScreen("ENTRY"); return; }
+      if (entryOnly) {
+        setEntry({ step: "CODE" });
+        setScreen("ENTRY");
+        return;
+      }
       for (const audience of [
         "PARTICIPANT",
         "STAFF",
@@ -84,7 +92,12 @@ export default function App() {
           setScreen("ENTRY");
           return;
         } catch (e) {
-          if (e instanceof ApiError && e.code === "CLOCK_UNTRUSTED" && !audience.startsWith("STAFF_RECOVERY")) continue;
+          if (
+            e instanceof ApiError &&
+            e.code === "CLOCK_UNTRUSTED" &&
+            !audience.startsWith("STAFF_RECOVERY")
+          )
+            continue;
           if (
             !(e instanceof ApiError) ||
             (e.status !== 401 && e.status !== 400)
@@ -174,8 +187,17 @@ export default function App() {
           />
         </Suspense>
       ) : screen === "STAFF" && staff ? (
-        <Suspense fallback={<div className="boot-status">Opening timing recovery...</div>}>
-          <ClockRecovery key={staff.session_id} api={api} session={staff} leave={() => void boot(true)} />
+        <Suspense
+          fallback={
+            <div className="boot-status">Opening timing recovery...</div>
+          }
+        >
+          <ClockRecovery
+            key={staff.session_id}
+            api={api}
+            session={staff}
+            leave={() => void boot(true)}
+          />
         </Suspense>
       ) : (
         <main className="service-screen">
@@ -198,7 +220,10 @@ export default function App() {
                     ? "Protected data has been cleared. Contact an organiser to restore your enrolled member."
                     : error}
                 </p>
-                <button className="primary" onClick={() => void boot()}>
+                <button
+                  className="primary"
+                  onClick={() => void boot(screen === "EXPIRED")}
+                >
                   {screen === "EXPIRED"
                     ? "Return to entry"
                     : "Check connection"}

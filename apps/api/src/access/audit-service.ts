@@ -19,6 +19,8 @@ import type { ClockGuard } from "./transaction.js";
 
 const globalScope = "NULL::uuid AS arena_id,NULL::uuid AS round_id";
 const projections: Record<AuditFamily, string> = {
+  REPORT_DECISIONS: `SELECT a.id,a.recorded_at,a.actor_id,a.verdict AS action,'APPLIED'::text AS outcome,NULL::text AS denial_reason,a.reason,a.report_id AS target_id,r.arena_instance_id AS arena_id,q.round_id FROM report_decisions a JOIN question_reports q ON q.id=a.report_id JOIN rounds r ON r.id=q.round_id`,
+  SCORE_ADJUSTMENTS: `SELECT a.id,a.recorded_at,a.actor_id,'ADJUST_POINTS'::text AS action,'APPLIED'::text AS outcome,NULL::text AS denial_reason,a.reason,a.team_round_id AS target_id,r.arena_instance_id AS arena_id,a.round_id FROM score_adjustments a JOIN rounds r ON r.id=a.round_id`,
   ANNOUNCEMENTS: `SELECT a.id,a.recorded_at,a.actor_id,'ANNOUNCE_'||a.scope AS action,a.outcome,a.denial_reason,a.reason,coalesce(a.team_id,a.round_id,a.arena_id) AS target_id,a.arena_id,a.round_id FROM announcements a`,
   ROUND: `SELECT a.id,a.recorded_at,a.actor_id,a.action,a.result->>'status' AS outcome,a.result->>'reason' AS denial_reason,a.reason,
     a.round_id AS target_id,r.arena_instance_id AS arena_id,a.round_id FROM competition_outcomes a JOIN rounds r ON r.id=a.round_id WHERE a.staff_session_id IS NOT NULL`,

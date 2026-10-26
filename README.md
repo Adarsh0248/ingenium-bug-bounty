@@ -366,6 +366,12 @@ Corrected continuation package: ignored `runtime-data/judge-spike/ingenium-judge
 
 ## First Local Milestone
 
+For interactive frontend work with both admin and contestant panels, run
+`npm.cmd run preview:app` with Docker Desktop open. The local demo at port 5175
+prints its demo codes and uses a separate disposable database. See
+[the local preview guide](docs/local-preview.md). Code judging is simulated;
+the cloud judge and the development database are not used.
+
 Requirements: Node.js 24.22.x (npm included) and running Docker Desktop with Linux containers. Run these from this repository's root in PowerShell; use `npm.cmd` if PowerShell blocks the `npm.ps1` wrapper.
 
 ```powershell

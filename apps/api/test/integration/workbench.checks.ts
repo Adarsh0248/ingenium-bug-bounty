@@ -43,6 +43,25 @@ export async function workbenchChecks(t:TestContext,c:Context){
     await c.budgets();assert.deepEqual(await service.open(a.aa,a.round,a.x,key),opened);assert.deepEqual(await before(),changed);
     assert.ok((await service.metadata(a.aa,a.round,a.x)).writable);
   });
+  await t.test("captures are team-shared, round scoped and private, with one first-capture live notice",async()=>{
+    await c.budgets();
+    const read=async(cookie:string)=>(await c.service.state(cookie,a.round,"PARTICIPANT")).bounties as {bounty_id:string;captured:boolean;category:string;difficulty:number;base_bounty:number}[];
+    const first=await read(a.aa),mate=await read(a.ab),other=await read(a.ba);
+    assert.equal(first.find(b=>b.bounty_id===a.x)!.captured,true);
+    assert.equal(mate.find(b=>b.bounty_id===a.x)!.captured,true);
+    assert.equal(other.find(b=>b.bounty_id===a.x)!.captured,false);
+    for(const b of first){assert.equal(b.category,"ARRAYS");const m=mate.find(x=>x.bounty_id===b.bounty_id)!;assert.equal(m.difficulty,b.difficulty);assert.equal(m.base_bounty,b.base_bounty);}
+    const before=(await query("SELECT count(*)::integer n FROM live_deliveries WHERE patch->>'projection'='capture'"))[0].n;
+    await c.budgets();await service.open(a.ab,a.round,a.x,randomUUID());
+    assert.equal((await query("SELECT count(*)::integer n FROM live_deliveries WHERE patch->>'projection'='capture'"))[0].n,before);
+    const notices=await query("SELECT s.kind,s.team_round_id,d.patch FROM live_deliveries d JOIN live_streams s ON s.id=d.stream_id WHERE d.patch->>'projection'='capture'");
+    assert.ok(notices.length>0);assert.ok(notices.every(n=>n.kind==='TEAM'&&!JSON.stringify(n.patch).includes('source')));
+    assert.equal((await read(a.aa)).find(b=>b.bounty_id===a.y)!.captured,false);
+  });
+  await t.test("pauses block first capture on the server while captured questions remain reopenable",async()=>{
+    await control("PAUSE");await c.budgets();await assert.rejects(service.open(a.aa,a.round,a.y,randomUUID()));
+    await c.budgets();await service.open(a.ab,a.round,a.x,randomUUID());await control("RESUME");
+  });
   await t.test("identical concurrent first saves commit one exact draft, one activity and one durable receipt",async()=>{
     await c.budgets();const intent={roundId:a.round,bountyId:a.x,requestKey:savedKey,baseRevision:"0",source:"\ufefffirst\r\n\u0000\u20ac"};
     const results=await Promise.all([service.save(a.aa,intent),service.save(a.aa,intent)]);assert.deepEqual(results[0],results[1]);assert.equal(results[0]!.outcome,"SAVED");assert.equal(results[0]!.result_revision,"1");

@@ -32,6 +32,8 @@ import { retentionStatus } from "../maintenance/status-schema.js";
 import { createOperationsStatus } from "../maintenance/operations.js";
 import { operationsSchema } from "../maintenance/operations-schema.js";
 import * as reviewSchema from "../competition/submission-review-schemas.js";
+import { createReportService } from "../competition/reports.js";
+import * as reportSchema from "../competition/report-schemas.js";
 import { createContentService } from "../content/service.js";
 import { createValidationService } from "../content/validation-service.js";
 import { createValidationRunService } from "../content/validation-runs.js";
@@ -76,6 +78,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   const arenas = createArenaService(options.pool, options.clock, options.delivery);
   const competition = createCompetitionService(options.pool, options.clock, options.delivery, options.competition);
   const submissionReviews = createSubmissionReviewService(options.pool, options.clock, options.delivery);
+  const reports = createReportService(options.pool, options.clock, options.delivery);
   const retention = createRetentionStatus(options.pool, options.clock, options.delivery);
   const operations = createOperationsStatus(options.pool, options.clock, options.delivery);
   const workbench=createWorkbenchService(options.pool,options.clock);
@@ -173,6 +176,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
       else if (["UNSUPPORTED_ENCODING", "JSON_REQUIRED"].includes(error.code)) { status = 415; code = "JSON_REQUIRED"; }
       else if (error.code === "RATE_LIMITED") { status = 429; code = "RATE_LIMITED"; reply.header("Retry-After", String(Math.max(1, Math.min(60, error.retryAfterSeconds ?? 1)))); }
       else if (error.code === "INTENT_CONFLICT") { status = 409; code = "INTENT_KEY_REUSED"; }
+      else if (["REPORT_ALREADY_EXISTS","REPORT_ALREADY_DECIDED","ROUND_NOT_FINAL","STALE_VERSION"].includes(error.code)) { status=409;code=error.code; }
       else if (error.code === "HANDOFF_NOT_READY") { status = 409; code = "HANDOFF_NOT_READY"; }
       else if (error.code === "REQUEST_CAPACITY_UNAVAILABLE") { code = "CAPACITY_UNAVAILABLE"; outcome = "NOT_PROCESSED"; }
       if (status !== 503) outcome = "NOT_PROCESSED";
@@ -239,6 +243,26 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   app.get<{Params:BugParams}>("/competition/rounds/:round_id/history/hints/:bounty_id",{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:competitionSchema.bountyParams,response:schema.responses(competitionSchema.hints)}},
     async request=>wrap(request,await history.hints(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id)));
   type BugParams={round_id:string;bounty_id:string};
+  app.get<{Params:BugParams}>(`${workbenchPath}/report`,{exposeHeadRoute:false,schema:{querystring:schema.empty,params:workbenchSchema.params,response:schema.responses(reportSchema.teamReport)}},
+    async r=>wrap(r,await reports.participant(r.cookies[policy.names.participant],r.params.round_id,r.params.bounty_id)));
+  app.post<{Params:BugParams;Body:{request_key:string;submission_id:string|null;message:string}}>(`${workbenchPath}/report`,{onRequest:writeHooks("PARTICIPANT"),schema:{querystring:schema.empty,params:workbenchSchema.params,body:reportSchema.reportBody,response:schema.responses(reportSchema.report)}},
+    async r=>wrap(r,await reports.create(r.cookies[policy.names.participant],r.params.round_id,r.params.bounty_id,{requestKey:r.body.request_key,submissionId:r.body.submission_id,message:r.body.message})));
+  app.get<{Params:BugParams&{request_key:string}}>(`${workbenchPath}/report/outcomes/:request_key`,{exposeHeadRoute:false,schema:{querystring:schema.empty,params:workbenchSchema.outcomeParams,response:schema.responses(reportSchema.outcome(reportSchema.report))}},
+    async r=>wrap(r,await reports.reportOutcome(r.cookies[policy.names.participant],r.params.round_id,r.params.bounty_id,r.params.request_key)));
+  app.get<{Params:{round_id:string};Querystring:{after?:string}}>("/staff/competition/rounds/:round_id/reports",{exposeHeadRoute:false,schema:{querystring:reportSchema.pageQuery,params:competitionSchema.roundParams,response:schema.responses(reportSchema.reportPage)}},
+    async r=>wrap(r,await reports.list(r.cookies[policy.names.staff],r.params.round_id,r.query.after)));
+  app.post<{Params:{round_id:string;report_id:string};Body:{request_key:string;verdict:string;reason:string;own_code:string}}>("/staff/competition/rounds/:round_id/reports/:report_id/decision",{onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:reportSchema.reportParams,body:reportSchema.decisionBody,response:schema.responses(reportSchema.decision)}},
+    async r=>wrap(r,await reports.decide(r.cookies[policy.names.staff],r.params.round_id,r.params.report_id,{requestKey:r.body.request_key,verdict:r.body.verdict,reason:r.body.reason,ownCode:r.body.own_code})));
+  for(const audience of ["STAFF","PARTICIPANT"] as const){
+    const route=`/${audience==="STAFF"?"staff/":""}competition/rounds/:round_id/score-adjustments`;
+    app.get<{Params:{round_id:string};Querystring:{after?:string}}>(route,{exposeHeadRoute:false,schema:{querystring:reportSchema.pageQuery,params:competitionSchema.roundParams,response:schema.responses(reportSchema.adjustmentPage)}},
+      async r=>wrap(r,await reports.adjustments(r.cookies[policy.names[audience==="STAFF"?"staff":"participant"]],r.params.round_id,audience,r.query.after)));
+  }
+  app.post<{Params:{round_id:string};Body:{request_key:string;team_round_id:string;report_id:string|null;delta:number;reason:string;expected_revision:string;own_code:string}}>("/staff/competition/rounds/:round_id/score-adjustments",{onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:competitionSchema.roundParams,body:reportSchema.scoreBody,response:schema.responses(reportSchema.scoreReceipt)}},
+    async r=>wrap(r,await reports.adjust(r.cookies[policy.names.staff],r.params.round_id,{requestKey:r.body.request_key,teamRoundId:r.body.team_round_id,reportId:r.body.report_id,delta:r.body.delta,reason:r.body.reason,expectedRevision:r.body.expected_revision,ownCode:r.body.own_code})));
+  for(const [name,kind,receipt] of [["report-decisions","decision",reportSchema.decision],["score-adjustments","score",reportSchema.scoreReceipt]] as const)
+    app.get<{Params:{round_id:string;request_key:string}}>(`/staff/competition/rounds/:round_id/${name}/outcomes/:request_key`,{exposeHeadRoute:false,schema:{querystring:schema.empty,params:competitionSchema.outcomeParams,response:schema.responses(reportSchema.outcome(receipt))}},
+      async r=>wrap(r,await reports.outcome(r.cookies[policy.names.staff],r.params.round_id,kind,r.params.request_key)));
   for(const [suffix,view,response] of [["",workbench.metadata,workbenchSchema.metadata],["/statement",workbench.statement,workbenchSchema.statement],
     ["/starter",workbench.starter,workbenchSchema.starter],["/draft",workbench.draft,workbenchSchema.draft]] as const){
     app.get<{Params:BugParams}>(`${workbenchPath}${suffix}`,{exposeHeadRoute:false,preSerialization:boundedResponse(1048576),schema:{querystring:schema.empty,params:workbenchSchema.params,response:schema.responses(response)}},

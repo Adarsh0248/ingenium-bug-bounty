@@ -44,7 +44,7 @@ function staffPayload(input: CompetitionCommand) {
     exact(p, ["arena_id", "cancellation_id"]);
     return { arena_id: uuid(p.arena_id), cancellation_id: uuid(p.cancellation_id) };
   }
-  if (input.action === "CONFIGURE") { exact(p, ["snapshots"]); return { snapshots: identifiers(p.snapshots, 40) }; }
+  if (input.action === "CONFIGURE") { exact(p, ["snapshots"]); return { snapshots: identifiers(p.snapshots, 50) }; }
   if (input.action === "SETUP_R2") {
     exact(p, ["teams", "duration_ms"]);
     if (!Number.isSafeInteger(p.duration_ms) || (p.duration_ms as number) < 1 || (p.duration_ms as number) > 18000000) throw new AccessError("INVALID_CONTEXT");
@@ -269,8 +269,8 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
         await staff.authorize(client, cookie, await decisionTime(client, clock, [roundId]));
         const row = await first<{ arena_id: string; round_kind: 1 | 2; result_id: string; result_version: number; finalised_at: Date;
           standings: Omit<FinalResults["standings"][number], "qualified">[]; selected: string[] | null }>(client,
-          `SELECT r.arena_instance_id AS arena_id,r.kind AS round_kind,f.id AS result_id,f.version AS result_version,f.finalised_at,
-            f.standings,q.selected
+          `SELECT r.arena_instance_id AS arena_id,r.kind AS round_kind,f.id AS result_id,f.version+(SELECT count(*)::integer FROM score_adjustments WHERE round_id=r.id) AS result_version,f.finalised_at,
+            competition_display_standings(r.id) AS standings,q.selected
           FROM rounds r JOIN round_results f ON f.round_id=r.id LEFT JOIN qualification_decisions q ON q.result_id=f.id
           WHERE r.id=$1 AND r.state='CLOSED'`, [roundId]);
         if (!row) throw new AccessError("ACCESS_UNAVAILABLE");
@@ -295,7 +295,7 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
         await lockedRounds(client, [roundId], true); const now = await decisionTime(client, clock, [roundId]);
         if (audience === "STAFF") await staff.authorize(client, cookie, now);
         else await participant(client, cookie, roundId, now);
-        const row = await first<{ standings: unknown; final: boolean; cancelled: boolean }>(client, `SELECT COALESCE((SELECT standings FROM round_results WHERE round_id=$1),competition_standings($1)) AS standings,
+        const row = await first<{ standings: unknown; final: boolean; cancelled: boolean }>(client, `SELECT competition_display_standings($1) AS standings,
           EXISTS(SELECT 1 FROM round_results WHERE round_id=$1) AS final,(SELECT state IN ('CANCELLING','CANCELLED') FROM rounds WHERE id=$1) AS cancelled`, [roundId]);
         if (!row || !Array.isArray(row.standings)) throw new AccessError("SECURITY_UNAVAILABLE");
         return { ...row, standings: row.standings.map(({ wallet: _privateWallet, ...standing }: { wallet: number }) => ({ ...standing, ...(row.cancelled ? { rank: null } : {}) })) };
@@ -310,7 +310,8 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
         const round = await first(client, `SELECT r.id AS round_id,r.arena_instance_id,r.kind,r.state,r.duration_ms,r.started_at,r.closes_at,r.revision,
           c.draw_commitment,c.draw_reveal,EXISTS(SELECT 1 FROM round_results WHERE round_id=r.id) AS final FROM rounds r LEFT JOIN competition_configs c ON c.round_id=r.id WHERE r.id=$1`, [roundId]);
         const teamRound = actor ? await first<{ team_round_id: string }>(client, "SELECT team_round_id FROM member_rounds WHERE id=$1", [actor.member_round_id]) : null;
-        const bounties = (await client.query(`SELECT b.id AS bounty_id,s.title,s.difficulty,s.base_bounty,
+        const bounties = (await client.query(`SELECT b.id AS bounty_id,s.title,s.difficulty,s.base_bounty,s.manifest_text::jsonb#>>'{version,category}' AS category,
+      EXISTS(SELECT 1 FROM workbench_activities w JOIN member_rounds m ON m.id=w.member_round_id WHERE w.bounty_id=b.id AND m.team_round_id=$2 AND w.request_key IS NOT NULL) AS captured,
           EXISTS(SELECT 1 FROM bounty_awards a WHERE a.bounty_id=b.id AND (r.kind=2 OR a.team_round_id=$2)) AS claimed,
           COALESCE((SELECT max(level) FROM hint_purchases WHERE bounty_id=b.id AND team_round_id=$2),0) AS hint_tier
           FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`, [roundId, teamRound?.team_round_id ?? null])).rows;

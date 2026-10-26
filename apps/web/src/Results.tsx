@@ -14,6 +14,7 @@ import type {
 } from "./history-types";
 import { IconButton, Modal } from "./ui";
 import { displayOutput } from "./output";
+import ScoreCorrections from "./ScoreCorrections";
 
 type Tab = "STANDINGS" | "ATTEMPTS" | "WALLET" | "SAVED_WORK";
 const path = (round: string) => `/api/v1/competition/rounds/${round}/history`;
@@ -223,6 +224,7 @@ function RoundHistory({
           ),
         )}
       </nav>
+      {tab === "STANDINGS" && overview?.final && <ScoreCorrections key={round} api={api} round={round}/>}
       {selected ? (
         <HistoryDetail
           key={`${selected.kind}:${selected.id}`}

@@ -13,7 +13,7 @@ import type { ContentAction } from "./policy.js";
 export interface ContentCommand { action: ContentAction; targetId: string | null; requestKey: string; expectedRevision: string; reason: string; payload: unknown; }
 interface Version { id: string; definition_id: string; content_revision: string; publication_status: string; }
 interface ContentSummary {
-  version_id: string; definition_id: string; version_number: number; title: string; difficulty: number; base_bounty: number;
+  version_id: string; definition_id: string; version_number: number; category: string | null; title: string; difficulty: number; base_bounty: number;
   publication_status: "DRAFT" | "PUBLISHED"; content_revision: string; round_type: number; definition_revision: string;
 }
 interface ContentMetadata extends ContentSummary { statement: string; submission_format: string; checker_mode: string; checker_version: string; }
@@ -27,7 +27,7 @@ function receiptView(row: Receipt) {
     reason: row.denial_reason, recorded_at: row.recorded_at.toISOString(), definition_id: row.result_definition_id, version_id: row.result_version_id,
     content_revision: row.result_revision, case_id: row.result_case_id };
 }
-const versionColumns = `v.id AS version_id,v.definition_id,v.version_number,v.title,v.difficulty,v.base_bounty,v.publication_status,v.content_revision,
+const versionColumns = `v.id AS version_id,v.definition_id,v.version_number,v.category,v.title,v.difficulty,v.base_bounty,v.publication_status,v.content_revision,
   d.round_type,d.revision AS definition_revision`;
 
 export function createContentService(pool: Pool, clock: ClockGuard, delivery: SessionDelivery) {

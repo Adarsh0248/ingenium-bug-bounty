@@ -28,7 +28,8 @@ export async function staffOutcomeCapacity(client: PoolClient, extra = 1) {
     +(SELECT count(*) FROM validation_run_outcomes)+(SELECT count(*) FROM validation_run_audits)+(SELECT count(*) FROM validation_diagnostic_audits)
     +(SELECT count(*) FROM competition_outcomes WHERE staff_session_id IS NOT NULL)+(SELECT count(*) FROM competition_publications)
     +(SELECT count(*) FROM content_publication_outcomes)+(SELECT count(*) FROM team_management_outcomes)
-      +(SELECT count(*) FROM registration_import_outcomes)+(SELECT count(*) FROM discipline_outcomes)+(SELECT count(*) FROM submission_review_audits)+(SELECT count(*) FROM announcements)+operator_staff_outcome_count()+$1)::integer AS n`, [extra]);
+      +(SELECT count(*) FROM registration_import_outcomes)+(SELECT count(*) FROM discipline_outcomes)+(SELECT count(*) FROM submission_review_audits)+(SELECT count(*) FROM announcements)
+      +(SELECT count(*) FROM report_decisions)+(SELECT count(*) FROM score_adjustments)+operator_staff_outcome_count()+$1)::integer AS n`, [extra]);
   if (!row || row.n>=100000) throw new AccessError("AUDIT_CAPACITY_UNAVAILABLE");
 }
 function sessionView(s: StaffSession) {

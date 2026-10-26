@@ -57,7 +57,8 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
       f.draw_commitment,f.draw_reveal,a.status AS arena_status,c.current_instance_id=r.arena_instance_id AS current FROM rounds r JOIN arena_instances a ON a.id=r.arena_instance_id
       LEFT JOIN competition_configs f ON f.round_id=r.id CROSS JOIN arena_control c WHERE r.id=$1 AND c.id=1`,[roundId]) : null;
     const arena=await first(client,"SELECT c.current_instance_id,a.status,a.revision FROM arena_control c LEFT JOIN arena_instances a ON a.id=c.current_instance_id WHERE c.id=1");
-    const bounties=roundId ? (await client.query(`SELECT b.id AS bounty_id,s.title,s.difficulty,s.base_bounty,
+    const bounties=roundId ? (await client.query(`SELECT b.id AS bounty_id,s.title,s.difficulty,s.base_bounty,s.manifest_text::jsonb#>>'{version,category}' AS category,
+      EXISTS(SELECT 1 FROM workbench_activities w JOIN member_rounds m ON m.id=w.member_round_id WHERE w.bounty_id=b.id AND m.team_round_id=$2 AND w.request_key IS NOT NULL) AS captured,
       EXISTS(SELECT 1 FROM bounty_awards a WHERE a.bounty_id=b.id AND (r.kind=2 OR a.team_round_id=$2)) AS claimed,
       COALESCE((SELECT max(level) FROM hint_purchases WHERE bounty_id=b.id AND team_round_id=$2),0) AS hint_tier
       FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`,[roundId,team])).rows : [];

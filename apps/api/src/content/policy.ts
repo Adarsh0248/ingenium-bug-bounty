@@ -28,9 +28,11 @@ const io = (value: unknown) => Buffer.from(contentText(value, 1048576), "utf8").
 // The internal payload uses Base64 so valid UTF-8 NUL bytes never pass through PostgreSQL text/jsonb.
 export function prepareContent(action: ContentAction, value: unknown): Record<string, unknown> {
   if (action === "CREATE" || action === "NEW_VERSION" || action === "METADATA") {
-    const row = record(value, [...(action === "CREATE" ? ["round_type"] : []), "title", "statement", "difficulty", "checker_mode"]);
+    const hasCategory = !!value && typeof value === "object" && Object.hasOwn(value, "category");
+    const row = record(value, [...(action === "CREATE" ? ["round_type"] : []), "title", "statement", "difficulty", "checker_mode", ...(hasCategory ? ["category"] : [])]);
     return { ...(action === "CREATE" ? { round_type: integer(row.round_type, 2) } : {}), title: contentText(row.title, 160, true, true),
-      statement: contentText(row.statement, 65536, true), difficulty: integer(row.difficulty, 100), checker_mode: choice(row.checker_mode, ["TOKENS", "EXACT_TEXT"]) };
+      statement: contentText(row.statement, 65536, true), difficulty: integer(row.difficulty, 100), checker_mode: choice(row.checker_mode, ["TOKENS", "EXACT_TEXT"]),
+      ...(hasCategory ? { category: choice(row.category, ["ARRAYS", "GRAPHS", "SYSTEMS", "LOGIC"]) } : {}) };
   }
   if (action === "VARIANT") {
     const row = record(value, ["language", "starter_code", "reference_solution_code", "defect_description", "runtime_key", "cpu_time_limit_ms", "wall_time_limit_ms", "memory_limit_kb"]);

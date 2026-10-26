@@ -4,6 +4,7 @@ export interface ContentSummary {
   version_id: string;
   definition_id: string;
   version_number: number;
+  category: "ARRAYS" | "GRAPHS" | "SYSTEMS" | "LOGIC" | null;
   title: string;
   difficulty: number;
   base_bounty: number;

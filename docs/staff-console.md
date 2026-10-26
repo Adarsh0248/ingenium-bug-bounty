@@ -62,6 +62,11 @@ does not expose participant source, hidden tests or raw judge diagnostics.
 
 ## Verification and Local Use
 
+For an interactive local admin and contestant session, use
+`npm.cmd run preview:app` and follow the [local preview guide](local-preview.md).
+It opens port 5175 with temporary demo accounts, a separate database and simulated
+judging. The existing participant-only preview on 5174 remains independent.
+
 `npm.cmd run test:browser:db` runs the real React/Fastify/Socket.IO flow with
 synthetic identities and a disposable PostgreSQL database. It checks participant
 draft privacy/pause/reload, the normal staff two-round lifecycle, singleton

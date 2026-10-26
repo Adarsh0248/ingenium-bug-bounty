@@ -1,5 +1,9 @@
 # Staff Access and Browser Replacement Screens
 
+For interactive local review with demo staff and teams, follow the
+[local preview guide](local-preview.md). The full preview runs on port 5175;
+the separate participant-only preview remains on port 5174.
+
 This slice extends the normal authenticated control room. It does not provision
 real people, migrate the development database, install a production runtime or
 change the approved architecture.

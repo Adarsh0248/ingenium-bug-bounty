@@ -156,6 +156,7 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     if(["worker-validation","diagnostics","diagnostics-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){await validationChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="imports"){await registrationImportChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="teams"){await teamManagementChecks(t,ownerUrl,apiUrl);return;}
+    if(process.env.INGENIUM_TEST_SUITE==="reports"){await competitionChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="judge-supervisor"){await judgeGatewayChecks(t,ownerUrl);return;}
     if (["load", "load-soak", "race-load", "operations", "operations-browser", "restore", "backup", "https", "competition", "worker", "maintenance", "participant", "live", "workbench", "history", "history-browser", "judging", "judging-browser", "review", "review-browser", "audit", "audit-browser", "announcements", "announcements-browser", "team-access", "team-access-browser", "results", "results-browser", "retention", "browser", "registration-browser", "discipline", "discipline-browser", "cancellation", "cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await competitionChecks(t, ownerUrl, apiUrl, backup ? { fixture: backup, container } : undefined); return; }
     if (process.env.INGENIUM_TEST_SUITE !== "foundation") {

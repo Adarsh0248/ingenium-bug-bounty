@@ -1,7 +1,7 @@
 import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { Server } from "socket.io";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 const id = (n: number) =>
@@ -26,12 +26,12 @@ const starter = {
     "const [a, b] = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/).map(Number);\nconsole.log(a - b);\n",
 };
 const definitions = [
-  { title: "The silent overflow", difficulty: 35 },
-  { title: "Off by one", difficulty: 20 },
-  { title: "A tangled reference", difficulty: 64 },
-  { title: "Race condition", difficulty: 88 },
-  { title: "The missing return", difficulty: 12 },
-  { title: "Ghost in the loop", difficulty: 51 },
+  { category: "ARRAYS", title: "The silent overflow", difficulty: 35 },
+  { category: "ARRAYS", title: "Off by one", difficulty: 20 },
+  { category: "SYSTEMS", title: "A tangled reference", difficulty: 64 },
+  { category: "LOGIC", title: "Race condition", difficulty: 88 },
+  { category: "LOGIC", title: "The missing return", difficulty: 12 },
+  { category: "GRAPHS", title: "Ghost in the loop", difficulty: 51 },
 ];
 interface State {
   session: string;
@@ -49,6 +49,7 @@ interface State {
   feedback: Map<string, any>;
   hints: Map<string, any[]>;
   submissions: any[];
+  reports: Map<string,any>;
   walletEntries: any[];
   wallet: number;
   points: number;
@@ -84,6 +85,7 @@ function state(req: IncomingMessage, res: ServerResponse) {
         ...b,
         bounty_id: id(100 + i),
         base_bounty: b.difficulty * 10,
+        captured: false,
         claimed: false,
         hint_tier: 0,
       })),
@@ -93,6 +95,7 @@ function state(req: IncomingMessage, res: ServerResponse) {
       feedback: new Map(),
       hints: new Map(),
       submissions: [],
+      reports: new Map(),
       walletEntries: [],
       wallet: 1200,
       points: 1350,
@@ -107,7 +110,12 @@ function state(req: IncomingMessage, res: ServerResponse) {
       `preview_session=${sid}; HttpOnly; SameSite=Strict; Path=/`,
     );
   }
-  return { sid, s: states.get(sid)! };
+  const s = states.get(sid)!;
+  if (s.active && Date.now() >= s.expires) {
+    s.active = false;
+    s.flow = false;
+  }
+  return { sid, s };
 }
 function session(s: State) {
   return {
@@ -270,13 +278,16 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     if (b.action === "resume") s.paused = false;
     if (b.action === "close") s.closed = true;
     if (b.action === "revoke") s.revoked = true;
+    if (b.action === "expire") s.expires = Date.now() - 1;
     if (b.action === "drop") s.dropNext = true;
     if (b.action === "full-field")
-      s.bugs = Array.from({ length: 40 }, (_, i) => ({
-        bounty_id: id(100 + i),
+      s.bugs = Array.from({ length: 50 }, (_, i) => ({
+        bounty_id: id(1000 + i),
+        category: ["ARRAYS","GRAPHS","SYSTEMS","LOGIC"][i%4],
         title: `${definitions[i % definitions.length].title} / ${i + 1}`,
         difficulty: 1 + ((i * 17) % 100),
         base_bounty: (1 + ((i * 17) % 100)) * 10,
+        captured: false,
         claimed: false,
         hint_tier: 0,
       }));
@@ -335,6 +346,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   }
   if (p === "/api/v1/entry/activate") {
     s.active = true;
+    s.expires = Date.now() + 7200000;
     s.language = b.language;
     s.name = b.member_id === member ? "Asha" : "Dev";
     return send({
@@ -412,6 +424,11 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return send({ items: s.walletEntries, next_after: null });
   if (p.startsWith(`${historyPath}/hints/`))
     return send(s.hints.get(p.split("/").at(-1)!) ?? []);
+  if(p===`/api/v1/competition/rounds/${round}/score-adjustments`)return send({items:[],next_after:null});
+  if(/\/report\/outcomes\/[^/]+$/.test(p)){
+    const value=[...s.reports.values()].find(r=>r.request_key===p.split("/").at(-1));
+    return send({status:value?"OBSERVED":"NOT_OBSERVED",receipt:value??null});
+  }
   const outcome = p.match(/\/outcomes\/([^/]+)$/);
   if (outcome && !p.includes("/draft/"))
     return send({
@@ -426,6 +443,16 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     suffix = match[2],
     bug = s.bugs.find((x) => x.bounty_id === bounty);
   if (!bug) return deny("NOT_FOUND", 404);
+  if(suffix==="/report"){
+    if(req.method==="GET")return send({report:s.reports.get(bounty)??null});
+    const prior=s.reports.get(bounty);if(prior)return prior.request_key===b.request_key?send(prior):deny("REPORT_ALREADY_EXISTS",409);
+    const attached=b.submission_id===null?null:s.submissions.find(x=>x.submission_id===b.submission_id&&x.bounty_id===bounty);
+    if(typeof b.message!=="string"||!b.message.trim()||Buffer.byteLength(b.message)>1024||(b.submission_id!==null&&!attached))return deny("INVALID_REQUEST",400);
+    const value={id:randomUUID(),request_key:b.request_key,round_id:round,bounty_id:bounty,team_round_id:teamRound,submission_id:attached?.submission_id??null,parent_id:attached?.submission_id??null,
+      source_sha256:attached?createHash("sha256").update(attached.source).digest("hex"):null,message:b.message,recorded_at:new Date().toISOString(),title:bug.title,team_name:"Segfault Society",reporter_name:s.name,
+      language:attached?.language??null,submission_result:attached?.result??null,status:"OPEN",decision_note:null};
+    s.reports.set(bounty,value);return send(value);
+  }
   const writable = !s.paused && !s.closed && !bug.claimed,
     reason = s.closed
       ? "ROUND_NOT_WRITABLE"
@@ -465,12 +492,14 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       language: s.language,
       source: starter[s.language],
     });
-  if (suffix === "/open")
+  if (suffix === "/open") {
+    if(!bug!.captured){bug!.captured=true;emit(s,{type:"INVALIDATE",projection:"capture"},1);}
     return send({
       opening_id: randomUUID(),
       request_key: b.request_key,
       recorded_at: new Date().toISOString(),
     });
+  }
   if (suffix === "/draft" && req.method === "GET") {
     const saved = s.drafts.get(bounty);
     return send({

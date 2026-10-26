@@ -1,12 +1,12 @@
 :root {
-  --bg: #090b10;
-  --panel: #151820;
-  --panel2: #20242e;
-  --text: #edf4f8;
-  --muted: #a3afbd;
-  --line: #343c4b;
-  --lime: #5ef3e6;
-  --pink: #ff579c;
-  --acid: #baff51;
+  --bg: #0c0a18;
+  --panel: #191429;
+  --panel2: #272038;
+  --text: #f1eefa;
+  --muted: #b3a8c9;
+  --line: #483653;
+  --lime: #6cf7ef;
+  --pink: #ff68cf;
+  --acid: #b9ff66;
   color-scheme: dark;
 }

@@ -10,7 +10,8 @@ async function enter(page: import("@playwright/test").Page) {
   await expect(page.getByText("STATE VERIFIED", { exact: true })).toBeVisible();
 }
 async function open(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: /01 The silent overflow/ }).click();
+  await page.locator(`[data-map-bounty="${bounty}"]`).focus();
+  await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
   await expect(
     page.getByRole("heading", { name: "The silent overflow", exact: true }),
   ).toBeVisible();
@@ -19,6 +20,43 @@ async function open(page: import("@playwright/test").Page) {
     page.getByRole("textbox", { name: "Your private code", exact: true }),
   ).toBeVisible();
 }
+
+test("an expired demo session returns to code entry and re-enters with a fresh expiry and saved draft", async ({
+  page,
+}) => {
+  await enter(page);
+  await open(page);
+  const source = "// saved before preview expiry\nint main() { return 0; }\n";
+  await page
+    .getByRole("textbox", { name: "Your private code", exact: true })
+    .fill(source);
+  await page
+    .getByRole("button", { name: "Save private draft", exact: true })
+    .click();
+  await expect(page.locator(".save-status")).toHaveText("saved");
+  await page.request.post("/api/v1/_fixture", { data: { action: "expire" } });
+  await expect(
+    page.getByRole("heading", { name: "Session unavailable", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Return to entry", exact: true })
+    .click();
+  await expect(page.getByLabel("Team or staff code")).toBeVisible();
+  await page.getByLabel("Team or staff code").fill("A".repeat(32));
+  await page.getByRole("button", { name: "Enter arena", exact: true }).click();
+  await page.getByRole("radio", { name: "Asha" }).check();
+  await page
+    .getByRole("button", { name: "Confirm and enter", exact: true })
+    .click();
+  await expect(page.getByText("STATE VERIFIED", { exact: true })).toBeVisible();
+  await open(page);
+  await expect(
+    page.getByRole("textbox", { name: "Your private code", exact: true }),
+  ).toHaveValue(source);
+  await expect(
+    page.getByRole("heading", { name: "Session unavailable", exact: true }),
+  ).toHaveCount(0);
+});
 
 test("a failed challenge read can be retried without discarding its private draft", async ({
   page,
@@ -56,6 +94,71 @@ test("a failed challenge read can be retried without discarding its private draf
   ).toBeEnabled();
 });
 
+test("question reports attach a submitted answer and recover a lost receipt without another POST", async ({
+  page,
+}) => {
+  await enter(page);
+  await open(page);
+  await page
+    .getByRole("textbox", { name: "Your private code", exact: true })
+    .fill("// fixed answer\nint main(){return 0;}\n");
+  await page.getByRole("button", { name: "Submit fix", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Target cleared", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Report question", exact: true })
+    .click();
+  const modal = page.getByRole("dialog", {
+    name: "Report question",
+    exact: true,
+  });
+  await expect(modal.getByLabel("Reported submission")).not.toHaveValue("");
+  await modal
+    .getByLabel("Question report details")
+    .fill("Preview glitch report with attached answer");
+  let posts = 0;
+  await page.route(`**/bounties/${bounty}/report`, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    posts++;
+    const response = await route.fetch();
+    expect(response.status()).toBe(200);
+    await route.abort("failed");
+  });
+  await modal
+    .getByRole("button", { name: "Raise ticket", exact: true })
+    .click();
+  await modal
+    .getByRole("button", { name: "Check original report", exact: true })
+    .click();
+  await expect(
+    modal.getByText("Preview glitch report with attached answer", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(posts).toBe(1);
+  await expect(
+    modal.getByText("Attached submission:", { exact: false }),
+  ).toBeVisible();
+  await modal
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Report question", exact: true })
+    .click();
+  await expect(
+    modal.getByText("Preview glitch report with attached answer", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    modal.getByRole("button", { name: "Raise ticket", exact: true }),
+  ).toHaveCount(0);
+});
+
 test("verdict polling recovers a failed GET without sending another run", async ({
   page,
 }) => {
@@ -89,7 +192,8 @@ test("a missing code-editor chunk falls back to an editable draft and still obey
 }) => {
   await page.route("**/src/CodeEditor.tsx*", (route) => route.abort());
   await enter(page);
-  await page.getByRole("button", { name: /01 The silent overflow/ }).click();
+  await page.locator(`[data-map-bounty="${bounty}"]`).focus();
+  await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
   const code = page.getByRole("textbox", {
     name: "Your private code",
     exact: true,
@@ -113,7 +217,8 @@ test("a missing code-editor chunk falls back to an editable draft and still obey
   await page
     .getByRole("button", { name: "Close workbench", exact: true })
     .click();
-  await page.getByRole("button", { name: /01 The silent overflow/ }).click();
+  await page.locator(`[data-map-bounty="${bounty}"]`).focus();
+  await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
   await expect(code).toHaveValue(/retained through editor failure/);
 });
 
@@ -247,7 +352,7 @@ test("a paid hint with a failed content read is recovered without a second purch
   expect(purchases).toBe(1);
 });
 
-test("WebGL failure preserves keyboard challenge access and private editing", async ({
+test("terrain rendering failure preserves keyboard capture and private editing", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -262,7 +367,7 @@ test("WebGL failure preserves keyboard challenge access and private editing", as
     } as typeof original;
   });
   await enter(page);
-  const target = page.getByRole("button", { name: /01 The silent overflow/ });
+  const target = page.locator(`[data-map-bounty="${bounty}"]`);
   await target.focus();
   await page.keyboard.press("Enter");
   await expect(
@@ -282,7 +387,7 @@ test("keyboard target entry focuses the workbench and closing returns to the sam
   page,
 }) => {
   await enter(page);
-  const target = page.getByRole("button", { name: /01 The silent overflow/ });
+  const target = page.locator(`[data-map-bounty="${bounty}"]`);
   await target.focus();
   await page.keyboard.press("Enter");
   await expect(
@@ -526,43 +631,11 @@ test("a solved target waits for IDE exit, terminates visibly once and remains re
   await expect(page.locator(".termination-banner")).toHaveCount(0);
   await page.screenshot({ path: "test-results/cleared-ide.png" });
   await page.getByRole("button", { name: "Close workbench" }).click();
-  const beam = await page.waitForFunction(
-    () => {
-      const canvas = document.querySelector("canvas");
-      const gl = canvas?.getContext("webgl2");
-      if (!canvas || !gl) return false;
-      const width = Math.min(160, canvas.width),
-        height = Math.min(160, canvas.height);
-      const pixels = new Uint8Array(width * height * 4);
-      gl.readPixels(
-        Math.floor((canvas.width - width) / 2),
-        0,
-        width,
-        height,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        pixels,
-      );
-      let white = 0;
-      for (let i = 0; i < pixels.length; i += 4)
-        if (pixels[i] > 210 && pixels[i + 1] > 235 && pixels[i + 2] > 225)
-          white++;
-      return white > 8 ? canvas.toDataURL("image/png") : false;
-    },
-    undefined,
-    { timeout: 8000, polling: "raf" },
-  );
-  await test.info().attach("visible-aimed-laser", {
-    body: Buffer.from(
-      ((await beam.jsonValue()) as string).split(",")[1],
-      "base64",
-    ),
-    contentType: "image/png",
-  });
+  await expect(page.locator(".field-weapon")).toHaveClass(/firing/);
   await expect(
     page.getByText("TARGET TERMINATED", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".field-weapon")).toHaveClass(/firing/);
+  await expect(page.locator(".termination-banner")).toBeVisible();
   await page.screenshot({ path: "test-results/termination-desktop.png" });
   await expect(page.locator(".termination-banner")).toHaveCount(0);
   const cleared = page.locator(`[data-bounty-id="${bounty}"]`);
@@ -702,150 +775,14 @@ test("revoked access clears private UI rather than keeping an editable source pa
     page.getByRole("textbox", { name: "Your private code", exact: true }),
   ).not.toBeVisible();
 });
-test("3D canvas renders distinct nonblank pixels and moves on desktop and mobile", async ({
-  page,
-}) => {
-  await enter(page);
-  for (const viewport of [
-    { width: 1440, height: 1000 },
-    { width: 390, height: 844 },
-  ]) {
-    await page.setViewportSize(viewport);
-    await page.waitForTimeout(1000);
-    const pixels = () =>
-      page.locator("canvas").evaluate((element) => {
-        const canvas = element as HTMLCanvasElement;
-        const gl = canvas.getContext("webgl2")!;
-        const out = new Uint8Array(canvas.width * canvas.height * 4);
-        gl.readPixels(
-          0,
-          0,
-          canvas.width,
-          canvas.height,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          out,
-        );
-        let bright = 0,
-          hash = 0;
-        const colors = new Set<number>();
-        for (let n = 0; n < out.length; n += 16) {
-          const color = (out[n] << 16) | (out[n + 1] << 8) | out[n + 2];
-          colors.add(color);
-          if (out[n] > 70 && out[n + 1] > 70) bright++;
-          hash = (hash + Math.imul(color, n + 1)) | 0;
-        }
-        return { colors: colors.size, bright, hash };
-      });
-    const first = await pixels();
-    expect(first.colors).toBeGreaterThan(20);
-    expect(first.bright).toBeGreaterThan(100);
-    await page.waitForTimeout(700);
-    const second = await pixels();
-    expect(second.hash).not.toBe(first.hash);
-  }
-});
-
-test("all forty bounties remain rendered, moving and keyboard reachable on desktop and mobile", async ({
-  page,
-}) => {
-  test.setTimeout(90000);
-  await enter(page);
-  await page.request.post("/api/v1/_fixture", {
-    data: { action: "full-field" },
-  });
-  const targets = page.getByRole("complementary", { name: "Bounty targets" });
-  await expect(targets.getByRole("button")).toHaveCount(40);
-  const measurements = [];
-  for (const viewport of [
-    { width: 1440, height: 1000 },
-    { width: 390, height: 844 },
-  ]) {
-    await page.setViewportSize(viewport);
-    await page.waitForTimeout(1000);
-    const inspect = () =>
-      page.locator("canvas").evaluate((element) => {
-        const canvas = element as HTMLCanvasElement;
-        const gl = canvas.getContext("webgl2")!;
-        const pixels = new Uint8Array(canvas.width * canvas.height * 4);
-        gl.readPixels(
-          0,
-          0,
-          canvas.width,
-          canvas.height,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          pixels,
-        );
-        let hash = 0,
-          bright = 0;
-        for (let i = 0; i < pixels.length; i += 16) {
-          const color =
-            (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2];
-          hash = (hash + Math.imul(color, i + 1)) | 0;
-          if (pixels[i] > 70 && pixels[i + 1] > 70) bright++;
-        }
-        return { hash, bright, contextLost: gl.isContextLost() };
-      });
-    const first = await inspect();
-    expect(first.contextLost).toBe(false);
-    expect(first.bright).toBeGreaterThan(100);
-    await page.waitForTimeout(700);
-    expect((await inspect()).hash).not.toBe(first.hash);
-    const frame = await page.evaluate(async () => {
-      const samples: number[] = [];
-      let previous = performance.now();
-      for (let i = 0; i < 12; i++) {
-        await new Promise(requestAnimationFrame);
-        const now = performance.now();
-        samples.push(now - previous);
-        previous = now;
-      }
-      return samples.sort((a, b) => a - b)[Math.floor(samples.length / 2)];
-    });
-    measurements.push({
-      ...viewport,
-      targets: 40,
-      median_frame_ms: frame,
-      renderer: "headless-software-test-only",
-    });
-    await page.screenshot({
-      path: `test-results/arena-40-${viewport.width}.png`,
-    });
-    const last = targets.getByRole("button").last();
-    await last.focus();
-    await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("heading", { name: "Race condition / 40", exact: true }),
-    ).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(
-      page.getByRole("button", { name: "Close workbench" }),
-    ).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(last).toBeFocused();
-    await expect(last).toBeInViewport();
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    ).toBe(true);
-  }
-  await test
-    .info()
-    .attach("forty-target-frame-samples-not-device-calibration", {
-      body: Buffer.from(JSON.stringify(measurements)),
-      contentType: "application/json",
-    });
-});
-
 test("the actual Monaco editor accepts keyboard text and acknowledges its own snapshot without a page error", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await enter(page);
-  await page.locator(`[data-bounty-id="${bounty}"]`).click();
+  await page.locator(`[data-map-bounty="${bounty}"]`).focus();
+  await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
   await expect(page.locator(".monaco-editor")).toBeVisible();
   await page.locator(".monaco-editor").click();
   await page.keyboard.press("ControlOrMeta+A");

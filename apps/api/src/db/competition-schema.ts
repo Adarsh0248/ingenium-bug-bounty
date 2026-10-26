@@ -50,7 +50,7 @@ export const bounties = pgTable("bounties", {
   id: uuid("id").primaryKey(), roundId: uuid("round_id").notNull().references(() => rounds.id), definitionId: uuid("definition_id").notNull().references(() => bugDefinitions.id),
   snapshotId: uuid("snapshot_id").notNull().references(() => competitionPublications.snapshotId), position: integer("position").notNull(),
 }, t => [unique("bounty_round_definition").on(t.roundId, t.definitionId), unique("bounty_round_position").on(t.roundId, t.position),
-  unique("bounty_round_scope").on(t.id, t.roundId), check("bounty_position", sql`${t.position} between 1 and 40`)]);
+  unique("bounty_round_scope").on(t.id, t.roundId), check("bounty_position", sql`${t.position} between 1 and 50`)]);
 export const competitionPauses = pgTable("competition_pauses", {
   id: uuid("id").primaryKey(), roundId: uuid("round_id").notNull().references(() => rounds.id), scope: text("scope").notNull(),
   teamRoundId: uuid("team_round_id").references(() => teamRounds.id), memberRoundId: uuid("member_round_id").references(() => memberRounds.id),

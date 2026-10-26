@@ -43,6 +43,7 @@ const metadata = (v?: ContentDetail) => ({
   title: v?.title ?? "",
   statement: v?.statement ?? "",
   difficulty: v?.difficulty ?? 50,
+  category: v?.category ?? "ARRAYS",
   checker_mode: v?.checker_mode ?? "TOKENS",
 });
 const emptyVariant = (language: Language) => ({
@@ -609,7 +610,9 @@ export default function StaffContent({
               </dl>
               <pre>{detail.statement || "No statement"}</pre>
               <button
-                disabled={locked || readOnly || validationBlocked}
+                disabled={
+                  locked || readOnly || validationBlocked || !detail.category
+                }
                 onClick={() =>
                   begin(
                     "METADATA",
@@ -831,6 +834,12 @@ export default function StaffContent({
                 <ClipboardCheck size={16} />
                 Prepare validation
               </button>
+              {!detail.category && (
+                <p>
+                  Choose a question category in Metadata before preparing this
+                  version for the map.
+                </p>
+              )}
               <ContentValidation
                 key={detail.version_id}
                 api={api}
@@ -1000,6 +1009,26 @@ export default function StaffContent({
                       update({ difficulty: Number(e.target.value) })
                     }
                   />
+                </label>
+                <label>
+                  Question category / habitat
+                  <select
+                    value={p!.category}
+                    onChange={(e) => update({ category: e.target.value })}
+                  >
+                    <option value="ARRAYS">
+                      Neon District — arrays, strings, searching
+                    </option>
+                    <option value="GRAPHS">
+                      Verdant Circuit — graphs, trees, traversal
+                    </option>
+                    <option value="SYSTEMS">
+                      Ember Foundry — memory, references, resources
+                    </option>
+                    <option value="LOGIC">
+                      Cryo Vault — logic, state, concurrency
+                    </option>
+                  </select>
                 </label>
                 <output>Bounty: {p!.difficulty * 10}</output>
                 <label>

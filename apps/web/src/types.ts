@@ -1,5 +1,6 @@
 export type Language = "c" | "cpp" | "java" | "python" | "javascript";
-export const judgingPending = (status: string) => status !== "COMPLETED" && status !== "CANCELLED";
+export const judgingPending = (status: string) =>
+  status !== "COMPLETED" && status !== "CANCELLED";
 export const languages: Record<Language, string> = {
   c: "C",
   cpp: "C++",
@@ -47,7 +48,10 @@ export interface Flow {
   members: { id: string; name: string }[];
   round_id: string | null;
 }
+export type Category = "ARRAYS" | "GRAPHS" | "SYSTEMS" | "LOGIC";
 export interface Bounty {
+  category: Category | null;
+  captured: boolean;
   bounty_id: string;
   title: string;
   difficulty: number;

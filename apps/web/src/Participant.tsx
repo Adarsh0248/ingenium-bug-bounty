@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import {
-  Bug,
+  Play,
   Bell,
   Check,
   Crosshair,
@@ -14,7 +14,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Trophy,
-  VolumeX,
+  Pause,
   Wallet,
   X,
 } from "lucide-react";
@@ -26,6 +26,10 @@ import { bugPath, languages, timeText } from "./types";
 import { createWorkspace } from "./workspace";
 import { Brand, IconButton, Modal } from "./ui";
 import Announcements from "./Announcements";
+import PixelBugIcon from "./PixelBugIcon";
+import { bugAppearance } from "./bug-art";
+import { regions } from "./regions";
+import type { RegionId } from "./regions";
 const Arena = lazy(() => import("./Arena")),
   Workbench = lazy(() => import("./Workbench")),
   Results = lazy(() => import("./Results"));
@@ -43,6 +47,9 @@ export default function Participant({
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null),
     [phase, setPhase] = useState("SYNCING"),
     [selected, setSelected] = useState<string | null>(null),
+    [catching, setCatching] = useState<string | null>(null),
+    [captureBusy, setCaptureBusy] = useState(false),
+    [region, setRegion] = useState<RegionId | null>(null),
     [presence, setPresence] = useState<Presence[]>([]),
     [compact, setCompact] = useState(false),
     [standings, setStandings] = useState(false),
@@ -59,6 +66,7 @@ export default function Participant({
     [expiry, setExpiry] = useState(session.expires_at),
     [busy, setBusy] = useState(false),
     [sessionPending, setSessionPending] = useState(false);
+  const captureIntent = useRef<{ id: string; key: string } | null>(null);
   const sessionIntent = useRef<{
     action: "logout" | "keep-alive";
     key: string;
@@ -72,6 +80,7 @@ export default function Participant({
     received = useRef(performance.now()),
     snapshotRef = useRef<Snapshot | null>(null),
     targetDock = useRef<HTMLElement>(null),
+    regionNavigation = useRef<HTMLElement>(null),
     returnTarget = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     const client = connectLive("PARTICIPANT", null, {
@@ -157,19 +166,68 @@ export default function Participant({
   }, [workspace]);
   const selectedBug = snapshot?.bounties.find((b) => b.bounty_id === selected);
   async function open(id: string) {
-    returnTarget.current =
-      targetDock.current?.querySelector<HTMLButtonElement>(
-        `[data-bounty-id="${CSS.escape(id)}"]`,
-      ) ?? null;
+    const target = snapshotRef.current?.bounties.find(
+      (bug) => bug.bounty_id === id,
+    );
+    if (!target || captureBusy) return;
+    if (captureIntent.current && captureIntent.current.id !== id) {
+      setError("Check your pending capture before catching another bug.");
+      return;
+    }
+    if (target.captured && captureIntent.current?.id === id) {
+      captureIntent.current = null;
+      setCatching(null);
+      setError("");
+    }
+    returnTarget.current = document.querySelector<HTMLButtonElement>(
+      `[data-bounty-id="${CSS.escape(id)}"]`,
+    );
+    if (!target.captured && !target.claimed) {
+      if (!ready || !roundOpen || ownPause) {
+        setError(
+          "Catching is unavailable while your arena actions are paused.",
+        );
+        return;
+      }
+      const intent = captureIntent.current ?? { id, key: crypto.randomUUID() };
+      captureIntent.current = intent;
+      setCatching(id);
+      setCaptureBusy(true);
+      try {
+        await api.request(`${bugPath(session.round_id, id)}/open`, {
+          request_key: intent.key,
+        });
+        const current = snapshotRef.current;
+        if (current) {
+          const next = {
+            ...current,
+            bounties: current.bounties.map((b) =>
+              b.bounty_id === id ? { ...b, captured: true } : b,
+            ),
+          };
+          snapshotRef.current = next;
+          setSnapshot(next);
+        }
+        captureIntent.current = null;
+        setCatching(null);
+        setError("");
+      } catch (e) {
+        if (e instanceof ApiError && e.outcome === "NOT_PROCESSED") {
+          captureIntent.current = null;
+          setCatching(null);
+        }
+        setError(errorText(e));
+        return;
+      } finally {
+        setCaptureBusy(false);
+      }
+    }
+    if (region && target)
+      setRegion(
+        bugAppearance(id, target.difficulty, target.category).region.id,
+      );
     setSelected(id);
     live.current?.edit(id);
-    try {
-      await api.request(`${bugPath(session.round_id, id)}/open`, {
-        request_key: crypto.randomUUID(),
-      });
-    } catch (e) {
-      setError(errorText(e));
-    }
   }
   const close = () => {
     setSelected(null);
@@ -246,10 +304,28 @@ export default function Participant({
       p.team_round_id === snapshot.actor.team_round_id ||
       p.member_round_id === session.member_round_id,
   );
+  const location = regions.find((item) => item.id === region);
+  const localBugs =
+    snapshot?.bounties.filter(
+      (bug) =>
+        !region ||
+        bugAppearance(bug.bounty_id, bug.difficulty, bug.category).region
+          ?.id === region,
+    ) ?? [];
+  function travel(next: RegionId | null) {
+    setRegion(next);
+    regionNavigation.current
+      ?.querySelector<HTMLButtonElement>(
+        `[data-region-choice="${next ?? "all"}"]`,
+      )
+      ?.focus();
+  }
   return (
     <main className="participant">
       <Suspense fallback={<div className="arena-fallback" />}>
         <Arena
+          region={region}
+          onRegionChange={selected ? undefined : travel}
           bugs={snapshot?.bounties ?? []}
           onOpen={(id) => void open(id)}
           still={light || !!globalPause || !!selected}
@@ -346,14 +422,28 @@ export default function Participant({
       {!selected && terminations.length === 0 && (
         <>
           <div className="arena-label">
-            <span className="eyebrow">OPERATION / DEBUG</span>
+            <span className="eyebrow">
+              SECTOR 026 /{" "}
+              {location ? location.specialty.toUpperCase() : "WORLD OVERVIEW"}
+            </span>
             <h1>
-              Neon district
+              {location?.name ?? "Hunting grounds"}
               <span>
-                {snapshot?.bounties.filter((b) => !b.claimed).length ?? 0}{" "}
-                targets available
+                {localBugs.filter((b) => !b.claimed).length} targets available
               </span>
             </h1>
+            <p className="arena-instruction">
+              {location?.description ??
+                "Choose one of the four regions to explore its hunting ground."}
+            </p>
+            {location && (
+              <span
+                className="region-family-label"
+                style={{ color: location.color }}
+              >
+                {location.family.toUpperCase()} TERRITORY
+              </span>
+            )}
           </div>
           <div className="field-coordinate" aria-hidden="true">
             FIELD 026
@@ -361,6 +451,34 @@ export default function Participant({
           </div>
         </>
       )}
+      <nav
+        ref={regionNavigation}
+        className="region-nav"
+        aria-label="Arena regions"
+      >
+        <button
+          type="button"
+          data-region-choice="all"
+          aria-pressed={region === null}
+          disabled={!!selected || terminations.length > 0}
+          onClick={() => travel(null)}
+        >
+          World map
+        </button>
+        {regions.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            aria-pressed={region === item.id}
+            data-region-choice={item.id}
+            disabled={!!selected || terminations.length > 0}
+            onClick={() => travel(item.id)}
+            style={{ borderBottomColor: item.color }}
+          >
+            {item.name}
+          </button>
+        ))}
+      </nav>
       <aside
         ref={targetDock}
         className="target-dock"
@@ -378,6 +496,15 @@ export default function Participant({
               className={`target ${bug.claimed ? "claimed" : ""} ${selected === bug.bounty_id ? "selected" : ""}`}
               key={bug.bounty_id}
               data-bounty-id={bug.bounty_id}
+              data-map-bounty={bug.bounty_id}
+              disabled={captureBusy}
+              data-species={
+                bugAppearance(bug.bounty_id, bug.difficulty, bug.category).name
+              }
+              data-region={
+                bugAppearance(bug.bounty_id, bug.difficulty, bug.category)
+                  .region?.id
+              }
               data-cleared={bug.claimed}
               title={
                 bug.claimed
@@ -393,12 +520,32 @@ export default function Participant({
                   String(index + 1).padStart(2, "0")
                 )}
               </span>
-              <span>
+              <PixelBugIcon
+                id={bug.bounty_id}
+                difficulty={bug.difficulty}
+                category={bug.category}
+              />
+              <span className="target-copy">
                 <strong>{bug.title}</strong>
                 <small>
                   {bug.claimed
                     ? "CLEARED / READ ONLY"
                     : `${bug.difficulty}/100 DIFFICULTY`}
+                </small>
+                <small
+                  className="target-region"
+                  style={{
+                    color: bugAppearance(
+                      bug.bounty_id,
+                      bug.difficulty,
+                      bug.category,
+                    ).color,
+                  }}
+                >
+                  {
+                    bugAppearance(bug.bounty_id, bug.difficulty, bug.category)
+                      .region?.name
+                  }
                 </small>
                 {presence
                   .filter(
@@ -437,10 +584,10 @@ export default function Participant({
           <Trophy size={19} />
         </IconButton>
         <IconButton
-          title={light ? "Enable animated 3D targets" : "Reduce target motion"}
+          title={light ? "Enable animated targets" : "Reduce target motion"}
           onClick={() => setLight(!light)}
         >
-          {light ? <Bug size={19} /> : <VolumeX size={19} />}
+          {light ? <Play size={19} /> : <Pause size={19} />}
         </IconButton>
       </div>
       {round?.state.startsWith("CANCEL") && (
@@ -602,6 +749,14 @@ export default function Participant({
             Check previous session action <RefreshCw size={15} />
           </button>
         </div>
+      )}
+      {catching && !captureBusy && (
+        <button
+          className="capture-recovery"
+          onClick={() => void open(catching)}
+        >
+          Check capture
+        </button>
       )}
       {error && (
         <div className="toast error" role="alert">

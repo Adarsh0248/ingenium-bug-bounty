@@ -2,7 +2,7 @@
 
 The first connected participant interface lives in `apps/web`. It includes common
 code entry, the registered member/language step, session restoration and browser
-replacement, a full-screen 3D bounty field, live/minimisable HUD, keyboard target
+replacement, the restored four-area pixel arena with separate region navigation, live/minimisable HUD, keyboard target
 navigator, standings and the private code workbench. This is not a production
 deployment or the complete staff console. No cloud or Git operation is included.
 
@@ -33,6 +33,12 @@ Monaco uses its installed package's exported ESM paths and a local worker, as in
 the [official worker integration](https://github.com/microsoft/monaco-editor/blob/main/samples/browser-esm-vite-react/src/userWorker.ts).
 
 ## Local Visual Preview
+
+To review contestants alongside the working admin control room, use
+`npm.cmd run preview:app` and the [local preview guide](local-preview.md).
+Both roles use port 5175 in separate browser profiles, with a temporary demo
+database and simulated judging. The lighter participant-only mode below remains
+independent on port 5174.
 
 From the repository root:
 
@@ -141,3 +147,5 @@ whole-app storage reservations, HTTPS/proxy installation, backups/restoration,
 real-device graphics calibration, accessibility audit and 100-team capacity/
 reconnect testing remain launch gates. Monaco and Three.js are lazy-loaded but
 their sizeable bundles still require real-network/performance rehearsal.
+
+Map categories, team captures, controls, artwork provenance and checks are documented in [neon-art-direction.md](neon-art-direction.md).

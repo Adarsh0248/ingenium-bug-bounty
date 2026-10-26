@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=../../.env --watch --import tsx src/server.ts",
+    "preview:app": "node --import tsx test/local-preview.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=../../.env dist/server.js",
     "start:judging": "node dist/worker/server.js",

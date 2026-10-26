@@ -5,6 +5,12 @@ import { checkText, contentText, prepareContent } from "../src/content/policy.js
 import { AccessError } from "../src/access/transaction.js";
 
 const invalid = (e: unknown) => e instanceof AccessError && e.code === "INVALID_CONTEXT";
+test("categories are explicit author metadata, with legacy payload compatibility and strict validation",()=>{
+  const value={round_type:1,title:"Arrays",statement:"Find the boundary",difficulty:80,checker_mode:"TOKENS"};
+  assert.equal(Object.hasOwn(prepareContent("CREATE",value),"category"),false);
+  for(const category of ["ARRAYS","GRAPHS","SYSTEMS","LOGIC"])assert.equal(prepareContent("CREATE",{...value,category}).category,category);
+  for(const category of [null,"cpp","arrays",12])assert.throws(()=>prepareContent("CREATE",{...value,category}),invalid);
+});
 const variant = { language: "cpp", starter_code: "", reference_solution_code: "", defect_description: "", runtime_key: null,
   cpu_time_limit_ms: null, wall_time_limit_ms: null, memory_limit_kb: null };
 test("draft text preserves accepted Unicode, BOM, line endings and NUL in byte-backed sources and case I/O", () => {

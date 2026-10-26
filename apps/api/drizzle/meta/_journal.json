@@ -540,6 +540,27 @@
       "when": 1792984698769,
       "tag": "0076_event_capacity_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792992941375,
+      "tag": "0077_question_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793015697167,
+      "tag": "0078_world_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1793026388757,
+      "tag": "0079_fifty_bounties",
+      "breakpoints": true
     }
   ]
 }
