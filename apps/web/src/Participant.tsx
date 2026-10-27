@@ -27,7 +27,7 @@ import { createWorkspace } from "./workspace";
 import { Brand, IconButton, Modal } from "./ui";
 import Announcements from "./Announcements";
 import PixelBugIcon from "./PixelBugIcon";
-import { bugAppearance } from "./bug-art";
+import { bugAppearance, bountyRanks } from "./bug-art";
 import { regions } from "./regions";
 import type { RegionId } from "./regions";
 const Arena = lazy(() => import("./Arena")),
@@ -490,84 +490,96 @@ export default function Participant({
           </span>
           <span>{snapshot?.bounties.length ?? 0}</span>
         </div>
-        <div className="target-scroll">
-          {snapshot?.bounties.map((bug, index) => (
-            <button
-              className={`target ${bug.claimed ? "claimed" : ""} ${selected === bug.bounty_id ? "selected" : ""}`}
-              key={bug.bounty_id}
-              data-bounty-id={bug.bounty_id}
-              data-map-bounty={bug.bounty_id}
-              disabled={captureBusy}
-              data-species={
-                bugAppearance(bug.bounty_id, bug.difficulty, bug.category).name
-              }
-              data-region={
-                bugAppearance(bug.bounty_id, bug.difficulty, bug.category)
-                  .region?.id
-              }
-              data-cleared={bug.claimed}
-              title={
-                bug.claimed
-                  ? "Cleared bounty: inspect retained code"
-                  : `Open ${bug.title}`
-              }
-              onClick={() => void open(bug.bounty_id)}
-            >
-              <span className="target-number">
-                {bug.claimed ? (
-                  <Check size={17} />
-                ) : (
-                  String(index + 1).padStart(2, "0")
-                )}
-              </span>
-              <PixelBugIcon
-                id={bug.bounty_id}
-                difficulty={bug.difficulty}
-                category={bug.category}
-              />
-              <span className="target-copy">
-                <strong>{bug.title}</strong>
-                <small>
-                  {bug.claimed
-                    ? "CLEARED / READ ONLY"
-                    : `${bug.difficulty}/100 DIFFICULTY`}
-                </small>
-                <small
-                  className="target-region"
-                  style={{
-                    color: bugAppearance(
-                      bug.bounty_id,
-                      bug.difficulty,
-                      bug.category,
-                    ).color,
-                  }}
-                >
-                  {
-                    bugAppearance(bug.bounty_id, bug.difficulty, bug.category)
-                      .region?.name
-                  }
-                </small>
-                {presence
-                  .filter(
-                    (p) =>
-                      p.bounty_id === bug.bounty_id &&
-                      p.member_round_id !== session.member_round_id,
-                  )
-                  .map((p) => (
-                    <small
-                      className="teammate-indicator"
-                      key={p.member_round_id}
-                    >
-                      {p.name ?? "Teammate"} {p.paused ? "paused" : "working"}
-                    </small>
-                  ))}
-              </span>
-              <span className="target-bounty">
-                {bug.base_bounty}
-                <small>CR</small>
-              </span>
-            </button>
+        <div className="bounty-guide" aria-label="Bounty appearance guide">
+          {bountyRanks.map((rank) => (
+            <span key={rank.label}>
+              {rank.label} {rank.minimum}+
+            </span>
           ))}
+        </div>
+        <div className="target-scroll">
+          {snapshot?.bounties.map((bug, index) => {
+            const appearance = bugAppearance(
+              bug.bounty_id,
+              bug.difficulty,
+              bug.category,
+              bug.base_bounty,
+            );
+            return (
+              <button
+                className={`target ${bug.claimed ? "claimed" : ""} ${selected === bug.bounty_id ? "selected" : ""}`}
+                key={bug.bounty_id}
+                data-bounty-id={bug.bounty_id}
+                data-map-bounty={bug.bounty_id}
+                disabled={captureBusy}
+                data-species={appearance.name}
+                data-region={appearance.region.id}
+                data-motion={appearance.motion}
+                data-bounty-tier={appearance.rank.label}
+                data-aura={
+                  appearance.rank.tier ? appearance.region.aura : "none"
+                }
+                data-cleared={bug.claimed}
+                title={
+                  bug.claimed
+                    ? "Cleared bounty: inspect retained code"
+                    : `Open ${bug.title}`
+                }
+                onClick={() => void open(bug.bounty_id)}
+              >
+                <span className="target-number">
+                  {bug.claimed ? (
+                    <Check size={17} />
+                  ) : (
+                    String(index + 1).padStart(2, "0")
+                  )}
+                </span>
+                <PixelBugIcon
+                  id={bug.bounty_id}
+                  difficulty={bug.difficulty}
+                  category={bug.category}
+                  baseBounty={bug.base_bounty}
+                />
+                <span className="target-copy">
+                  <strong>{bug.title}</strong>
+                  <small>
+                    {bug.claimed
+                      ? "CLEARED / READ ONLY"
+                      : `${bug.difficulty}/100 DIFFICULTY`}
+                  </small>
+                  <small className="target-rarity">
+                    {appearance.rank.label} · {appearance.movement}
+                  </small>
+                  <small
+                    className="target-region"
+                    style={{
+                      color: appearance.color,
+                    }}
+                  >
+                    {appearance.region.name}
+                  </small>
+                  {presence
+                    .filter(
+                      (p) =>
+                        p.bounty_id === bug.bounty_id &&
+                        p.member_round_id !== session.member_round_id,
+                    )
+                    .map((p) => (
+                      <small
+                        className="teammate-indicator"
+                        key={p.member_round_id}
+                      >
+                        {p.name ?? "Teammate"} {p.paused ? "paused" : "working"}
+                      </small>
+                    ))}
+                </span>
+                <span className="target-bounty">
+                  {bug.base_bounty}
+                  <small>CR</small>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </aside>
       <div className="arena-tools">

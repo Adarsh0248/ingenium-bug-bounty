@@ -59,6 +59,19 @@ code. It never connects to the project database or judge and is not imported by
 the production build. Restarting it clears its synthetic state. Do not use real
 team codes or sensitive source in this preview.
 
+The default demo has **40 dummy bugs: ten in each region**. Every region includes
+all six creature families and Common, Rare, Elite and Apex bounties. Foundry also
+includes small unarmed scouts, pulse cannons and heavy siege bots. Questions use
+the same dummy addition exercise; these are visual-review fixtures, not event content.
+
+Each confirmed entry starts a fresh two-hour synthetic round and session window,
+independent of when the preview server was launched. If the demo timer has run
+out, sign out and enter again; saved practice drafts survive re-entry while the
+server stays running. Restarting the preview still clears its in-memory state.
+An aged-round browser regression checks both map and target-list question entry,
+loaded statement/starter code, and saved draft recovery after re-entry. Real
+competition deadlines and permissions are unchanged.
+
 ## Normal Frontend
 
 ```powershell
@@ -149,3 +162,13 @@ reconnect testing remain launch gates. Monaco and Three.js are lazy-loaded but
 their sizeable bundles still require real-network/performance rehearsal.
 
 Map categories, team captures, controls, artwork provenance and checks are documented in [neon-art-direction.md](neon-art-direction.md).
+
+Focused regions support drag or scroll to pan, plus directional buttons and Centre. Each world spans four viewport widths and four viewport heights with room for 30 bugs; only one viewport-sized section is visible. Map scale stays fixed, with no zoom controls. Changing regions retains its view. The four-area overview and the existing competition rules are preserved.
+
+Regions mix six creature types, with independent destinations across the whole region and individual speeds. [Silicon Hive](ember-foundry.md) uses armoured wheeled chassis and jetpack flyers on an animated motherboard. [Verdant Nexus](verdant-nexus.md) uses six geometric cyber-anomalies with articulated panels, rings and memory segments over a branching data-pulse network. [Zero-Day Core](zero-day-core.md) is a breached security mainframe with black glass, active memory channels and six mechanical intrusion entities. Neon retains its own insect movement. Bugs start spread out but are not confined to their initial patches. Journeys scale with map size, rest durations stay short, and bugs remain inside their category's region. The camera brings an off-screen cleared bug into view for its deferred termination. Common/Rare/Elite/Apex appearance is tied to the displayed base bounty, with regional auras from 400 CR upward. The target list shows both movement type and rarity in text. Hover and reduced motion keep selection accessible; these visuals do not change question or scoring rules.
+
+The world overview now contains scenery-only navigation tiles: click anywhere on a tile to enter its full area, with no capture or question opening on the miniature. Bugs use shared size-aware steering and keep their positions and animation memory across region changes. See [bug movement and navigation](bug-movement.md) for collision behaviour and memory scope.
+
+Ground creatures turn to face their path before moving. Jointed legs use a distance-driven planted-foot gait, while crawlers contract along their forward axis. Wing flapping is independent of leg motion. Hover and motion controls freeze the current pose.
+
+Neon District's background is a dynamic 2D runtime/circuit world: memory banks, code traces, processor blocks and moving data packets in cyan, pink and violet. It uses directly drawn geometry rather than a city backdrop image. The existing fixed-scale panning and motion controls apply to this scenery.

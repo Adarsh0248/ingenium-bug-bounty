@@ -2850,6 +2850,9 @@ dialog:has(.results-history) {
   flex: none;
   filter: drop-shadow(0 2px 0 #05030e);
 }
+.pixel-bug-icon:not([data-rank="Common"]) {
+  filter: drop-shadow(0 0 var(--aura-blur) var(--aura-color));
+}
 .target .target-number {
   font-size: 10px;
   color: #b49ac8;
@@ -2868,6 +2871,28 @@ button.target:hover:not(:disabled) {
 .target.claimed .pixel-bug-icon {
   opacity: 0.4;
   filter: grayscale(1);
+}
+.bounty-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #4b345a;
+  color: #c3b4cf;
+  font:
+    8px Consolas,
+    monospace;
+}
+.target .target-rarity {
+  color: #e3ccf2;
+  font-size: 9px;
+}
+.target[data-bounty-tier="Elite"] .target-bounty,
+.target[data-bounty-tier="Apex"] .target-bounty {
+  color: #ffe29b;
+}
+.target[data-bounty-tier="Apex"] .target-rarity {
+  color: #ffe29b;
 }
 .dock-heading {
   color: #e2b5f7;
@@ -2947,6 +2972,13 @@ button.target:hover:not(:disabled) {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--region-color) 45%, transparent);
   box-shadow: 4px 4px 0 #05040c99;
+  display: block;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
 }
 .world-region .cybercity {
   opacity: 0.85;
@@ -2967,11 +2999,13 @@ button.target:hover:not(:disabled) {
   text-align: left;
   justify-content: start;
   pointer-events: auto;
+  display: flex;
+  align-items: center;
 }
-.world-region-heading:hover:not(:disabled) {
+.world-region:hover:not(:disabled) .world-region-heading {
   background: #121222eb;
 }
-.world-region-heading:disabled {
+.world-region:disabled .world-region-heading {
   opacity: 1;
 }
 .world-region-heading > span:nth-child(2) {
@@ -3075,18 +3109,6 @@ button.target:hover:not(:disabled) {
 .city-billboard {
   animation: district-sign 8s ease-in-out infinite alternate;
 }
-.foundry-steam {
-  animation: foundry-steam 18s linear infinite;
-}
-.city-conveyor {
-  animation: conveyor 3s linear infinite;
-}
-.furnace-core {
-  animation: district-sign 6s ease-in-out infinite alternate;
-}
-.city-embers {
-  animation: foundry-embers 8s linear infinite;
-}
 .city-vines {
   transform-origin: center top;
   animation: vine-sway 14s ease-in-out infinite alternate;
@@ -3128,31 +3150,6 @@ button.target:hover:not(:disabled) {
   }
   to {
     opacity: 1;
-  }
-}
-@keyframes foundry-steam {
-  from {
-    transform: translate(0, 45px);
-    opacity: 0.05;
-  }
-  to {
-    transform: translate(-65px, -90px);
-    opacity: 0.22;
-  }
-}
-@keyframes conveyor {
-  to {
-    transform: translateX(48px);
-  }
-}
-@keyframes foundry-embers {
-  from {
-    transform: translate(0, 20px);
-    opacity: 0.2;
-  }
-  to {
-    transform: translate(24px, -65px);
-    opacity: 0.8;
   }
 }
 @keyframes vine-sway {
@@ -3249,4 +3246,187 @@ button.target:hover:not(:disabled) {
   padding: 12px;
   background: #79fff2;
   color: #071b24;
+}
+.region-arena {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.neon-runtime {
+  background: #050c1c;
+}
+.foundry-board {
+  background: #071d1a;
+}
+.foundry-pcb {
+  font-family: Consolas, monospace;
+}
+.foundry-data-packet {
+  offset-rotate: 0deg;
+  animation: neon-data-flow 25s linear infinite;
+}
+.foundry-status-led {
+  animation: neon-signal 4s ease-in-out infinite alternate;
+}
+.foundry-fan {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: neon-core-cycle 10s linear infinite;
+}
+.neon-circuit-map {
+  font-family: Consolas, monospace;
+  shape-rendering: geometricPrecision;
+}
+.neon-data-packet {
+  offset-rotate: auto;
+  animation: neon-data-flow 35s linear infinite;
+}
+.neon-node-light {
+  animation: neon-signal 5s ease-in-out infinite alternate;
+}
+.neon-core-pulse {
+  animation: neon-signal 3.5s ease-in-out infinite alternate;
+}
+.neon-core-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: neon-core-cycle 48s linear infinite;
+}
+.painted-creature-icon {
+  image-rendering: auto;
+}
+.nexus-network {
+  background: #06181f;
+}
+.zero-day-core { background: #05090f; }
+.zero-day-map { font-family: Consolas, monospace; shape-rendering: geometricPrecision; }
+.zero-day-data-flow { animation: nexus-packet 15s linear infinite; }
+.zero-day-fracture-flow { animation: nexus-packet 34s linear infinite; }
+.zero-day-lock-ring { transform-origin: 0 0; animation: neon-core-cycle 45s linear infinite; }
+.zero-day-lock-inner { transform-origin: 0 0; animation: neon-core-cycle 29s linear infinite reverse; }
+.zero-day-gate-scan { animation: zero-day-scan 5s ease-in-out infinite alternate; }
+@keyframes zero-day-scan { from { transform: translateY(-16px); } to { transform: translateY(16px); } }
+.nexus-map {
+  font-family: Consolas, monospace;
+  shape-rendering: geometricPrecision;
+}
+.nexus-data-pulse {
+  animation: nexus-packet 6s linear infinite;
+}
+.nexus-node-breath {
+  animation: neon-signal 4s ease-in-out infinite alternate;
+}
+.nexus-root-orbit {
+  transform-origin: 0 0;
+  animation: neon-core-cycle 65s linear infinite reverse;
+}
+@keyframes nexus-packet {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes neon-data-flow {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+@keyframes neon-core-cycle {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes neon-signal {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .neon-circuit-map *,
+  .foundry-pcb *,
+  .nexus-map *,
+  .zero-day-map * {
+    animation-play-state: paused !important;
+  }
+}
+.region-map-viewport {
+  position: absolute;
+  overflow: hidden;
+  background: #0b1020;
+  border: 1px solid #5b416e;
+  pointer-events: none;
+  contain: paint;
+}
+.region-map-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.region-arena:focus-visible {
+  outline: 2px solid #9dfff1;
+  outline-offset: -3px;
+}
+.region-map-controls {
+  position: absolute;
+  top: 245px;
+  right: 96px;
+  z-index: 6;
+  background: #110f20ed;
+  border: 1px solid #705280;
+  padding: 6px;
+  display: grid;
+  gap: 5px;
+}
+.region-map-controls > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.region-map-controls button {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 4px 7px;
+  font:
+    10px Consolas,
+    monospace;
+}
+.region-map-controls small {
+  color: #c7bdd2;
+  font:
+    9px Consolas,
+    monospace;
+}
+.region-arena[data-map-region]:not([data-map-region="all"]) .arena-canvas {
+  cursor: grab;
+  touch-action: none;
+}
+.region-arena[data-map-region]:not([data-map-region="all"])
+  .arena-canvas:active {
+  cursor: grabbing;
+}
+@media (max-width: 720px) {
+  .region-map-controls {
+    top: 344px;
+    right: 22px;
+    max-width: calc(100% - 44px);
+    padding: 4px;
+  }
+  .region-map-controls button {
+    font-size: 9px;
+    min-width: 25px;
+    min-height: 28px;
+    padding: 4px 5px;
+  }
+  .region-map-controls small {
+    display: none;
+  }
 }

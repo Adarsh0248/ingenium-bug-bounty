@@ -2,6 +2,9 @@
 
 A gamified bug-fixing competition platform for Ingenium, the college technical festival module.
 
+For Windows startup, admin/contestant access, shutdown, database inspection and
+troubleshooting, see the [local app guide](LOCAL-APP-GUIDE.md).
+
 ## Status
 
 Current update, 25 October: roughly **91%** complete; event deployment remains on

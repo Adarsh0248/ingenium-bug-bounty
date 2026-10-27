@@ -1020,13 +1020,13 @@ export default function StaffContent({
                       Neon District — arrays, strings, searching
                     </option>
                     <option value="GRAPHS">
-                      Verdant Circuit — graphs, trees, traversal
+                      Verdant Nexus — graphs, trees, traversal
                     </option>
                     <option value="SYSTEMS">
-                      Ember Foundry — memory, references, resources
+                      Silicon Hive — memory, references, resources
                     </option>
                     <option value="LOGIC">
-                      Cryo Vault — logic, state, concurrency
+                      Zero-Day Core — logic, state, concurrency
                     </option>
                   </select>
                 </label>

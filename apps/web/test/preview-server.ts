@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { definitions, previewBugs } from "./preview-bugs";
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const round = id(1),
@@ -25,14 +26,6 @@ const starter = {
   javascript:
     "const [a, b] = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/).map(Number);\nconsole.log(a - b);\n",
 };
-const definitions = [
-  { category: "ARRAYS", title: "The silent overflow", difficulty: 35 },
-  { category: "ARRAYS", title: "Off by one", difficulty: 20 },
-  { category: "SYSTEMS", title: "A tangled reference", difficulty: 64 },
-  { category: "LOGIC", title: "Race condition", difficulty: 88 },
-  { category: "LOGIC", title: "The missing return", difficulty: 12 },
-  { category: "GRAPHS", title: "Ghost in the loop", difficulty: 51 },
-];
 interface State {
   session: string;
   flow: boolean;
@@ -40,6 +33,7 @@ interface State {
   revoked: boolean;
   language: keyof typeof starter;
   name: string;
+  started: number;
   expires: number;
   heads: typeof streams;
   bugs: any[];
@@ -60,9 +54,7 @@ interface State {
   statement: string;
 }
 const states = new Map<string, State>(),
-  tickets = new Map<string, string>(),
-  started = Date.now(),
-  closing = started + 7200000;
+  tickets = new Map<string, string>();
 let io: Server;
 function state(req: IncomingMessage, res: ServerResponse) {
   let sid = req.headers.cookie
@@ -79,16 +71,10 @@ function state(req: IncomingMessage, res: ServerResponse) {
       revoked: false,
       language: "cpp",
       name: "Asha",
+      started: Date.now(),
       expires: Date.now() + 7200000,
       heads: structuredClone(streams),
-      bugs: definitions.map((b, i) => ({
-        ...b,
-        bounty_id: id(100 + i),
-        base_bounty: b.difficulty * 10,
-        captured: false,
-        claimed: false,
-        hint_tier: 0,
-      })),
+      bugs: previewBugs(),
       drafts: new Map(),
       outcomes: new Map(),
       actions: new Map(),
@@ -129,7 +115,7 @@ function session(s: State) {
     team_name: "Segfault Society",
     round_state: s.closed ? "CLOSED" : s.paused ? "PAUSED" : "RUNNING",
     expires_at: new Date(s.expires).toISOString(),
-    absolute_expires_at: new Date(started + 28800000).toISOString(),
+    absolute_expires_at: new Date(s.started + 28800000).toISOString(),
     warning_at: new Date(s.expires - 300000).toISOString(),
   };
 }
@@ -184,8 +170,8 @@ function snapshot(s: State, sync: string) {
       kind: 1,
       state: s.closed ? "CLOSED" : s.paused ? "PAUSED" : "RUNNING",
       duration_ms: "7200000",
-      started_at: new Date(started).toISOString(),
-      closes_at: new Date(closing).toISOString(),
+      started_at: new Date(s.started).toISOString(),
+      closes_at: new Date(s.started + 7200000).toISOString(),
       current: true,
       arena_status: "IN_PROGRESS",
     },
@@ -279,6 +265,8 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     if (b.action === "close") s.closed = true;
     if (b.action === "revoke") s.revoked = true;
     if (b.action === "expire") s.expires = Date.now() - 1;
+    if (b.action === "age-round" && Number.isSafeInteger(b.ms) && b.ms >= 0 && b.ms <= 28800000)
+      s.started = Date.now() - b.ms;
     if (b.action === "drop") s.dropNext = true;
     if (b.action === "full-field")
       s.bugs = Array.from({ length: 50 }, (_, i) => ({
@@ -291,6 +279,8 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         claimed: false,
         hint_tier: 0,
       }));
+    if(b.action==="region-field"&&["ARRAYS","SYSTEMS","GRAPHS","LOGIC"].includes(b.category))
+      s.bugs=Array.from({length:30},(_,i)=>({bounty_id:id(2000+i),category:b.category,title:`Region test bug ${i+1}`,difficulty:10+i*3,base_bounty:(10+i*3)*10,captured:false,claimed:false,hint_tier:0}));
     if (
       b.action === "judge-delay" &&
       Number.isInteger(b.ms) &&
@@ -346,7 +336,8 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   }
   if (p === "/api/v1/entry/activate") {
     s.active = true;
-    s.expires = Date.now() + 7200000;
+    s.started = Date.now();
+    s.expires = s.started + 7200000;
     s.language = b.language;
     s.name = b.member_id === member ? "Asha" : "Dev";
     return send({

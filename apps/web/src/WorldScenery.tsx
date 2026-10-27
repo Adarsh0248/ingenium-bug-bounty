@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import CyberCity from "./CyberCity";
 import { regions, regionField } from "./regions";
 import type { RegionId } from "./regions";
 import { bugAppearance } from "./bug-art";
 import type { Bounty } from "./types";
+import { mapExtent, mapBounds } from "./region-map";
 
 export default function WorldScenery({
   region,
@@ -12,12 +13,14 @@ export default function WorldScenery({
   bugs,
   enter,
   locked,
+  mapRef,
 }: {
   region: RegionId | null;
   still: boolean;
   bugs: Bounty[];
   enter?: (region: RegionId) => void;
   locked: boolean;
+  mapRef?: RefObject<HTMLDivElement | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -38,7 +41,18 @@ export default function WorldScenery({
       data-world-view={region ?? "all"}
     >
       {region ? (
-        <CyberCity region={region} still={still} />
+        <div
+          className="region-map-viewport"
+          style={mapBounds(size.width, size.height)}
+        >
+          <div
+            ref={mapRef}
+            className="region-map-world"
+            style={mapExtent(mapBounds(size.width, size.height))}
+          >
+            <CyberCity region={region} still={still} />
+          </div>
+        </div>
       ) : (
         <>
           <div className="world-grid" aria-hidden="true" />
@@ -51,10 +65,14 @@ export default function WorldScenery({
                     .region.id === item.id,
               ).length;
               return (
-                <div
+                <button
                   className="world-region"
+                  type="button"
                   key={item.id}
                   data-region-tile={item.id}
+                  onClick={() => enter?.(item.id)}
+                  disabled={locked || !enter}
+                  aria-label={`Enter ${item.name}`}
                   style={
                     {
                       ...regionField(size.width, size.height, item.id),
@@ -63,13 +81,7 @@ export default function WorldScenery({
                   }
                 >
                   <CyberCity region={item.id} still={still} />
-                  <button
-                    className="world-region-heading"
-                    type="button"
-                    onClick={() => enter?.(item.id)}
-                    disabled={locked || !enter}
-                    aria-label={`Enter ${item.name}`}
-                  >
+                  <span className="world-region-heading">
                     <span className="region-number">0{index + 1}</span>
                     <span>
                       <strong>{item.name}</strong>
@@ -79,11 +91,11 @@ export default function WorldScenery({
                       {count}
                       <small>ACTIVE</small>
                     </span>
-                  </button>
+                  </span>
                   <span className="world-region-family" aria-hidden="true">
                     {item.family.toUpperCase()} TERRITORY
                   </span>
-                </div>
+                </button>
               );
             })}
         </>
