@@ -115,6 +115,9 @@ test("Zero-Day Core is a breached mainframe with six cached mechanical entities,
     .click();
   await expect(stream).toHaveCSS("animation-play-state", "paused");
   await page.locator("button.target[data-region=cryo]").last().click();
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await expect(page.locator(".statement")).toContainText("Repair the program");
   await page
     .getByRole("button", { name: "Close workbench", exact: true })

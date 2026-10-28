@@ -1,0 +1,60 @@
+{
+  "scope": "TRUSTED_LOCAL_CONTENT_CHECKS",
+  "pack_sha256": "621ef0f33be6f4ab6c34d1c945c481af16dd0a0a229aba960f261fda5106b133",
+  "passed": true,
+  "question_count": 100,
+  "variant_count": 400,
+  "programs_compiled_or_syntax_checked": 800,
+  "reference_case_runs": 3280,
+  "declared_hidden_witnesses_verified": 400,
+  "separate_paid_examples_verified": 400,
+  "tools": {
+    "c": "gcc (GCC) 15.3.0",
+    "cpp": "g++ (GCC) 15.3.0",
+    "java": "javac 21.0.12.1",
+    "python": "Python 3.14.8"
+  },
+  "test_image_id": "sha256:727b56f40ae170a74b61ed7cd9a87a6e05516909e7b4a75db5898d80aaca38b3",
+  "c_cpp_undefined_behavior_checks": true,
+  "unchanged_variants_reused": 388,
+  "changed_question_variants_rechecked": 12,
+  "evidence_note": "388 unchanged variants reuse the complete initial Linux run. All twelve variants of the three corrected questions were rerun; exact source hashes, unchanged complete question objects, all judging cases and separate probes are checked before combining results.",
+  "production_judge_validated": false,
+  "human_pilot_difficulty_reviewed": false,
+  "scanner_validation_source_pack_sha256": "a8307985a7b3088ec939f773dc038336faadf66db4ee0faf0bc5f1a275fe00b2",
+  "scanner_change_note": "Only authored scanner labels/ranges changed. All 100 complete mission objects, excluding scanner metadata, match the previously validated pack exactly. Existing Linux compiler, case, witness and paid-probe results are reused; no program was rerun for this metadata-only change.",
+  "scanner_scope_checks": {
+    "variants_checked": 400,
+    "section_lines": {
+      "minimum": 4,
+      "median": 13,
+      "maximum": 39
+    },
+    "first_fault_offsets": {
+      "1": 4,
+      "2": 14,
+      "3": 18,
+      "4": 17,
+      "5": 46,
+      "6": 54,
+      "7": 38,
+      "8": 27,
+      "9": 30,
+      "10": 27,
+      "11": 34,
+      "12": 16,
+      "13": 13,
+      "14": 13,
+      "15": 4,
+      "16": 12,
+      "17": 15,
+      "18": 6,
+      "20": 6,
+      "22": 6
+    },
+    "human_balance_pilot_completed": false
+  },
+  "prose_validation_source_pack_sha256": "a0ad99e2d237e2ada3cb8373d5b2f3b2b0c38185c9d01cebe60aebf2f9ceaaac",
+  "prose_change_note": "Only participant statement and hint text changed. Exact program bytes, tests, witnesses, paid examples, scanner scopes, metadata and rewards match the preceding validated pack. Existing compiler results are reused; prose/UI checks do not certify human difficulty or production publication.",
+  "plain_english_questions_reviewed": 100
+}

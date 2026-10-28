@@ -1,5 +1,12 @@
 # Local admin and contestant preview
 
+For the separate **Round 2 Black Market preview**, run `npm.cmd run preview:round2`
+and open **http://127.0.0.1:5176**. Use the team code
+`AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, choose a member/language and click **Black Market**.
+It starts with 35,000 demo coins and all seven approved items. See the
+[shop preview guide](round-2-items.md#review-the-local-shop) for controls and limitations.
+This mode needs no Docker and does not modify another preview or database.
+
 Start Docker Desktop with Linux containers, then run from PowerShell:
 
 ```powershell
@@ -18,8 +25,11 @@ arena. Use separate profiles for admin and contestants because tabs in one
 profile share login cookies. A third profile can represent the second teammate.
 The ordinary two-member/session and language-lock rules still apply.
 
-Round 1 starts with two teams and two published demo bugs. Round 2 demo bugs are
-also published, so the normal close/finalise/qualify/setup flow can be reviewed.
+Round 1 starts with two synthetic teams and all **50 Protocol Rebellion missions**:
+13 Neon District, 13 Silicon Hive, 12 Verdant Nexus and 12 Zero-Day Core. Each has
+C, C++, Java and Python starters, real statements, two samples and three tailored
+hints. JavaScript is not offered for new enrolments. Round 2 event content has not
+been authored. The older four-question setup survives only in isolated regression tests.
 The Super Admin can review Teams, Staff, Bug Library, Access and other control-room
 views. Admin writes use the actual API, permissions, confirmations and database
 rules. They are visible to contestants using this same preview on port 5175.
@@ -31,10 +41,11 @@ finalising a round to add or deduct points with a note. See the
 
 This is a **UI preview**. Its permanent preview banner identifies the synthetic
 teams and disabled code execution. Its clock/readiness are simulated. Run,
-Submit and authoring validation use canned addition-example feedback, not a
-compiler. Put `PREVIEW_WRONG` anywhere in submitted text to see a wrong answer;
-otherwise participant output is simulated as `12` plus a newline. It does not
-check whether your program is actually correct. The normal quotas, cooldowns,
+Submit and authoring validation use a simulated driver, not a compiler. The
+setup reads the pack's reference outputs to exercise publication and selection;
+that is not evidence of production-judge validation. Put `PREVIEW_WRONG` in
+submitted text to simulate a wrong answer. Arbitrary participant fixes are not
+executed or checked for correctness in this preview. The normal quotas, cooldowns,
 hint costs, scoring and live updates remain enabled after setup.
 
 The preview creates its own labelled, memory-backed PostgreSQL container with
@@ -58,3 +69,7 @@ simulated submission feedback, role separation and removal of its own database.
 The lighter `npm.cmd run preview:participant` remains available independently
 at port 5174, with its existing `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA` team code.
 It uses a separate in-memory preview, so admin changes on 5175 do not affect it.
+It also loads the 50 real missions by default; its judging is simulated and its
+default wallet/standings are synthetic UI data. Restart either preview after
+changing the server-side question pack. Never serve `content/round-1` as static
+assets: it contains private references, hidden cases and unpurchased hints.

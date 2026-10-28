@@ -30,6 +30,7 @@ export interface Session {
   expires_at: string;
   warning_at: string;
   absolute_expires_at: string;
+  preview_round?: number;
 }
 export interface StaffSession {
   session_id: string;
@@ -58,6 +59,7 @@ export interface Bounty {
   base_bounty: number;
   claimed: boolean;
   hint_tier: number;
+  scan_clear?: boolean;
 }
 export interface Termination {
   awardId: string;
@@ -72,6 +74,7 @@ export interface Standing {
   effective_time_ms: number;
   penalty_ms: number;
   difficulties: number[];
+  overdrive?: boolean;
 }
 export interface Snapshot {
   sync_id: string;
@@ -118,6 +121,7 @@ export interface Snapshot {
   }[];
   drafts: { bounty_id: string; revision: string; updated_at: string }[];
   announcement_head: string | null;
+  shop?: import("./shop-items").ShopView;
 }
 export interface Metadata extends Bounty {
   round_id: string;

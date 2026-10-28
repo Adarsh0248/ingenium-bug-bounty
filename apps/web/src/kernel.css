@@ -1,0 +1,241 @@
+.kernel-arena {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 64% 48%, #17314b, #050c18 75%);
+}
+.kernel-canvas {
+  position: absolute;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+  border: 1px solid #285368;
+  border-radius: 5px;
+}
+.kernel-floor {
+  position: absolute;
+  display: block;
+  border-radius: 5px;
+  pointer-events: none;
+  box-shadow: 0 0 40px #03122080;
+}
+.kernel-actors {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+.kernel-body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 128px;
+  height: 128px;
+  transform-origin: center;
+  will-change: transform;
+  pointer-events: none;
+}
+.kernel-restraint {
+  position: absolute;
+  left: 51px;
+  top: 49px;
+  width: 25px;
+  height: 25px;
+  border: 1px solid #e8f9ff;
+  pointer-events: none;
+}
+.kernel-iris {
+  position: absolute;
+  left: 56px;
+  top: 56px;
+  width: 16px;
+  height: 16px;
+  border-left: 1px solid #ffb276;
+  border-bottom: 1px solid #ffb276;
+  pointer-events: none;
+}
+.kernel-canvas:focus-visible {
+  outline: 2px solid #8af5ff;
+  outline-offset: 3px;
+}
+.kernel-map-tools {
+  position: absolute;
+  width: 166px;
+  z-index: 2;
+  padding: 9px;
+  border: 1px solid #326074;
+  background: #07121fef;
+  box-shadow: 0 5px 20px #0007;
+  pointer-events: auto;
+  font: 10px monospace;
+  color: #b9edff;
+}
+.kernel-map-tools > span,
+.kernel-map-tools > small {
+  display: block;
+  line-height: 1.5;
+}
+.kernel-map-tools > small {
+  font-size: 8px;
+  color: #6e9bb0;
+  margin-bottom: 7px;
+}
+.kernel-minimap {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid #476477;
+  background: #091928;
+  cursor: crosshair;
+}
+.kernel-minimap svg {
+  display: block;
+  width: 100%;
+}
+.kernel-centre {
+  width: 100%;
+  margin-top: 6px;
+  font: 10px monospace;
+  padding: 5px;
+  border: 1px solid #335367;
+  background: #142b40;
+  color: #bbecff;
+  cursor: pointer;
+}
+.kernel-info {
+  position: absolute;
+  z-index: 5;
+  pointer-events: auto;
+}
+.kernel-identity {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  background: #0b1d2b;
+  font: 700 13px monospace;
+  transform: rotate(-8deg);
+}
+.kernel-identity span {
+  transform: rotate(8deg);
+}
+.bug-gear {
+  padding: 14px;
+  margin: 0 0 18px;
+  background: linear-gradient(120deg, #11273b, #171f35);
+  border: 1px solid #35586c;
+  border-radius: 6px;
+}
+.bug-gear-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #9aebff;
+}
+.bug-gear-heading small {
+  display: block;
+  color: #a4b8c6;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.bug-gear-tools {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.bug-gear-tools button {
+  flex: 1;
+  min-width: 116px;
+  text-align: left;
+  border: 1px solid #53718a;
+  background: #152f46;
+  color: #d5efff;
+  border-radius: 4px;
+  padding: 10px;
+  cursor: pointer;
+}
+.bug-gear-tools button small {
+  display: block;
+  color: #87dbe8;
+  margin-top: 4px;
+}
+.bug-gear-tools button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.bug-gear-confirm {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  border-top: 1px solid #315065;
+  padding-top: 10px;
+}
+.bug-gear-confirm p {
+  flex: 1;
+  min-width: 180px;
+  font-size: 12px;
+}
+.bug-gear-confirm button {
+  border: 1px solid #6ec7d4;
+  background: #193c50;
+  color: #ddfbff;
+  padding: 7px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.participant[data-round="2"] .region-nav {
+  display: none;
+}
+.kernel-list-toggle {
+  display: none;
+}
+.participant[data-round="2"] .arena-label {
+  max-width: 300px;
+}
+.participant[data-round="2"][data-terminating="true"] .kernel-map-tools {
+  visibility: hidden;
+}
+@media (max-width: 720px) {
+  .kernel-list-toggle {
+    display: block;
+  }
+  .participant[data-round="2"]:not([data-targets-open="true"]) .target-dock {
+    visibility: hidden;
+  }
+  .kernel-map-tools {
+    width: 116px;
+    padding: 6px;
+  }
+  .kernel-map-tools > span {
+    font-size: 8px;
+  }
+  .kernel-map-tools > small {
+    font-size: 6px;
+  }
+  .kernel-centre {
+    font-size: 8px;
+  }
+  .kernel-minimap {
+    max-height: 72px;
+    overflow: hidden;
+  }
+  .kernel-identity {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+  }
+  .bug-gear {
+    padding: 10px;
+  }
+  .bug-gear-tools button {
+    min-width: 95px;
+    padding: 8px;
+    font-size: 11px;
+  }
+}

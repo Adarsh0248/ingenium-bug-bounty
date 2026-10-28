@@ -11,6 +11,7 @@ import {
   LockKeyhole,
   Play,
   RefreshCw,
+  RotateCcw,
   Save,
   Send,
   X,
@@ -31,6 +32,10 @@ import { IconButton, Modal } from "./ui";
 import { displayOutput } from "./output";
 import Editor from "./Editor";
 import ReportQuestion from "./ReportQuestion";
+import { TecnoesisCoin } from "./BountyReward";
+import type { ShopIntel, ShopView } from "./shop-items";
+import BugGear from "./BugGear";
+import ProblemText, { InlineCode } from "./ProblemText";
 type Workspace = ReturnType<typeof createWorkspace>;
 type Tab = "PROBLEM" | "HINTS" | "SUBMISSIONS";
 export default function Workbench({
@@ -44,6 +49,11 @@ export default function Workbench({
   wallet,
   close,
   judging,
+  purchasesBlocked = false,
+  shopIntel,
+  shop,
+  gearCommand,
+  shopChanged,
 }: {
   api: Api;
   session: Session;
@@ -55,6 +65,11 @@ export default function Workbench({
   wallet: number;
   close: () => void;
   judging: Snapshot["judging"];
+  purchasesBlocked?: boolean;
+  shopIntel?: ShopIntel;
+  shop?: ShopView;
+  gearCommand?: Command;
+  shopChanged?: (view: ShopView) => void;
 }) {
   const path = bugPath(session.round_id, bug.bounty_id),
     [meta, setMeta] = useState<Metadata | null>(null),
@@ -77,9 +92,11 @@ export default function Workbench({
     [feedbackId, setFeedbackId] = useState<string | null>(null),
     [viewSource, setViewSource] = useState<any>(null),
     [buy, setBuy] = useState<number | null>(null),
+    [resetSource, setResetSource] = useState<string | null>(null),
     [conflict, setConflict] = useState<any>(null),
     [reporting, setReporting] = useState(false);
-  const heading = useRef<HTMLHeadingElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null),
+    resetButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     heading.current?.focus();
   }, [bug.bounty_id]);
@@ -117,9 +134,18 @@ export default function Workbench({
       ready &&
       !!source.trim() &&
       new TextEncoder().encode(source).length <= 131072;
+  const canReset =
+    !!item &&
+    !loading &&
+    !readOnly &&
+    ready &&
+    !busy &&
+    !["SAVING", "UNRESOLVED", "CONFLICT", "OFFLINE"].includes(
+      state?.state ?? "",
+    );
   const hintTier = Math.max(bug.hint_tier, ...hints.map((h) => h.level), 0),
     price = (level: number) =>
-      bug.difficulty * [1, 3, roundKind === 1 ? 4 : 8][level - 1];
+      (bug.base_bounty / 10) * [1, 3, roundKind === 1 ? 4 : 8][level - 1];
   useEffect(() => {
     let gone = false;
     setLoadFailed(false);
@@ -197,6 +223,29 @@ export default function Workbench({
   }
   async function refreshMetadata() {
     setMeta(await api.request(path));
+  }
+  async function prepareReset() {
+    if (!canReset) return;
+    await perform(async () => {
+      const original = await api.request<{
+        bounty_id: string;
+        language: string;
+        source: string;
+      }>(`${path}/starter`);
+      if (
+        original?.bounty_id !== bug.bounty_id ||
+        original.language !== session.language ||
+        typeof original.source !== "string" ||
+        !original.source.isWellFormed() ||
+        new TextEncoder().encode(original.source).length > 131072
+      )
+        throw new Error("INVALID_STARTER");
+      setResetSource(original.source);
+    });
+  }
+  function closeReset() {
+    setResetSource(null);
+    requestAnimationFrame(() => resetButton.current?.focus());
   }
   async function admitted(result: Receipt) {
     if (result.result.status === "REJECTED") {
@@ -314,6 +363,7 @@ export default function Workbench({
             <small>/100</small>
           </span>
           <strong>
+            <TecnoesisCoin />
             {bug.base_bounty.toLocaleString()}
             <small> bounty</small>
           </strong>
@@ -335,8 +385,17 @@ export default function Workbench({
               : `Read only: ${label(meta!.reason ?? "unavailable")}.`}
         </div>
       )}
-      <button className="text-button" onClick={()=>setReporting(true)}>Report question</button>
-      {reporting&&<ReportQuestion api={api} path={path} title={bug.title} close={()=>setReporting(false)}/>}
+      <button className="text-button" onClick={() => setReporting(true)}>
+        Report question
+      </button>
+      {reporting && (
+        <ReportQuestion
+          api={api}
+          path={path}
+          title={bug.title}
+          close={() => setReporting(false)}
+        />
+      )}
       <div className="workbench-grid">
         <div className="problem-column">
           <nav className="tabs" aria-label="Challenge views">
@@ -354,6 +413,17 @@ export default function Workbench({
             ))}
           </nav>
           <div className="problem-content">
+            {roundKind === 2 && shop && gearCommand && shopChanged && (
+              <BugGear
+                api={api}
+                roundId={session.round_id}
+                bountyId={bug.bounty_id}
+                view={shop}
+                enabled={ready && permitted && !readOnly}
+                command={gearCommand}
+                changed={shopChanged}
+              />
+            )}
             {tab === "PROBLEM" && (
               <>
                 <div className="limits">
@@ -365,9 +435,44 @@ export default function Workbench({
                   <span>Full program</span>
                 </div>
                 <h3>Mission brief</h3>
-                <div className="statement">
-                  {statement || "Loading challenge…"}
-                </div>
+                <ProblemText text={statement || "Loading challenge…"} />
+                {shopIntel && (
+                  <section
+                    className="gear-intel"
+                    aria-label="Purchased gear intelligence"
+                  >
+                    <span className="eyebrow">TEAM GEAR INTELLIGENCE</span>
+                    <p>
+                      This fix uses at least Hint {shopIntel.assistance_tier}
+                      -level assistance for scoring.
+                    </p>
+                    {shopIntel.scanner && (
+                      <div>
+                        <h4>Hex Scanner · {shopIntel.scanner.label}</h4>
+                        <p>{shopIntel.scanner.text}</p>
+                        <p className="muted">
+                          Original code · lines {shopIntel.scanner.from_line}–
+                          {shopIntel.scanner.to_line}. Your edits do not change
+                          this trace.
+                        </p>
+                        <pre>{shopIntel.scanner.source}</pre>
+                      </div>
+                    )}
+                    {shopIntel.probe && (
+                      <div>
+                        <h4>Boundary Probe · additional edge example</h4>
+                        <p>
+                          This authored example is separate from the hidden
+                          judging tests.
+                        </p>
+                        <h5>Input</h5>
+                        <pre>{shopIntel.probe.input}</pre>
+                        <h5>Expected output</h5>
+                        <pre>{shopIntel.probe.output}</pre>
+                      </div>
+                    )}
+                  </section>
+                )}
                 <h3>Public samples</h3>
                 {meta?.samples.map((s) => (
                   <section className="sample" key={s.sample_number}>
@@ -411,6 +516,12 @@ export default function Workbench({
             {tab === "HINTS" && (
               <>
                 <h3>Field intelligence</h3>
+                {purchasesBlocked && (
+                  <p className="shop-freeze" role="status">
+                    Black ICE is active. New hint purchases are locked;
+                    purchased hints remain available.
+                  </p>
+                )}
                 {[1, 2, 3].map((level) => {
                   const owned = hints.find((h) => h.level === level),
                     purchased = level <= hintTier,
@@ -431,7 +542,9 @@ export default function Workbench({
                         <strong>{price(level)} credits</strong>
                       </div>
                       {owned ? (
-                        <p>{owned.content}</p>
+                        <p>
+                          <InlineCode>{owned.content}</InlineCode>
+                        </p>
                       ) : purchased ? (
                         <p role="status">Purchased / content pending</p>
                       ) : (
@@ -441,7 +554,8 @@ export default function Workbench({
                             readOnly ||
                             busy ||
                             unresolved ||
-                            wallet < price(level)
+                            wallet < price(level) ||
+                            purchasesBlocked
                           }
                           onClick={() => setBuy(level)}
                         >
@@ -514,6 +628,15 @@ export default function Workbench({
               >
                 {state ? label(state.state) : "loading"}
               </span>
+              <button
+                ref={resetButton}
+                className="text-button"
+                title="Restore the original buggy code"
+                disabled={!canReset}
+                onClick={() => void prepareReset()}
+              >
+                <RotateCcw size={15} /> Reset code
+              </button>
               <IconButton
                 title="Save private draft"
                 disabled={
@@ -718,10 +841,44 @@ export default function Workbench({
           <RefreshCw size={15} /> Retry challenge
         </button>
       )}
-      {(error || feedbackError) && (
+      {resetSource === null && (error || feedbackError) && (
         <div role="alert" className="error workbench-error">
           {error || feedbackError}
         </div>
+      )}
+      {resetSource !== null && (
+        <Modal title="Reset to original code?" close={closeReset}>
+          <p>
+            Replace your edits for this question with the original{" "}
+            {languages[session.language]} buggy code? The restored code will be
+            saved as your private draft.
+          </p>
+          <p className="muted">
+            Copy any changes you want to keep before resetting.
+          </p>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="dialog-actions">
+            <button onClick={closeReset}>Cancel</button>
+            <button
+              className="primary"
+              disabled={!canReset}
+              onClick={() =>
+                void perform(async () => {
+                  if (!canReset) return;
+                  item!.editor.edit(resetSource);
+                  setResetSource(null);
+                  await item!.editor.save();
+                })
+              }
+            >
+              Restore original code
+            </button>
+          </div>
+        </Modal>
       )}
       {buy !== null && (
         <Modal title={`Purchase hint ${buy}`} close={() => setBuy(null)}>

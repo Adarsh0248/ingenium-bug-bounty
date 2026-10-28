@@ -1,5 +1,55 @@
 # Ingenium Bug Bounty Architecture
 
+Current Round 2 content decision (28 October 2026): author **100 distinct debugging
+questions**, harder than Round 1, at difficulty **25–100**, in C, C++, Java and
+Python. The private Kernel Breach pack in `content/round-2` now supplies 25 per
+topic, with a draft difficulty allocation of 32/36/20/12 across 25–45/46–65/
+66–85/86–100. These replace the repeated Round 1 preview questions. All four
+versions share the task, intended defect, tests, difficulty and B = 10 × difficulty.
+Three progressive hints and a separate paid edge example are authored per bug.
+Local compiler evidence is recorded separately from human difficulty/fairness
+review and protected production publication. Round 2's selection cap becomes
+100 bounties; Round 1 remains 50. Existing team/qualification limits stay as below.
+
+Current Round 2 UI direction (28 October 2026): bug-targeted items are bought
+into shared inventory and used from the question page; purchase does not start
+Claim Lock's timer. Round 2 needs one continuous pan-only arena for 100 bugs,
+separate from Round 1's four areas. Requirements and the proposed Kernel Breach
+art direction are in [the arena design](docs/round-2-arena-design.md). These
+changes now exist in the frontend and local preview. The 100 preview targets use
+the authored Round 2 drafts; human content approval, durable item rules and
+multi-team production verification remain pending.
+
+Current shop decision (28 October 2026): seven Round 2 item concepts and prices
+are approved in [the item design](docs/round-2-items.md). Black ICE costs 15,000
+coins, reduced from 20,000. This supersedes the earlier deferred
+shop-item decision below; unrelated bonus/trivia rules remain deferred. Item
+frontend and a loopback-only in-memory Round 2 demonstration now exist. Production
+item enforcement, multi-team integration and balance testing are still pending.
+
+Current reward decision (28 October 2026): the Round 1 Protocol Rebellion pack
+uses **B = 50 × difficulty**, five times the original scale, to fund Round 2
+spending. Difficulty and the easier question content stay unchanged. New Round 1
+drafts explicitly select `reward_multiplier: 5`; the legacy scale remains valid
+for existing content. Round 2 keeps B = 10 × difficulty. Hint charges and award
+points are calculated from each immutable snapshot's actual B, preserving the
+existing percentages and all old rounds. This supersedes the original 10×
+Round 1 mapping below; no existing snapshot, balance or award is rewritten.
+
+Current event-content decision (27 October 2026): Round 1 uses the 50-question
+Protocol Rebellion pack in `content/round-1`, with equivalent C, C++, Java and
+Python variants. JavaScript is excluded from new participant enrolments; retained
+five-language histories remain readable. The revised introductory split is 35
+very easy questions at difficulty 1–20, ten easy at 21–30 and five moderate at
+31–40, distributed 13/13/12/12 across the four current areas. The three-hour
+pacing target is at least 30 solves for a typical team; faster teams can aim for
+all 50. Actual solve times require human pilot review. Every mission supplies
+its algorithm and a short code-reading guide. This supersedes the earlier
+25/17/8 difficulty split and five-language event scope below.
+Three hints and the existing hint pricing/validation/privacy contracts remain.
+Local content checks and simulated previews do not replace protected production
+validation, organiser review or publication. See `docs/round-1-question-design.md`.
+
 Status: the complete core architecture is approved and the user committed its checkpoint as `2209483`. The first local backend foundation is implemented on `feat/project-foundation`; competition features, frontend, Judge0 and cloud deployment are not implemented.
 
 Implementation boundary: the architecture approval and user-owned commit/implementation-branch gates are satisfied. Continue in small teaching-first local milestones. Git mutations remain user-owned; cloud provisioning/spending, real competition bug authoring and event launch retain their separately agreed boundaries. Architecture examples are not implemented competition features.
@@ -3503,7 +3553,7 @@ Status: the user confirmed this grouped remaining Review 3 batch, including phys
 
 | Boundary | Confirmed initial maximum and handling |
 | --- | --- |
-| Rosters/catalogue/staff | 1,000 registered teams with two members each; 100 selected R1/50 selected R2; 40 selected bounties per round; 250 definitions/1,000 versions and 50 active staff identities. Existing five variants/20 cases/three public samples/three witnesses per variant/three hints remain. These are deployment guards, not a requirement to use all slots. |
+| Rosters/catalogue/staff | 1,000 registered teams with two members each; 100 selected R1/50 selected R2; 50 selected R1 bounties/100 selected R2 bounties; 250 definitions/1,000 versions and 50 active staff identities. Existing retained five-language histories/20 cases/three public samples/three witnesses per variant/three hints remain; new event content uses the four languages above. These are deployment guards, not a requirement to use all slots. |
 | Prose/metadata | Team/member names 120 UTF-8 bytes, bug title 160, statement 64 KiB, each hint/defect description 16 KiB, staff reason 1 KiB, announcement 4 KiB and ordinary structured metadata 4 KiB. Larger trusted execution/configuration metadata keeps its separately approved bound. Trim/normalise only explicitly approved prose input, never source. Snapshot projection excludes large text/source and must fit its 1 MiB encoded cap before readiness; large announcement text is read by ID, not forced into a 16 KiB event. |
 | Initial retained database counts | 100 arena instances; 20,000 official parents plus 20,000 sample parents per instance; four million processed outcomes and 100,000 staff outcomes database-wide. Reserve every admitted parent's maximum job/attempt/outcome rows, including the possible approved manual extra dispatch, before admission. These are hard infrastructure ceilings, not new wrong penalties, automatic elimination or a promise that all theoretical maxima fit on a chosen VM. |
 | Persistent variable-length app data | 32 GiB decoded committed plus reserved bytes database-wide for canonical/source/diagnostic/receipt/prose/JSON data, excluding the separately capped outbox and temporary judge staging. Catalogue portion is at most 3 GiB and each TeamRound's source/draft/evidence/receipt portion at most 192 MiB. Count bytes before compression/TOAST; reference copies count only where actually stored. Fixed rows/indexes/WAL/backups require separate measured physical-disk headroom in Review 4. |

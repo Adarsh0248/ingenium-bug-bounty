@@ -31,6 +31,25 @@ export type Roamer = RoamerSpec & {
   worldWidth: number;
   worldHeight: number;
 };
+export function closestRoamer(
+  point: { x: number; y: number },
+  actors: Iterable<Roamer>,
+  region: RegionId,
+) {
+  let nearest: string | undefined,
+    score = Infinity;
+  for (const actor of actors) {
+    if (actor.region !== region) continue;
+    const distance =
+      Math.hypot(point.x - actor.x, point.y - actor.y) / actor.radius;
+    if (distance <= 1.12 && distance < score) {
+      nearest = actor.id;
+      score = distance;
+    }
+  }
+  return nearest;
+}
+
 const sample = (seed: number, index: number) => {
   let value = Math.imul(seed ^ Math.imul(index + 1, 0x9e3779b1), 0x45d9f3b);
   value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
@@ -158,6 +177,30 @@ export function stepSwarm(
 ) {
   const dt = Math.max(0, Math.min(seconds, 0.05));
   if (!dt) return;
+  const neighbours = new Map<Roamer, Roamer[]>();
+  if (actors.length >= 40) {
+    // This radius covers the largest body, predictive look-ahead and closing-speed margin.
+    const cell =
+        Math.max(...actors.map((a) => a.radius)) * 4.6 +
+        11.5 +
+        Math.max(...actors.map((a) => a.velocity)) * 1.05,
+      grid = new Map<string, Roamer[]>();
+    for (const a of actors) {
+      const key = `${Math.floor(a.x / cell)},${Math.floor(a.y / cell)}`,
+        bucket = grid.get(key) ?? [];
+      bucket.push(a);
+      grid.set(key, bucket);
+    }
+    for (const a of actors) {
+      const x = Math.floor(a.x / cell),
+        y = Math.floor(a.y / cell),
+        near: Roamer[] = [];
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+          near.push(...(grid.get(`${x + dx},${y + dy}`) ?? []));
+      neighbours.set(a, near);
+    }
+  }
   const proposals = actors.map((a) => {
     if (a.held || a.id === frozen)
       return { a, dx: 0, dy: 0, turn: 0, velocity: 0, held: true, factor: 1 };
@@ -177,16 +220,18 @@ export function stepSwarm(
     a.rest = Math.max(0, a.rest - dt);
     let sx = length ? gx / length : 0,
       sy = length ? gy / length : 0;
-    for (const b of actors) {
+    for (const b of neighbours.get(a) ?? actors) {
       if (a === b) continue;
       const dx = a.x - b.x,
         dy = a.y - b.y,
-        distance = Math.hypot(dx, dy),
         safe = a.radius + b.radius + 5,
+        influence = safe * 2.3 + Math.max(a.velocity, b.velocity) * 0.25,
+        reach = influence + (a.velocity + b.velocity) * 0.4;
+      if (dx * dx + dy * dy >= reach * reach) continue;
+      const distance = Math.hypot(dx, dy),
         px = dx + (a.vx - (b.held || b.id === frozen ? 0 : b.vx)) * 0.4,
         py = dy + (a.vy - (b.held || b.id === frozen ? 0 : b.vy)) * 0.4,
-        predicted = Math.hypot(px, py),
-        influence = safe * 2.3 + Math.max(a.velocity, b.velocity) * 0.25;
+        predicted = Math.hypot(px, py);
       if (Math.min(distance, predicted) >= influence) continue;
       const nx = distance ? dx / distance : a.id < b.id ? 1 : -1,
         ny = distance ? dy / distance : 0,
@@ -250,13 +295,18 @@ export function stepSwarm(
     };
   });
   // Reserve half the free gap for each moving neighbour; braking cannot push a body sideways.
+  const byActor = new Map(proposals.map((p) => [p.a, p]));
   for (const p of proposals)
-    if (!p.held)
-      for (const q of proposals) {
+    if (!p.held) {
+      const travel = Math.hypot(p.dx, p.dy);
+      for (const other of neighbours.get(p.a) ?? actors) {
+        const q = byActor.get(other)!;
         if (p === q) continue;
         const dx = q.a.x - p.a.x,
           dy = q.a.y - p.a.y,
-          distance = Math.hypot(dx, dy);
+          reach = p.a.radius + q.a.radius + 3 + travel * (q.held ? 1 : 2);
+        if (dx * dx + dy * dy >= reach * reach) continue;
+        const distance = Math.hypot(dx, dy);
         if (!distance) continue;
         const closing = (p.dx * dx + p.dy * dy) / distance;
         if (closing > 0) {
@@ -264,6 +314,7 @@ export function stepSwarm(
           p.factor = Math.min(p.factor, (gap * (q.held ? 1 : 0.5)) / closing);
         }
       }
+    }
   for (const p of proposals) {
     const a = p.a;
     if (p.held) {

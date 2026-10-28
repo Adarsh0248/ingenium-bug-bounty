@@ -3,6 +3,22 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { bounty, compareStandings, createDrawCipher, createDrawPlan, drawCommitment, hintPrice, qualifiers, ranked, solveTime, winPoints } from "../src/competition/policy.js";
 
+test("boosted Round 1 rewards keep exact hint percentages while legacy snapshots and Round 2 stay unchanged", () => {
+  for (const d of [1,3,20,40,100]) {
+    const boosted=bounty(d,5);
+    assert.equal(boosted,50*d);
+    assert.deepEqual([1,2,3].map(level=>hintPrice(1,d,level,boosted)),[5*d,15*d,20*d]);
+    assert.equal(winPoints(1,d,3,boosted),boosted);
+    assert.equal(boosted-[1,2,3].reduce((n,level)=>n+hintPrice(1,d,level,boosted),0),10*d);
+    assert.equal(winPoints(1,d,0),10*d);
+    assert.equal(hintPrice(2,d,3),8*d);
+    assert.throws(()=>hintPrice(2,d,1,boosted));
+    assert.throws(()=>winPoints(2,d,0,boosted));
+  }
+  for (const multiplier of [0,2,6,1.5,NaN]) assert.throws(()=>bounty(20,multiplier));
+  assert.throws(()=>hintPrice(1,20,1,999));
+});
+
 test("bounty, both hint schedules and admission-tier points are exact integer game units", () => {
   for (const d of [1, 80, 95, 100]) {
     assert.equal(bounty(d), 10 * d);

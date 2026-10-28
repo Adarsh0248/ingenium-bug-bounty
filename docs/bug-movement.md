@@ -22,6 +22,9 @@ placed into available space before rendering. Compact viewports reduce drawing
 scale and collision footprints together. Camera panning does not change gait
 distance or physical positions.
 
+Pointer selection uses the nearest creature footprint in the current region.
+Transparent corners of a neighbouring drawing cannot steal its hover or click.
+
 Only the visible region simulates movement. Pause, reduced motion, an open
 workbench and hover retain their existing holds. Deferred termination uses the
 stored actual position and can bring the target's full region into view.

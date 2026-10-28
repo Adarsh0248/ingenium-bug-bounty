@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
-  AdditiveBlending,
   CanvasTexture,
   NearestFilter,
   SRGBColorSpace,
   Group,
   Vector3,
 } from "three";
+import type { Ray } from "three";
+import type { ReactNode } from "react";
 import type { Bounty, Termination } from "./types";
 import { Boundary } from "./ui";
 import WorldScenery from "./WorldScenery";
@@ -19,7 +20,14 @@ import NeonCreature from "./NeonCreature";
 import FoundryCreature from "./FoundryCreature";
 import NexusCreature from "./NexusCreature";
 import ZeroDayEntity from "./ZeroDayEntity";
-import { syncRoamers, stepSwarm, swarmPixels } from "./bug-swarm";
+import TerminationSequence from "./TerminationSequence";
+import { regionWeapons, terminationDuration } from "./termination-art";
+import {
+  syncRoamers,
+  stepSwarm,
+  swarmPixels,
+  closestRoamer,
+} from "./bug-swarm";
 import type { Roamer } from "./bug-swarm";
 import {
   mapBounds,
@@ -27,8 +35,80 @@ import {
   centreMap,
   mapExtent,
   regionTarget,
+  infoCardPlacement,
 } from "./region-map";
-import type { RegionMapView } from "./region-map";
+import type { RegionMapView, MapBounds } from "./region-map";
+
+function placeInfoCard(
+  node: HTMLDivElement,
+  bounds: MapBounds,
+  point: { x: number; y: number },
+  radius: number,
+) {
+  const width = Math.min(300, bounds.width - 16),
+    room = Math.max(
+      point.y - radius - 14 - bounds.top,
+      bounds.top + bounds.height - point.y - radius - 14,
+    ),
+    maxHeight = Math.min(290, Math.max(160, room));
+  if (node.style.width !== `${width}px`) node.style.width = `${width}px`;
+  if (node.style.getPropertyValue("--card-max-height") !== `${maxHeight}px`)
+    node.style.setProperty("--card-max-height", `${maxHeight}px`);
+  const p = infoCardPlacement(bounds, point, radius, {
+    width,
+    height: node.offsetHeight,
+  });
+  if (node.style.left !== `${p.left}px`) node.style.left = `${p.left}px`;
+  if (node.style.top !== `${p.top}px`) node.style.top = `${p.top}px`;
+  node.style.setProperty("--card-pin", `${p.pin}px`);
+  node.dataset.placement = p.side;
+  node.dataset.bugX = String(point.x);
+  node.dataset.bugY = String(point.y);
+  node.style.visibility = "visible";
+}
+
+function InspectedTarget({
+  request,
+  anchor,
+  positions,
+  mapView,
+  locate,
+}: {
+  request: { bountyId: string };
+  anchor: React.RefObject<HTMLDivElement | null>;
+  positions: React.RefObject<Map<string, Roamer>>;
+  mapView: React.RefObject<RegionMapView>;
+  locate: (point: { x: number; y: number }) => void;
+}) {
+  const { size } = useThree(),
+    placed = useRef<{ request: object; width: number; height: number } | null>(
+      null,
+    );
+  useFrame(() => {
+    const actor = positions.current.get(request.bountyId),
+      node = anchor.current;
+    if (!actor || !node) return;
+    if (
+      placed.current?.request === request &&
+      placed.current.width === size.width &&
+      placed.current.height === size.height
+    )
+      return;
+    locate(actor);
+    placed.current = { request, width: size.width, height: size.height };
+    const bounds = mapBounds(size.width, size.height);
+    placeInfoCard(
+      node,
+      bounds,
+      {
+        x: bounds.left + mapView.current.x + actor.x,
+        y: bounds.top + mapView.current.y + actor.y,
+      },
+      actor.radius,
+    );
+  });
+  return null;
+}
 
 function SwarmController({
   bugs,
@@ -168,6 +248,27 @@ function Target({
     distance = useRef(0),
     [hover, setHover] = useState(false),
     { viewport, size } = useThree();
+  const pointer = useMemo(() => new Vector3(), []);
+  function ownsPointer(ray: Ray) {
+    if (!ray.direction.z) return false;
+    ray.at((0.2 - ray.origin.z) / ray.direction.z, pointer);
+    const bounds = mapBounds(size.width, size.height),
+      view = mapView.current,
+      point = {
+        x:
+          (pointer.x / viewport.width + 0.5) * size.width -
+          bounds.left -
+          view.x,
+        y:
+          (0.5 - pointer.y / viewport.height) * size.height -
+          bounds.top -
+          view.y,
+      };
+    return (
+      closestRoamer(point, positions.current.values(), appearance.region.id) ===
+      bug.bounty_id
+    );
+  }
   useEffect(() => {
     if (!active) {
       const actor = positions.current.get(bug.bounty_id);
@@ -201,6 +302,7 @@ function Target({
     );
     group.current.visible =
       active &&
+      !group.current.userData.terminationHidden &&
       x > bounds.left - actor.radius &&
       x < bounds.left + bounds.width + actor.radius &&
       y > bounds.top - actor.radius &&
@@ -220,11 +322,13 @@ function Target({
         motion: appearance.motion,
         bountyTier: appearance.rank.label,
         weapon: appearance.weapon,
+        roamer: positions.current.get(bug.bounty_id),
         aura: appearance.rank.tier ? appearance.region.aura : null,
       }}
       onClick={
         active
           ? (e) => {
+              if (!ownsPointer(e.ray)) return;
               e.stopPropagation();
               open(bug.bounty_id);
             }
@@ -233,6 +337,7 @@ function Target({
       onPointerOver={
         active
           ? (e) => {
+              if (!ownsPointer(e.ray)) return;
               e.stopPropagation();
               const actor = positions.current.get(bug.bounty_id);
               if (actor) actor.held = true;
@@ -304,88 +409,13 @@ function Target({
           appearance.region.id !== "neon" ? Math.max(0.48, appearance.size) : 1
         }
       >
-        <ringGeometry args={[1.3, hover ? 1.34 : 1.31, 4]} />
+        <ringGeometry args={[1.3, bug.scan_clear ? 1.39 : hover ? 1.34 : 1.31, bug.scan_clear ? 24 : 4]} />
         <meshBasicMaterial
-          color={color}
+          color={bug.scan_clear ? "#8effb9" : color}
           transparent
-          opacity={hover ? 0.8 : 0.25}
+          opacity={bug.scan_clear ? 0.9 : hover ? 0.8 : 0.25}
         />
       </mesh>
-    </group>
-  );
-}
-
-function Strike({ bountyId }: { bountyId: string }) {
-  const group = useRef<Group>(null),
-    beam = useRef<Group>(null),
-    burst = useRef<Group>(null),
-    started = useRef<number | null>(null),
-    { viewport, size, scene } = useThree();
-  const end = useMemo(() => new Vector3(), []),
-    start = useMemo(() => new Vector3(), []),
-    direction = useMemo(() => new Vector3(), []),
-    up = useMemo(() => new Vector3(0, 1, 0), []);
-  useFrame(({ clock }) => {
-    // A demand-rendered IDE pause must not count towards a newly mounted shot.
-    started.current ??= clock.elapsedTime;
-    const elapsed = clock.elapsedTime - started.current;
-    const target = scene.getObjectByName(`target-${bountyId}`);
-    if (!group.current || !beam.current || !burst.current || !target) return;
-    end.copy(target.position);
-    start.set(
-      0,
-      (-0.5 + (size.width <= 720 ? 56 : 96) / size.height) * viewport.height,
-      0.2,
-    );
-    beam.current.position.copy(start).lerp(end, 0.5);
-    direction.copy(end).sub(start);
-    beam.current.scale.set(1, direction.length(), 1);
-    beam.current.quaternion.setFromUnitVectors(up, direction.normalize());
-    beam.current.visible = elapsed > 0.35 && elapsed < 1.15;
-    burst.current.position.copy(end);
-    burst.current.visible = elapsed >= 1;
-    const expansion = Math.max(0.01, (elapsed - 1) * 2);
-    burst.current.scale.setScalar(expansion);
-    target.visible = elapsed < 1.05;
-    burst.current.children.forEach((shard) => {
-      shard.scale.setScalar(Math.max(0.01, 1 - expansion / 3));
-    });
-  });
-  return (
-    <group ref={group}>
-      <group ref={beam} visible={false}>
-        <mesh>
-          <cylinderGeometry args={[0.016, 0.035, 1, 6]} />
-          <meshBasicMaterial color="#e5fffd" toneMapped={false} />
-        </mesh>
-        <mesh>
-          <cylinderGeometry args={[0.065, 0.1, 1, 6]} />
-          <meshBasicMaterial
-            color="#43ffe5"
-            blending={AdditiveBlending}
-            toneMapped={false}
-            transparent
-            opacity={0.35}
-            depthWrite={false}
-          />
-        </mesh>
-      </group>
-      <group ref={burst} visible={false}>
-        {Array.from({ length: 14 }, (_, i) => (
-          <mesh
-            key={i}
-            position={[
-              Math.cos(i * 2.4) * (0.6 + i * 0.04),
-              Math.sin(i * 2.4) * (0.6 + i * 0.04),
-              0.4,
-            ]}
-            rotation={[i, i, i]}
-          >
-            <boxGeometry args={[0.08, 0.22, 0.04]} />
-            <meshBasicMaterial color={i % 2 ? "#49f1ed" : "#ff477e"} />
-          </mesh>
-        ))}
-      </group>
     </group>
   );
 }
@@ -399,6 +429,9 @@ export default function Arena({
   onTerminated,
   region = "neon",
   onRegionChange,
+  inspection,
+  infoCard,
+  onDismissInfo,
 }: {
   bugs: Bounty[];
   onOpen: (id: string) => void;
@@ -408,6 +441,9 @@ export default function Arena({
   onTerminated?: () => void;
   region?: RegionId | null;
   onRegionChange?: (region: RegionId | null) => void;
+  inspection?: { bountyId: string } | null;
+  infoCard?: ReactNode;
+  onDismissInfo?: () => void;
 }) {
   const destination = strike
     ? bugs.find((bug) => bug.bounty_id === strike.bountyId)
@@ -428,8 +464,11 @@ export default function Arena({
   );
   const visited = useRef(new Set<RegionId>());
   if (focus) visited.current.add(focus);
-  const finish = useRef(onTerminated);
+  const finish = useRef(onTerminated),
+    weaponPanel = useRef<HTMLDivElement>(null);
+  const weapon = regionWeapons[focus ?? "neon"];
   const root = useRef<HTMLDivElement>(null),
+    card = useRef<HTMLDivElement>(null),
     scenery = useRef<HTMLDivElement>(null),
     mapView = useRef<RegionMapView>({ x: 0, y: 0 }),
     positions = useRef(new Map<string, Roamer>()),
@@ -445,8 +484,23 @@ export default function Arena({
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
   const bounds = mapBounds(mapSize.width, mapSize.height),
     locked = !onRegionChange || !!strike;
-  const navigation = useRef({ focus, locked, bounds });
-  navigation.current = { focus, locked, bounds };
+  const navigation = useRef({
+    focus,
+    locked,
+    bounds,
+    dismissInfo: onDismissInfo,
+  });
+  navigation.current = { focus, locked, bounds, dismissInfo: onDismissInfo };
+  function locateInspected(point: { x: number; y: number; radius?: number }) {
+    const radius = point.radius ?? 50,
+      targetY = Math.min(
+        bounds.height - radius - 24,
+        Math.max(bounds.height * 0.65, 290 + radius + 20),
+      );
+    applyMap(
+      clampMap({ x: bounds.width / 2 - point.x, y: targetY - point.y }, bounds),
+    );
+  }
   function applyMap(next: RegionMapView, save = true) {
     const n = navigation.current,
       view = clampMap(next, n.bounds);
@@ -488,6 +542,39 @@ export default function Arena({
       false,
     );
   }, [focus, mapSize.width, mapSize.height, strike?.awardId]);
+  useLayoutEffect(() => {
+    if (!inspection || !focus || !mapSize.width || !card.current) return;
+    const node = card.current,
+      habitat = habitats[regions.findIndex((r) => r.id === focus)],
+      point =
+        positions.current.get(inspection.bountyId) ??
+        regionTarget(
+          Math.max(
+            0,
+            habitat.findIndex((b) => b.bounty_id === inspection.bountyId),
+          ),
+          habitat.length,
+          bounds,
+        ),
+      radius = positions.current.get(inspection.bountyId)?.radius ?? 50;
+    locateInspected(point);
+    const place = () => {
+      const current = positions.current.get(inspection.bountyId) ?? point;
+      placeInfoCard(
+        node,
+        bounds,
+        {
+          x: bounds.left + mapView.current.x + current.x,
+          y: bounds.top + mapView.current.y + current.y,
+        },
+        positions.current.get(inspection.bountyId)?.radius ?? radius,
+      );
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [inspection, focus, mapSize.width, mapSize.height]);
   useEffect(() => {
     const node = root.current;
     if (!node) return;
@@ -497,6 +584,7 @@ export default function Arena({
       if (
         !n.focus ||
         n.locked ||
+        (event.target as Element).closest(".bug-info-anchor") ||
         event.ctrlKey ||
         event.clientX < b.left ||
         event.clientX > b.left + b.width ||
@@ -505,6 +593,7 @@ export default function Arena({
       )
         return;
       event.preventDefault();
+      n.dismissInfo?.();
       const unit =
         event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? b.height : 1;
       applyMap({
@@ -518,6 +607,7 @@ export default function Arena({
     return () => node.removeEventListener("wheel", wheel);
   }, []);
   function pan(dx: number, dy: number) {
+    navigation.current.dismissInfo?.();
     applyMap({
       ...mapView.current,
       x: mapView.current.x + dx,
@@ -528,9 +618,20 @@ export default function Arena({
   useEffect(() => {
     document.body.style.cursor = "";
     if (!strike) return;
-    const timer = setTimeout(() => finish.current?.(), 3500);
+    const tier = destination
+      ? bugAppearance(
+          destination.bounty_id,
+          destination.difficulty,
+          destination.category,
+          destination.base_bounty,
+        ).rank.tier
+      : 0;
+    const timer = setTimeout(
+      () => finish.current?.(),
+      still || !destination ? 1800 : (terminationDuration(tier) + 2) * 1000,
+    );
     return () => clearTimeout(timer);
-  }, [strike?.awardId]);
+  }, [strike?.awardId, still]);
   const fallback = (
     <div className="arena-fallback" aria-hidden="true">
       <div className="field-cross" />
@@ -557,6 +658,7 @@ export default function Arena({
           pan(...moves[e.key]);
         } else if (e.key === "Home") {
           e.preventDefault();
+          onDismissInfo?.();
           applyMap(centreMap(bounds));
         }
       }}
@@ -565,7 +667,9 @@ export default function Arena({
         if (
           !focus ||
           locked ||
-          (e.target as Element).closest("button,.region-map-controls")
+          (e.target as Element).closest(
+            "button,.region-map-controls,.bug-info-anchor",
+          )
         )
           return;
         const b = bounds;
@@ -589,6 +693,7 @@ export default function Arena({
         const dx = e.clientX - g.x,
           dy = e.clientY - g.y;
         if (!g.dragged && Math.hypot(dx, dy) < 6) return;
+        onDismissInfo?.();
         g.dragged = true;
         e.currentTarget.setPointerCapture(e.pointerId);
         e.stopPropagation();
@@ -644,7 +749,7 @@ export default function Arena({
               pending={pending}
               focus={focus}
               still={still}
-              frozen={strike?.bountyId}
+              frozen={strike?.bountyId ?? inspection?.bountyId}
               memory={positions}
             />
             <ambientLight intensity={0.9} />
@@ -669,21 +774,47 @@ export default function Arena({
                   index={index}
                   active={focus === appearance.region.id}
                   open={(id) => {
-                    if (!ignoreClick.current) onOpen(id);
+                    if (!ignoreClick.current && !strike) onOpen(id);
                   }}
                   still={still}
-                  frozen={strike?.bountyId === bug.bounty_id}
+                  frozen={
+                    strike?.bountyId === bug.bounty_id ||
+                    inspection?.bountyId === bug.bounty_id
+                  }
                   mapView={mapView}
                   positions={positions}
                 />
               );
             })}
-            {strike && !still && (
-              <Strike key={strike.awardId} bountyId={strike.bountyId} />
+            {inspection && (
+              <InspectedTarget
+                request={inspection}
+                anchor={card}
+                positions={positions}
+                mapView={mapView}
+                locate={locateInspected}
+              />
+            )}
+            {strike && destination && !still && (
+              <TerminationSequence
+                key={strike.awardId}
+                bug={destination}
+                onComplete={() => finish.current?.()}
+                panel={weaponPanel}
+              />
             )}
           </Canvas>
         </div>
       </Boundary>
+      {inspection && infoCard && (
+        <div
+          ref={card}
+          className="bug-info-anchor"
+          data-inspect-target={inspection.bountyId}
+        >
+          {infoCard}
+        </div>
+      )}
       {focus && (
         <div
           className="region-map-controls"
@@ -726,7 +857,10 @@ export default function Arena({
             <button
               type="button"
               disabled={locked}
-              onClick={() => applyMap(centreMap(bounds))}
+              onClick={() => {
+                onDismissInfo?.();
+                applyMap(centreMap(bounds));
+              }}
             >
               Centre
             </button>
@@ -740,20 +874,33 @@ export default function Arena({
           aria-hidden="true"
         >
           <div />
-          <span>ARC // 01</span>
+          <span>{weapon.serial}</span>
         </div>
       )}
       {strike && (
         <div
           className="termination-banner"
+          ref={weaponPanel}
           role="status"
           data-award-id={strike.awardId}
+          data-weapon={weapon.name}
+          data-phase={still ? "CONFIRMED" : "DEPLOYING"}
+          style={{ "--weapon-colour": weapon.colour } as React.CSSProperties}
         >
           <span>BOUNTY SECURED</span>
           <strong>TARGET TERMINATED</strong>
           <small>
             {bugs.find((bug) => bug.bounty_id === strike.bountyId)?.title}
           </small>
+          <div className="weapon-sequence-status">
+            <b>{weapon.name.toUpperCase()}</b>
+            <span data-weapon-phase>{still ? "CONFIRMED" : "DEPLOYING"}</span>
+          </div>
+          {!still && (
+            <div className="weapon-sequence-progress" aria-hidden="true">
+              <i />
+            </div>
+          )}
         </div>
       )}
     </div>

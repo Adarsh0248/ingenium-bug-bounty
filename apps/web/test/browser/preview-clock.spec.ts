@@ -19,6 +19,9 @@ test("a fresh preview entry renews an aged demo round; map and list open real qu
   await page.emulateMedia({ reducedMotion: "reduce" });
   await enter(page);
   await page.locator(`button.target[data-bounty-id="${first}"]`).click();
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await page.getByRole("button", { name: "Plain text", exact: true }).click();
   const editor = page.getByRole("textbox", {
       name: "Your private code",
@@ -38,8 +41,11 @@ test("a fresh preview entry renews an aged demo round; map and list open real qu
   });
   await expect(page.locator(".hud-timer strong")).toHaveText("00:00:00");
   await page.locator(`button.target[data-bounty-id="${second}"]`).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "Catching is unavailable",
+  await expect(
+    page.getByRole("button", { name: "Open question", exact: true }),
+  ).toBeDisabled();
+  await expect(page.locator(".bug-info-card")).toContainText(
+    "paused or closed",
   );
   await expect(page.locator(".workbench")).toHaveCount(0);
 
@@ -53,6 +59,9 @@ test("a fresh preview entry renews an aged demo round; map and list open real qu
   await enter(page);
   await expect(page.locator(".hud-timer strong")).not.toHaveText("00:00:00");
   await page.locator(`button.target[data-bounty-id="${second}"]`).click();
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Off by one", exact: true }),
   ).toBeVisible();

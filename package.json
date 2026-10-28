@@ -16,10 +16,16 @@
     }
   },
   "scripts": {
+    "content:round1:build": "node content/round-1/build.mjs",
+    "content:round1:verify": "python content/round-1/verify.py",
+    "content:round2:build": "node content/round-2/build.mjs",
+    "content:round2:verify": "python content/verify.py --round=2",
+    "content:programs:test": "node --test content/programs.test.mjs content/statement.test.mjs content/round-2/scanner.test.mjs",
     "setup:env": "node scripts/setup-env.mjs",
     "dev": "npm run dev --workspace @ingenium/api",
     "dev:web": "npm run dev --workspace @ingenium/web --",
     "preview:participant": "npm run preview:participant --workspace @ingenium/web",
+    "preview:round2": "npm run preview:round2 --workspace @ingenium/web",
     "preview:app": "npm run preview:app --workspace @ingenium/api",
     "test:browser": "npm run test:browser --workspace @ingenium/web --",
     "test:browser:db": "node apps/web/test/real-backend.mjs",

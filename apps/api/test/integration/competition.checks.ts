@@ -76,7 +76,8 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
   }
   let editor: Person, editCount = 0;
   async function edit(action: ContentCommand["action"], targetId: string | null, payload: unknown) {
-    if (!editor || editCount++ % 8 === 0) editor = await person();
+    if (process.env.INGENIUM_TEST_SUITE === "hundred-bounties") await budgets();
+    if (!editor || (process.env.INGENIUM_TEST_SUITE !== "hundred-bounties" && editCount++ % 8 === 0)) editor = await person();
     const revision = action === "CREATE" ? (await owner.query("SELECT revision FROM catalogue_control WHERE id=1")).rows[0].revision
       : (await owner.query("SELECT content_revision FROM bug_versions WHERE id=$1", [targetId])).rows[0].content_revision;
     return content.command(editor.sessionCookie, { action, targetId, expectedRevision: revision, payload, requestKey: randomUUID(), reason: "Synthetic competition content" });
@@ -107,8 +108,8 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
   let worker: ReturnType<typeof createValidationWorker>;
   let judge: ReturnType<typeof createParticipantJudgeWorker>;
   const judgePool = new Pool({ connectionString: ownerUrl.toString(), options: "-c role=ingenium_competition_worker", max: 2 });
-  async function published(actor: Person, kind: number, difficulty: number) {
-    const version = (await edit("CREATE", null, { round_type: kind, category: "ARRAYS", title: "Synthetic competition bounty", statement: "Synthetic statement", difficulty, checker_mode: "TOKENS" })).version_id!;
+  async function published(actor: Person, kind: number, difficulty: number, rewardMultiplier = 1) {
+    const version = (await edit("CREATE", null, { round_type: kind, category: "ARRAYS", title: "Synthetic competition bounty", statement: "Synthetic statement", difficulty, checker_mode: "TOKENS", ...(rewardMultiplier===1?{}:{reward_multiplier:rewardMultiplier}) })).version_id!;
     for (const language of LANGUAGES) await edit("VARIANT", version, { language, starter_code: "synthetic wrong", reference_solution_code: "synthetic reference", defect_description: "Synthetic defect",
       runtime_key: `competition-${language}`, cpu_time_limit_ms: 1000, wall_time_limit_ms: 5000, memory_limit_kb: 262144 });
     const sample = (await edit("CASE", version, { case_id: null, position: 1, visibility: "SAMPLE", input_data: "7 5\n", expected_output: "12\n" })).case_id!;
@@ -173,14 +174,75 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     }
     worker = createValidationWorker(api, clock, driver); assert.equal(await worker.claim(), true);
     judge = createParticipantJudgeWorker(judgePool, clock, driver, worker.workerId);
-    const one = await published(actor, 1, 100), two = await published(actor, 1, 80), race = await published(actor, 2, 95), race2 = await published(actor, 2, 80);
+    const boost = process.env.INGENIUM_TEST_SUITE === "reward-boost" ? 5 : 1;
+    const one = await published(actor, 1, 100, boost), two = await published(actor, 1, 80, boost), race = await published(actor, 2, 95), race2 = await published(actor, 2, 80);
+    const legacy = boost === 5 ? await published(actor,1,100) : null;
     await budgets();
     const created = await arena.command(actor.sessionCookie, { action: "CREATE", roundId: null, requestKey: randomUUID(), expectedRevision: "0", durationMs: 18000000, teamIds: [a.id, b.id], reason: "Synthetic competition instance" });
     const r1 = created.round_id!;
+    if (process.env.INGENIUM_TEST_SUITE === "hundred-bounties") {
+      await t.test("100 published Round 2 snapshots configure atomically; Round 1, storage and input boundaries remain bounded", async () => {
+        const rawConfigure = async (round: string, snapshots: string[]) => api.query(
+          "SELECT competition_staff_command($1,$2,$3,(SELECT revision FROM rounds WHERE id=$2),'CONFIGURE',$4::jsonb,'Synthetic boundary check',NULL)",
+          [parseProof(actor.sessionCookie)!.id, round, randomUUID(), JSON.stringify({ snapshots })]);
+        const r1Overflow = Array.from({ length: 51 }, () => randomUUID());
+        await assert.rejects(command(actor, "CONFIGURE", r1, { snapshots: r1Overflow }), { code: "INVALID_CONTEXT" });
+        await assert.rejects(rawConfigure(r1, r1Overflow), /Invalid bounty selection/);
+        await assert.rejects(owner.query("INSERT INTO bounties SELECT gen_random_uuid(),$1,s.definition_id,s.id,51 FROM validation_snapshots s WHERE s.id=$2", [r1, one.snapshot]), { code: "23514" });
+        const snapshots = [race.snapshot, race2.snapshot];
+        while (snapshots.length < 100) {
+          await budgets();
+          snapshots.push((await published(actor, 2, snapshots.length + 1)).snapshot);
+        }
+        await command(actor, "CONFIGURE", r1, { snapshots: [one.snapshot, two.snapshot] });
+        await command(actor, "READY", r1); await worker.claim(); await command(actor, "START", r1);
+        await command(actor, "CLOSE", r1); await command(actor, "FINALISE", r1); await command(actor, "QUALIFY", r1);
+        const r2 = (await command(actor, "SETUP_R2", r1, { teams: [a.id, b.id], duration_ms: 18000000 })).result.round_id as string;
+        const revision = (await owner.query("SELECT revision FROM rounds WHERE id=$1", [r2])).rows[0].revision;
+        const requestKey = randomUUID();
+        const configured = await command(actor, "CONFIGURE", r2, { snapshots }, { requestKey });
+        assert.equal(configured.result.status, "APPLIED");
+        assert.deepEqual(await command(actor, "CONFIGURE", r2, { snapshots }, { requestKey, expectedRevision: revision }), configured);
+        const before = (await owner.query("SELECT * FROM bounties WHERE round_id=$1 ORDER BY position", [r2])).rows;
+        assert.equal(before.length, 100);
+        assert.deepEqual(before.map(row => row.position), Array.from({ length: 100 }, (_, i) => i + 1));
+        assert.deepEqual(before.map(row => row.snapshot_id), snapshots);
+        await assert.rejects(command(actor, "CONFIGURE", r2, { snapshots: [...snapshots, randomUUID()] }), { code: "INVALID_CONTEXT" });
+        await assert.rejects(rawConfigure(r2, [...snapshots, randomUUID()]), /Invalid bounty selection/);
+        await assert.rejects(command(actor, "CONFIGURE", r2, { snapshots: [...snapshots.slice(0, 99), snapshots[0]] }), { code: "INVALID_CONTEXT" });
+        await assert.rejects(rawConfigure(r2, [...snapshots.slice(0, 99), snapshots[0]!]), /Invalid bounty selection/);
+        await assert.rejects(command(actor, "CONFIGURE", r2, { snapshots: [...snapshots.slice(0, 99), one.snapshot] }), /Only matching published/);
+        await assert.rejects(command(actor, "CONFIGURE", r2, { snapshots: [...snapshots.slice(0, 99), randomUUID()] }), /Only matching published/);
+        for (const position of [0, 101]) await assert.rejects(owner.query(
+          "INSERT INTO bounties SELECT gen_random_uuid(),$1,s.definition_id,s.id,$3 FROM validation_snapshots s WHERE s.id=$2", [r2, one.snapshot, position]), { code: "23514" });
+        await assert.rejects(api.query("DELETE FROM bounties WHERE round_id=$1", [r2]), { code: "42501" });
+        assert.deepEqual((await owner.query("SELECT * FROM bounties WHERE round_id=$1 ORDER BY position", [r2])).rows, before);
+        const control = await service.controlRoom(actor.sessionCookie);
+        assert.equal(control.rounds.find(round => round.round_id === r2)!.selected.length, 100);
+        const page = await service.published(actor.sessionCookie, 2);
+        assert.equal(page.items.length, 50); assert.ok(page.next_after);
+        assert.equal((await service.published(actor.sessionCookie, 2, page.next_after!)).items.length, 50);
+        await command(actor, "READY", r2); await worker.claim(); await command(actor, "START", r2);
+        const participant = await join(a, 0);
+        assert.equal((await service.state(participant.sessionCookie, r2, "PARTICIPANT")).bounties.length, 100);
+        const { createLiveService } = await import("../../src/live/service.js");
+        const live = createLiveService(api, clock, delivery);
+        const snapshot = await live.guarded({ audience: "PARTICIPANT", cookie: participant.sessionCookie, roundId: r2 }, live.snapshot);
+        assert.equal(snapshot.bounties.length, 100);
+        const { createHistoryService } = await import("../../src/workbench/history.js");
+        assert.equal((await createHistoryService(api, clock).overview(participant.sessionCookie, r2)).bounties.length, 100);
+        await assert.rejects(owner.query("DELETE FROM bounties WHERE round_id=$1", [r2]), /Launched selection is immutable/);
+        await command(actor, "CLOSE", r2); await command(actor, "FINALISE", r2);
+        assert.equal((await service.standings(actor.sessionCookie, r2, "STAFF")).final, true);
+        await migrateDatabase(ownerUrl.toString());
+        assert.equal((await owner.query("SELECT count(*)::int n FROM bounties WHERE round_id=$1", [r2])).rows[0].n, 100);
+      });
+      return;
+    }
     await t.test("competition selection requires matching reviewed publications; starts need current readiness and sensitive owner confirmation", async () => {
       await assert.rejects(command(actor, "CONFIGURE", r1, { snapshots: [race.snapshot] }));
       await assert.rejects(command(organiser, "CONFIGURE", r1, { snapshots: [one.snapshot] }));
-      assert.equal((await command(actor, "CONFIGURE", r1, { snapshots: [one.snapshot, two.snapshot] })).result.status, "APPLIED");
+      assert.equal((await command(actor, "CONFIGURE", r1, { snapshots: [one.snapshot, two.snapshot,...(legacy?[legacy.snapshot]:[])] })).result.status, "APPLIED");
       assert.equal((await command(actor, "READY", r1)).result.status, "APPLIED");
       await assert.rejects(command(actor, "START", r1, {}, { ownCode: newAccessCode().code }));
       const revision = (await owner.query("SELECT revision FROM rounds WHERE id=$1", [r1])).rows[0].revision;
@@ -197,6 +259,64 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     const aa = await join(a, 0), ab = await join(a, 1, "python"), ba = await join(b, 0);
     const selected = (await owner.query("SELECT b.id,b.snapshot_id FROM bounties b WHERE b.round_id=$1 ORDER BY position", [r1])).rows;
     const x = selected[0].id as string, y = selected[1].id as string;
+    if (process.env.INGENIUM_TEST_SUITE === "reward-boost") {
+      await t.test("fivefold rewards pay exactly once and sequential hints debit 10/30/40 percent of the frozen amount",async()=>{
+        assert.equal((await owner.query("SELECT base_bounty FROM validation_snapshots WHERE id=$1",[one.snapshot])).rows[0].base_bounty,5000);
+        assert.equal((await service.state(aa.sessionCookie,r1,"PARTICIPANT")).bounties.find((bug:any)=>bug.bounty_id===x)?.base_bounty,5000);
+        const funding=await service.submit(aa.sessionCookie,r1,y,"synthetic funding",randomUUID());
+        await assess(funding.result.submission_id as string);
+        const purchaseKey=randomUUID();
+        const first=await service.buyHint(aa.sessionCookie,r1,x,1,purchaseKey);
+        assert.equal(first.result.status,"PURCHASED");
+        assert.deepEqual(await service.buyHint(aa.sessionCookie,r1,x,1,purchaseKey),first);
+        assert.equal((await service.buyHint(ab.sessionCookie,r1,x,1,randomUUID())).result.status,"ALREADY_OWNED");
+        await service.buyHint(aa.sessionCookie,r1,x,2,randomUUID());
+        await service.buyHint(aa.sessionCookie,r1,x,3,randomUUID());
+        assert.deepEqual((await owner.query("SELECT price FROM hint_purchases WHERE bounty_id=$1 ORDER BY level",[x])).rows.map(row=>row.price),[500,1500,2000]);
+        const wallet=async()=>(await owner.query("SELECT competition_standings($1) value",[r1])).rows[0].value.find((row:any)=>row.team_id===a.id);
+        assert.equal((await wallet()).wallet,0);
+        const solved=await service.submit(aa.sessionCookie,r1,x,"synthetic boosted fix",randomUUID());
+        await assess(solved.result.submission_id as string);
+        assert.equal((await wallet()).wallet,5000);
+        assert.equal((await wallet()).points,5000);
+        assert.equal((await service.submit(ab.sessionCookie,r1,x,"duplicate fix",randomUUID())).result.reason,"BOUNTY_UNAVAILABLE");
+        assert.equal((await owner.query("SELECT count(*)::int n FROM bounty_awards WHERE bounty_id=$1",[x])).rows[0].n,1);
+      });
+      await t.test("legacy Round 1 snapshots pay their original amount and larger hint prices still require committed funds",async()=>{
+        const original=(await owner.query("SELECT id FROM bounties WHERE round_id=$1 AND snapshot_id=$2",[r1,legacy!.snapshot])).rows[0].id as string;
+        const submitted=await service.submit(ba.sessionCookie,r1,original,"synthetic legacy fix",randomUUID());
+        await assess(submitted.result.submission_id as string);
+        const award=(await owner.query("SELECT base_bounty,points FROM bounty_awards WHERE submission_id=$1",[submitted.result.submission_id])).rows[0];
+        assert.deepEqual(award,{base_bounty:1000,points:1000});
+        assert.equal((await service.buyHint(ba.sessionCookie,r1,x,2,randomUUID())).result.reason,"HINT_LOCKED");
+        await service.buyHint(ba.sessionCookie,r1,x,1,randomUUID());
+        assert.equal((await service.buyHint(ba.sessionCookie,r1,x,2,randomUUID())).result.reason,"INSUFFICIENT_FUNDS");
+        const own=(await owner.query("SELECT competition_standings($1) value",[r1])).rows[0].value.find((row:any)=>row.team_id===b.id);
+        assert.equal(own.wallet,500);
+      });
+      await t.test("Round 2 opens with the exact larger unspent balance, starts at zero points and keeps its original reward and hint prices",async()=>{
+        await command(actor,"CLOSE",r1);await command(actor,"FINALISE",r1);await command(actor,"QUALIFY",r1);
+        const oldResult=(await owner.query("SELECT * FROM round_results WHERE round_id=$1",[r1])).rows;
+        const r2=(await command(actor,"SETUP_R2",r1,{teams:[a.id,b.id],duration_ms:18000000})).result.round_id as string;
+        await command(actor,"CONFIGURE",r2,{snapshots:[race.snapshot]});await command(actor,"READY",r2);await judge.claim();
+        const revision=(await owner.query("SELECT revision FROM rounds WHERE id=$1",[r2])).rows[0].revision;
+        const key=randomUUID(),started=await command(actor,"START",r2,{}, {requestKey:key});
+        assert.deepEqual(await command(actor,"START",r2,{}, {requestKey:key,expectedRevision:revision}),started);
+        const member=await join(a,0),round2Bug=(await owner.query("SELECT id FROM bounties WHERE round_id=$1",[r2])).rows[0].id as string;
+        const rows=() => owner.query("SELECT competition_standings($1) value",[r2]);
+        let own=(await rows()).rows[0].value.find((row:any)=>row.team_id===a.id);
+        assert.equal(own.wallet,5000);assert.equal(own.points,0);
+        assert.equal((await owner.query("SELECT count(*)::int n FROM round_carryovers")).rows[0].n,2);
+        await service.buyHint(member.sessionCookie,r2,round2Bug,1,randomUUID());
+        assert.equal((await owner.query("SELECT price FROM hint_purchases WHERE bounty_id=$1",[round2Bug])).rows[0].price,95);
+        const submitted=await service.submit(member.sessionCookie,r2,round2Bug,"synthetic round two fix",randomUUID());
+        await assess(submitted.result.submission_id as string);
+        own=(await rows()).rows[0].value.find((row:any)=>row.team_id===a.id);
+        assert.equal(own.wallet,5855);assert.equal(own.points,855);
+        assert.deepEqual((await owner.query("SELECT * FROM round_results WHERE round_id=$1",[r1])).rows,oldResult);
+      });
+      return;
+    }
     async function pipeline() {
       let current = r1, count = 0;
       const context={ owner, api, clock, delivery, deps, service: baseService, judge, validationWorker:worker, driver, judgePool, answers, sent, trace, lost, held, malformed,

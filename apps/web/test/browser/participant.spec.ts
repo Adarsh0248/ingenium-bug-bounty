@@ -12,6 +12,14 @@ async function enter(page: import("@playwright/test").Page) {
 async function open(page: import("@playwright/test").Page) {
   await page.locator(`[data-map-bounty="${bounty}"]`).focus();
   await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
+  if (
+    (await page
+      .locator(`[data-map-bounty="${bounty}"]`)
+      .getAttribute("data-cleared")) !== "true"
+  )
+    await page
+      .getByRole("button", { name: "Open question", exact: true })
+      .click();
   await expect(
     page.getByRole("heading", { name: "The silent overflow", exact: true }),
   ).toBeVisible();
@@ -194,6 +202,9 @@ test("a missing code-editor chunk falls back to an editable draft and still obey
   await enter(page);
   await page.locator(`[data-map-bounty="${bounty}"]`).focus();
   await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   const code = page.getByRole("textbox", {
     name: "Your private code",
     exact: true,
@@ -219,6 +230,9 @@ test("a missing code-editor chunk falls back to an editable draft and still obey
     .click();
   await page.locator(`[data-map-bounty="${bounty}"]`).focus();
   await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await expect(code).toHaveValue(/retained through editor failure/);
 });
 
@@ -370,6 +384,10 @@ test("terrain rendering failure preserves keyboard capture and private editing",
   const target = page.locator(`[data-map-bounty="${bounty}"]`);
   await target.focus();
   await page.keyboard.press("Enter");
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .focus();
+  await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "The silent overflow", exact: true }),
   ).toBeFocused();
@@ -389,6 +407,9 @@ test("keyboard target entry focuses the workbench and closing returns to the sam
   await enter(page);
   const target = page.locator(`[data-map-bounty="${bounty}"]`);
   await target.focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "The silent overflow", exact: true }),
@@ -676,12 +697,14 @@ test("competing revision and malicious statement stay reviewable text, not execu
   await page.request.post("/api/v1/_fixture", {
     data: {
       action: "statement",
-      text: '<img src=x onerror="window.__xss=1"> statement',
+      text: '<img src=x onerror="window.__xss=1"> statement\n\nInput\nRead `n`, the number of values.\n\nOutput\nPrint `n < 5`.',
     },
   });
   await open(page);
   await expect(page.locator(".statement")).toContainText("<img");
   expect(await page.locator(".statement img").count()).toBe(0);
+  await expect(page.locator(".statement h4")).toHaveText(["Input", "Output"]);
+  await expect(page.locator(".statement code")).toHaveText(["n", "n < 5"]);
   const editor = page.getByRole("textbox", {
     name: "Your private code",
     exact: true,
@@ -783,6 +806,9 @@ test("the actual Monaco editor accepts keyboard text and acknowledges its own sn
   await enter(page);
   await page.locator(`[data-map-bounty="${bounty}"]`).focus();
   await page.locator(`[data-map-bounty="${bounty}"]`).press("Enter");
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await expect(page.locator(".monaco-editor")).toBeVisible();
   await page.locator(".monaco-editor").click();
   await page.keyboard.press("ControlOrMeta+A");

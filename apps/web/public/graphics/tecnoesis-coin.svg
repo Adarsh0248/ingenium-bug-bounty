@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 126">
+  <defs>
+    <linearGradient id="rim" x1="0" x2="1" y2="1"><stop stop-color="#fff2b3"/><stop offset=".25" stop-color="#ffd76c"/><stop offset=".52" stop-color="#8a480c"/><stop offset=".76" stop-color="#ffc955"/><stop offset="1" stop-color="#9e5913"/></linearGradient>
+    <linearGradient id="gold" x1=".15" x2=".85" y2="1"><stop stop-color="#fff0a2"/><stop offset=".38" stop-color="#efb840"/><stop offset=".7" stop-color="#c58217"/><stop offset="1" stop-color="#ffe18a"/></linearGradient>
+    <linearGradient id="stamp" x2=".8" y2="1"><stop stop-color="#63350b"/><stop offset=".5" stop-color="#a46112"/><stop offset="1" stop-color="#ffe59a"/></linearGradient>
+  </defs>
+  <circle cx="60" cy="66" r="57" fill="#6d390d"/>
+  <path d="M8 76v9m7 2v10m9-1v11m12-4v13m14-11v15m16-15v15m15-17v13m12-16v11m10-18v10m7-23v9" stroke="#c68b2a" stroke-width="3"/>
+  <circle cx="60" cy="60" r="57" fill="url(#rim)" stroke="#ffe9a0" stroke-width="1.5"/>
+  <circle cx="60" cy="60" r="50" fill="url(#gold)" stroke="#8c4e10" stroke-width="2"/>
+  <circle cx="60" cy="60" r="45" fill="none" stroke="#ffeeb0" stroke-width="1"/>
+  <circle cx="60" cy="60" r="53" fill="none" stroke="#fff2b4" stroke-width="2.5" stroke-dasharray="1.5 5"/>
+  <g stroke-linejoin="round" stroke-width="1.2" stroke="#ffe8a0" fill="url(#stamp)">
+    <path d="M32 28 89 44 34 44Z"/>
+    <path d="M35 49H56L41 91Z"/>
+    <path d="M62 49H78L60 74Z"/>
+  </g>
+  <path d="m37 32 37 10H38Zm2 21h11L43 76m22-23h6l-7 11" fill="none" stroke="#ffdd73" stroke-width="1.1"/>
+  <text x="60" y="106" text-anchor="middle" fill="#6a390c" font-family="Arial,sans-serif" font-size="7.1" font-weight="700" letter-spacing="1.2">TECNOESIS</text>
+  <path d="m24 25 2-7 2 7 7 2-7 2-2 7-2-7-7-2Z" fill="#fff8d7"/>
+</svg>

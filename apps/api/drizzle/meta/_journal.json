@@ -561,6 +561,27 @@
       "when": 1793026388757,
       "tag": "0079_fifty_bounties",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793126400000,
+      "tag": "0080_four_language_event_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1793145600000,
+      "tag": "0081_round_one_reward_boost",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1793203200000,
+      "tag": "0082_round_two_hundred_bounties",
+      "breakpoints": true
     }
   ]
 }

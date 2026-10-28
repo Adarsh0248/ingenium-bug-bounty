@@ -36,7 +36,7 @@ export const bugVersions = pgTable("bug_versions", {
   check("bug_category", sql`${t.category} in ('ARRAYS','GRAPHS','SYSTEMS','LOGIC')`),
   check("bug_version_content", sql`${t.versionNumber} between 1 and 1000 and ${t.contentRevision}>=1 and ${t.contentBytes}>=4096
     and octet_length(${t.title}) between 1 and 160 and length(btrim(${t.title}))>0 and octet_length(${t.statement})<=65536
-    and ${t.difficulty} between 1 and 100 and ${t.baseBounty}=${t.difficulty}*10 and ${t.submissionFormat}='FULL_PROGRAM'
+    and ${t.difficulty} between 1 and 100 and ${t.baseBounty} in (${t.difficulty}*10,${t.difficulty}*50) and ${t.submissionFormat}='FULL_PROGRAM'
     and ${t.checkerMode} in ('TOKENS','EXACT_TEXT') and ${t.checkerVersion}='ingenium-text-v1'`),
   check("bug_version_publication", sql`(${t.publicationStatus}='DRAFT' and ${t.publishedBy} is null and ${t.publishedAt} is null)
     or (${t.publicationStatus}='PUBLISHED' and ${t.publishedBy} is not null and ${t.publishedAt} is not null and ${t.publishedAt}>=${t.createdAt})`)]);

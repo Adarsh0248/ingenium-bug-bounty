@@ -8,7 +8,46 @@ import {
   centreMap,
   regionTarget,
   bugWander,
+  infoCardPlacement,
 } from "../src/region-map";
+
+test("bug cards stay inside the field and flip below a target without room above", () => {
+  const bounds = { left: 350, top: 236, width: 800, height: 500 },
+    card = { width: 300, height: 240 };
+  const above = infoCardPlacement(bounds, { x: 700, y: 650 }, 50, card);
+  assert.equal(above.side, "above");
+  assert.ok(above.top + card.height < 600);
+  const tight = infoCardPlacement(
+    { left: 18, top: 338, width: 354, height: 436 },
+    { x: 195, y: 650 },
+    30,
+    { width: 300, height: 270 },
+  );
+  assert.equal(
+    tight.side,
+    "above",
+    "a few pixels of top padding must not force the card over the bug",
+  );
+  assert.ok(tight.top + 270 < 650 - 30);
+  const below = infoCardPlacement(bounds, { x: 380, y: 255 }, 40, card);
+  assert.equal(below.side, "below");
+  assert.ok(below.left >= bounds.left);
+  assert.ok(below.top > 255);
+  for (const point of [
+    { x: 380, y: 260 },
+    { x: 1130, y: 700 },
+  ]) {
+    const p = infoCardPlacement(bounds, point, 50, card);
+    assert.ok(
+      p.left >= bounds.left &&
+        p.left + card.width <= bounds.left + bounds.width,
+    );
+    assert.ok(
+      p.top >= bounds.top && p.top + card.height <= bounds.top + bounds.height,
+    );
+    assert.ok(p.pin >= 16 && p.pin <= card.width - 16);
+  }
+});
 
 test("thirty targets start spread out, then roam within the entire region on desktop and mobile", () => {
   for (const [width, height] of [

@@ -4,19 +4,22 @@ import { sha256, uuid } from "../access/credentials.js";
 export const COMPETITION_RULES = "ingenium-competition-v1";
 export const VERDICTS = ["PASSED", "WRONG_ANSWER", "COMPILATION_ERROR", "RUNTIME_ERROR", "TIME_LIMIT_EXCEEDED", "MEMORY_LIMIT_EXCEEDED", "OUTPUT_LIMIT_EXCEEDED"] as const;
 export type Verdict = typeof VERDICTS[number];
-export function bounty(difficulty: number) {
+export function bounty(difficulty: number, multiplier = 1) {
   if (!Number.isInteger(difficulty) || difficulty < 1 || difficulty > 100) throw new Error("Invalid difficulty.");
-  return difficulty * 10;
+  if (![1,5].includes(multiplier)) throw new Error("Invalid reward multiplier.");
+  return difficulty * 10 * multiplier;
 }
-export function hintPrice(round: number, difficulty: number, level: number) {
+export function hintPrice(round: number, difficulty: number, level: number, baseBounty = bounty(difficulty)) {
   bounty(difficulty);
   if (![1, 2].includes(round) || !Number.isInteger(level) || level < 1 || level > 3) throw new Error("Invalid hint.");
-  return difficulty * [1, 3, round === 1 ? 4 : 8][level - 1]!;
+  if (baseBounty !== bounty(difficulty) && !(round === 1 && baseBounty === bounty(difficulty,5))) throw new Error("Invalid frozen bounty.");
+  return baseBounty / 10 * [1, 3, round === 1 ? 4 : 8][level - 1]!;
 }
-export function winPoints(round: number, difficulty: number, tier: number) {
+export function winPoints(round: number, difficulty: number, tier: number, baseBounty = bounty(difficulty)) {
   bounty(difficulty);
   if (![1, 2].includes(round) || !Number.isInteger(tier) || tier < 0 || tier > 3) throw new Error("Invalid tier.");
-  return difficulty * (round === 1 ? 10 : [10, 9, 7, 5][tier]!);
+  if (baseBounty !== bounty(difficulty) && !(round === 1 && baseBounty === bounty(difficulty,5))) throw new Error("Invalid frozen bounty.");
+  return baseBounty / 10 * (round === 1 ? 10 : [10, 9, 7, 5][tier]!);
 }
 export interface Standing { team_round_id: string; points: number; effective_time_ms: number; difficulties: number[]; }
 export function compareStandings(a: Standing, b: Standing) {

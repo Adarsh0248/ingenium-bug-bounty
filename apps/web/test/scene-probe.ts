@@ -158,3 +158,33 @@ export function motionState(ids: string[]) {
   }
   return states;
 }
+
+export function terminationState() {
+  for (const root of _roots.values()) {
+    const { scene } = root.store.getState(),
+      sequence = scene.getObjectByName("termination-sequence");
+    if (!sequence) continue;
+    const target = scene.getObjectByName(
+        `target-${sequence.userData.bountyId}`,
+      ),
+      heading = target?.getObjectByName("motion-heading"),
+      names: string[] = [];
+    sequence.traverse((node) => {
+      if (node.name) names.push(node.name);
+    });
+    return {
+      weapon: sequence.userData.weapon,
+      region: sequence.userData.region,
+      elapsed: sequence.userData.elapsed,
+      phase: sequence.userData.phase,
+      progress: sequence.userData.progress,
+      targetVisible: !!target?.visible,
+      scale: heading?.scale.toArray(),
+      debrisCount: (
+        sequence.getObjectByName("termination-debris") as InstancedMesh
+      )?.count,
+      names,
+    };
+  }
+  return null;
+}

@@ -39,6 +39,38 @@ export function centreMap(
     bounds,
   );
 }
+export function infoCardPlacement(
+  bounds: MapBounds,
+  point: { x: number; y: number },
+  radius: number,
+  card: { width: number; height: number },
+) {
+  const left = Math.max(
+      bounds.left + 8,
+      Math.min(
+        point.x - card.width / 2,
+        bounds.left + bounds.width - card.width - 8,
+      ),
+    ),
+    above = point.y - radius - 14 - card.height,
+    aboveRoom = point.y - radius - 14 - bounds.top,
+    belowRoom = bounds.top + bounds.height - point.y - radius - 14,
+    side =
+      aboveRoom >= card.height || aboveRoom >= belowRoom ? "above" : "below",
+    top = Math.max(
+      bounds.top,
+      Math.min(
+        side === "above" ? above : point.y + radius + 14,
+        bounds.top + bounds.height - card.height,
+      ),
+    );
+  return {
+    left,
+    top,
+    side,
+    pin: Math.max(16, Math.min(card.width - 16, point.x - left)),
+  };
+}
 export function bugWander(
   seed: number,
   seconds: number,

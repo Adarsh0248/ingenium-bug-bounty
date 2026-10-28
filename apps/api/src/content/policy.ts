@@ -29,10 +29,13 @@ const io = (value: unknown) => Buffer.from(contentText(value, 1048576), "utf8").
 export function prepareContent(action: ContentAction, value: unknown): Record<string, unknown> {
   if (action === "CREATE" || action === "NEW_VERSION" || action === "METADATA") {
     const hasCategory = !!value && typeof value === "object" && Object.hasOwn(value, "category");
-    const row = record(value, [...(action === "CREATE" ? ["round_type"] : []), "title", "statement", "difficulty", "checker_mode", ...(hasCategory ? ["category"] : [])]);
+    const hasReward = !!value && typeof value === "object" && Object.hasOwn(value, "reward_multiplier");
+    const row = record(value, [...(action === "CREATE" ? ["round_type"] : []), "title", "statement", "difficulty", "checker_mode", ...(hasCategory ? ["category"] : []), ...(hasReward ? ["reward_multiplier"] : [])]);
+    if (hasReward && (![1,5].includes(integer(row.reward_multiplier,5)) || (action === "CREATE" && row.round_type === 2 && row.reward_multiplier !== 1))) return invalid();
     return { ...(action === "CREATE" ? { round_type: integer(row.round_type, 2) } : {}), title: contentText(row.title, 160, true, true),
       statement: contentText(row.statement, 65536, true), difficulty: integer(row.difficulty, 100), checker_mode: choice(row.checker_mode, ["TOKENS", "EXACT_TEXT"]),
-      ...(hasCategory ? { category: choice(row.category, ["ARRAYS", "GRAPHS", "SYSTEMS", "LOGIC"]) } : {}) };
+      ...(hasCategory ? { category: choice(row.category, ["ARRAYS", "GRAPHS", "SYSTEMS", "LOGIC"]) } : {}),
+      ...(hasReward ? { reward_multiplier: row.reward_multiplier } : {}) };
   }
   if (action === "VARIANT") {
     const row = record(value, ["language", "starter_code", "reference_solution_code", "defect_description", "runtime_key", "cpu_time_limit_ms", "wall_time_limit_ms", "memory_limit_kb"]);

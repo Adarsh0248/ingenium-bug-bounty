@@ -842,6 +842,347 @@ button.target {
   display: block;
   color: #a9c1d2;
 }
+.termination-banner {
+  border-left-color: var(--weapon-colour, var(--lime));
+}
+.weapon-sequence-status {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #52708166;
+  font:
+    10px Consolas,
+    monospace;
+}
+.weapon-sequence-status b {
+  color: var(--weapon-colour);
+  letter-spacing: 1.1px;
+  font-weight: 400;
+}
+.weapon-sequence-status span {
+  color: #a3bdc9;
+  font-size: 9px;
+}
+.weapon-sequence-progress {
+  height: 2px;
+  background: #273a45;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.weapon-sequence-progress i {
+  display: block;
+  width: var(--strike-progress, 0%);
+  height: 100%;
+  background: var(--weapon-colour);
+}
+.tecnoesis-coin {
+  display: inline-block;
+  width: 22px;
+  height: 23px;
+  flex: none;
+  vertical-align: middle;
+}
+.coin-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.target-bounty .coin-value {
+  font-size: 14px;
+}
+.target-bounty .tecnoesis-coin {
+  width: 17px;
+  height: 18px;
+}
+.hud-score > span .tecnoesis-coin {
+  width: 17px;
+  height: 18px;
+}
+.workbench-stats strong > .tecnoesis-coin {
+  margin-right: 6px;
+}
+.bug-info-anchor {
+  position: absolute;
+  z-index: 7;
+  visibility: hidden;
+  width: 300px;
+}
+.bug-info-anchor::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--card-pin) - 6px);
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  transform: rotate(45deg);
+  background: #121a27;
+  border-right: 1px solid #827694;
+  border-bottom: 1px solid #827694;
+  pointer-events: none;
+}
+.bug-info-anchor[data-placement="below"]::after {
+  top: -6px;
+  bottom: auto;
+  transform: rotate(225deg);
+}
+.bug-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: var(--card-max-height, 290px);
+  padding: 12px;
+  border: 1px solid #827694;
+  border-top: 2px solid var(--intel-colour);
+  background: #121a27f8;
+  box-shadow:
+    0 8px 24px #0007,
+    inset 0 0 0 3px #090f1c66;
+}
+.bug-info-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.bug-info-card header > div {
+  min-width: 0;
+}
+.bug-info-card .icon-button {
+  width: 25px;
+  height: 25px;
+  min-height: 25px;
+  flex: none;
+}
+.intel-caption {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font:
+    8px Consolas,
+    monospace;
+  letter-spacing: 1.2px;
+  color: var(--intel-colour);
+}
+.bug-info-card h2 {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bug-info-card h2:focus {
+  outline: none;
+}
+.bug-info-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.intel-region {
+  margin: 0 0 9px;
+  color: #b8a9cd;
+  font:
+    9px Consolas,
+    monospace;
+}
+.intel-stats {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  padding: 8px 0;
+  border-top: 1px solid #53647755;
+  border-bottom: 1px solid #53647755;
+}
+.intel-stats > div > span {
+  display: block;
+  color: #94aab8;
+  font:
+    8px Consolas,
+    monospace;
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+}
+.intel-stats strong {
+  font:
+    17px Consolas,
+    monospace;
+  color: #ffe096;
+}
+.intel-stats > div:last-child strong {
+  color: var(--intel-colour);
+}
+.intel-stats strong small {
+  color: #a7b6c6;
+  font-size: 9px;
+}
+.intel-stats .tecnoesis-coin {
+  width: 18px;
+  height: 19px;
+}
+.intel-creature {
+  margin: 9px 0;
+  color: #e0d8ed;
+  font-size: 11px;
+}
+.intel-creature span {
+  display: block;
+  color: #aab9c8;
+  font:
+    9px Consolas,
+    monospace;
+  margin-top: 4px;
+}
+.intel-preview {
+  color: #c0ced7;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.intel-preview .text-button {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 0;
+  color: var(--intel-colour);
+  font-size: 10px;
+}
+.intel-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  min-height: 32px;
+  flex: none;
+  background: #263a4c;
+  border: 1px solid var(--intel-colour);
+  border-radius: 0;
+  font:
+    11px Consolas,
+    monospace;
+}
+.intel-open:focus-visible {
+  outline: 2px solid #fff0b0;
+  outline-offset: 2px;
+}
+.intel-unavailable {
+  color: #bcb2bd;
+  font-size: 9px;
+}
+@media (max-width: 720px) {
+  .participant[data-inspecting="true"] .target-dock {
+    visibility: hidden;
+  }
+}
+.bounty-reward {
+  position: fixed;
+  z-index: 40;
+  top: 45%;
+  left: 50%;
+  width: min(324px, calc(100vw - 32px));
+  padding: 14px 20px 18px;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  border: 1px solid #e6b955;
+  border-top: 3px solid #ffe8a0;
+  background:
+    radial-gradient(ellipse at 50% 22%, #5c3b1970, transparent 65%), #12131bf5;
+  box-shadow:
+    0 10px 35px #0008,
+    inset 0 0 0 5px #8d60261c;
+  animation: bounty-reward-show 2s both;
+}
+.reward-coins {
+  position: relative;
+  width: 280px;
+  height: 142px;
+  max-width: 100%;
+  margin: 0 auto 4px;
+}
+.reward-coins > span {
+  position: absolute;
+  transform: rotate(var(--coin-angle));
+  animation: reward-coin-arrive 350ms var(--coin-delay) both;
+}
+.reward-coins .tecnoesis-coin {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.reward-caption {
+  display: block;
+  color: #efc86b;
+  font:
+    10px Consolas,
+    monospace;
+  letter-spacing: 2.8px;
+}
+.bounty-reward > strong {
+  display: block;
+  margin: 8px 0;
+  color: #ffe5a0;
+  font:
+    30px Silkscreen,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 0 #714c1f;
+}
+.bounty-reward > strong small {
+  font:
+    13px Consolas,
+    monospace;
+  color: #e9c56e;
+}
+.reward-target {
+  display: block;
+  color: #ddd0b6;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.reward-mint {
+  display: block;
+  color: #a98b54;
+  margin-top: 14px;
+  font:
+    8px Consolas,
+    monospace;
+  letter-spacing: 1.5px;
+}
+@keyframes bounty-reward-show {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -45%) scale(0.92);
+  }
+  12%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -54%) scale(1.02);
+  }
+}
+@keyframes reward-coin-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) rotate(var(--coin-angle)) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(var(--coin-angle)) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bounty-reward,
+  .reward-coins > span {
+    animation: none;
+  }
+}
 .topbar {
   border-bottom-color: #42384d;
 }
@@ -1111,10 +1452,34 @@ button.target {
   gap: 5px;
 }
 .statement {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.85;
   color: #cedbe4;
   margin-bottom: 28px;
+}
+.statement p {
+  margin: 0 0 16px;
+}
+.statement h4 {
+  color: #f0f6fa;
+  font-size: 14px;
+  margin: 23px 0 8px;
+  letter-spacing: 0;
+}
+.statement code,
+.hint code,
+.intel-preview code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  color: #a9f7ee;
+  background: #8ce9e912;
+  border: 1px solid #8ce9e92e;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: Consolas, monospace;
+  font-size: 0.94em;
 }
 .sample {
   margin: 15px 0;
@@ -1197,6 +1562,8 @@ button.target {
 }
 .code-heading {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: space-between;
   align-items: center;
   min-height: 49px;
@@ -1441,6 +1808,26 @@ dialog p {
 .leaderboard .own-standing {
   background: #1b3b40;
 }
+.overdrive-name {
+  color: #ffe0a1;
+  font-weight: 700;
+  text-shadow:
+    0 0 5px #ffad57cc,
+    0 0 12px #ff794c99;
+  animation: overdrive-name-glow 3s ease-in-out infinite alternate;
+}
+@keyframes overdrive-name-glow {
+  to {
+    text-shadow:
+      0 0 7px #ffcb83,
+      0 0 16px #ff6d9dbb;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overdrive-name {
+    animation: none;
+  }
+}
 @media (min-width: 1500px) {
   .entry-body {
     margin-top: 13vh;
@@ -1502,6 +1889,19 @@ dialog p {
   }
   .termination-banner strong {
     font-size: 17px;
+  }
+  .participant[data-terminating="true"] .target-dock,
+  .participant[data-terminating="true"] .region-nav,
+  .participant[data-terminating="true"] .region-map-controls,
+  .participant[data-terminating="true"] .arena-tools {
+    visibility: hidden;
+  }
+  .participant[data-terminating="true"] .weapon-sequence-status {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+    padding-top: 6px;
   }
   .field-weapon {
     bottom: 32px;
@@ -3298,14 +3698,38 @@ button.target:hover:not(:disabled) {
 .nexus-network {
   background: #06181f;
 }
-.zero-day-core { background: #05090f; }
-.zero-day-map { font-family: Consolas, monospace; shape-rendering: geometricPrecision; }
-.zero-day-data-flow { animation: nexus-packet 15s linear infinite; }
-.zero-day-fracture-flow { animation: nexus-packet 34s linear infinite; }
-.zero-day-lock-ring { transform-origin: 0 0; animation: neon-core-cycle 45s linear infinite; }
-.zero-day-lock-inner { transform-origin: 0 0; animation: neon-core-cycle 29s linear infinite reverse; }
-.zero-day-gate-scan { animation: zero-day-scan 5s ease-in-out infinite alternate; }
-@keyframes zero-day-scan { from { transform: translateY(-16px); } to { transform: translateY(16px); } }
+.zero-day-core {
+  background: #05090f;
+}
+.zero-day-map {
+  font-family: Consolas, monospace;
+  shape-rendering: geometricPrecision;
+}
+.zero-day-data-flow {
+  animation: nexus-packet 15s linear infinite;
+}
+.zero-day-fracture-flow {
+  animation: nexus-packet 34s linear infinite;
+}
+.zero-day-lock-ring {
+  transform-origin: 0 0;
+  animation: neon-core-cycle 45s linear infinite;
+}
+.zero-day-lock-inner {
+  transform-origin: 0 0;
+  animation: neon-core-cycle 29s linear infinite reverse;
+}
+.zero-day-gate-scan {
+  animation: zero-day-scan 5s ease-in-out infinite alternate;
+}
+@keyframes zero-day-scan {
+  from {
+    transform: translateY(-16px);
+  }
+  to {
+    transform: translateY(16px);
+  }
+}
 .nexus-map {
   font-family: Consolas, monospace;
   shape-rendering: geometricPrecision;
@@ -3321,8 +3745,12 @@ button.target:hover:not(:disabled) {
   animation: neon-core-cycle 65s linear infinite reverse;
 }
 @keyframes nexus-packet {
-  from { stroke-dashoffset: 100; }
-  to { stroke-dashoffset: 0; }
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 @keyframes neon-data-flow {
   from {

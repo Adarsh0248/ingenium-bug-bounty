@@ -77,6 +77,7 @@ export async function startBrowserApp(
         hmr: { server: bridge },
         fs: {
           allow: [fileURLToPath(new URL("../../../../", import.meta.url))],
+          deny: ["**/.env", "**/.env.*", "**/*.{crt,pem}", "**/.git/**", "**/content/round-1/**", "**/test-results/**"],
         },
       },
     });

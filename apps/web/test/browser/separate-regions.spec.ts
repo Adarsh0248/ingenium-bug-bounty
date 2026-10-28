@@ -57,6 +57,9 @@ test("restored overview has four separate scenes and old region navigation on de
     expect(new Set(varieties.map((b) => b.rank)).size).toBe(4);
     await page.screenshot({ path: `test-results/restored-${id}.png` });
     await targets.last().click();
+    await page
+      .getByRole("button", { name: "Open question", exact: true })
+      .click();
     await expect(page.locator(".workbench")).toBeVisible();
     await expect(page.locator(".workbench h2")).toContainText("Dummy");
     await expect(page.locator(".statement")).toContainText(
@@ -94,6 +97,9 @@ test("restored target list keeps captures, private code and deferred award in an
     target = page.locator(`[data-bounty-id="${first}"]`);
   await nav.getByRole("button", { name: "Zero-Day Core", exact: true }).click();
   await target.click();
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "The silent overflow", exact: true }),
   ).toBeVisible();
@@ -108,6 +114,9 @@ test("restored target list keeps captures, private code and deferred award in an
   await page.getByRole("button", { name: "Close workbench" }).click();
   await nav.getByRole("button", { name: "Verdant Nexus", exact: true }).click();
   await target.click();
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await page.getByRole("button", { name: "Plain text", exact: true }).click();
   await expect(editor).toHaveValue(
     "// retained through the visual rollback\nint main() {}\n",
@@ -353,6 +362,9 @@ test("bugs roam beyond their starting cells and the camera finds a cleared roami
     ),
     title = await target.locator("strong").innerText();
   await target.click();
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: title, exact: true }),
   ).toBeVisible();

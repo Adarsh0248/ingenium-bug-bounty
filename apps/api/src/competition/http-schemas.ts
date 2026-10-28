@@ -41,11 +41,11 @@ export const receipt = object({ outcome_id: id, round_id: id, request_key: id, a
 export const outcome = object({ status: { type: "string", enum: ["OBSERVED", "NOT_OBSERVED"] }, outcome: nullable(receipt) });
 const signedPoints={type:"integer",minimum:-1000000000000,maximum:1000000000000};
 export const standings = object({ final: { type: "boolean" }, cancelled:{type:"boolean"}, standings: list(object({ team_round_id: id, team_id: id, team_name: text, points: signedPoints, solve_time_ms: number,
-  penalty_ms: number, effective_time_ms: number, difficulties: list({ type: "integer", minimum: 1, maximum: 100 }, 50), rank: nullable({ type: "integer", minimum: 1, maximum: 100 }) }), 100) });
+  penalty_ms: number, effective_time_ms: number, difficulties: list({ type: "integer", minimum: 1, maximum: 100 }, 100), rank: nullable({ type: "integer", minimum: 1, maximum: 100 }) }), 100) });
 export const finalResults = object({ format_version:{type:"integer",const:1},state:{type:"string",const:"FINAL"},arena_id:id,round_id:id,round_kind:{type:"integer",enum:[1,2]},
   result_id:id,result_version:{type:"integer",minimum:1,maximum:100001},finalised_at:time,standings_sha256:{type:"string",pattern:"^[0-9a-f]{64}$"},
   qualification_status:{type:"string",enum:["PENDING","LOCKED","NOT_APPLICABLE"]},standings:list(object({team_round_id:id,team_id:id,team_name:text,rank:{type:"integer",minimum:1,maximum:100},
-    points:signedPoints,solve_time_ms:number,penalty_ms:number,effective_time_ms:number,difficulties:list({type:"integer",minimum:1,maximum:100},50),qualified:nullable({type:"boolean"})}),100) });
+    points:signedPoints,solve_time_ms:number,penalty_ms:number,effective_time_ms:number,difficulties:list({type:"integer",minimum:1,maximum:100},100),qualified:nullable({type:"boolean"})}),100) });
 export const cancellation = object({arena_id:id,round_id:id,revision:{type:"string",maxLength:19},state:{type:"string",maxLength:16},current:{type:"boolean"},held_executions:number,cancelled_work:number,pending_work:number,
   cancellation:nullable(object({cancellation_id:id,incident_ref:{type:"string",maxLength:120},reason:text,actor_name:text,started_at:time,finished_at:nullable(time)}))});
 export const hints = list(object({ level: { type: "integer", minimum: 1, maximum: 3 }, content: { type: "string", maxLength: 16384 }, recorded_at: time }), 3);
@@ -53,7 +53,7 @@ export const state = object({
   round: object({ round_id: id, arena_instance_id: id, kind: { type: "integer", enum: [1, 2] }, state: { type: "string", maxLength: 16 }, duration_ms: { type: "string", maxLength: 19 },
     started_at: nullable(time), closes_at: nullable(time), revision: { type: "string", maxLength: 19 }, draw_commitment: nullable({ type: "string", maxLength: 64 }),
     draw_reveal: nullable(object({ version: { type: "integer", const: 1 }, round_id: id, roster: list(id, 100), permutation: list(id, 100), salt: { type: "string", maxLength: 64 } })), final: { type: "boolean" } }),
-  bounties: list(object({ category: nullable({type:"string",enum:["ARRAYS","GRAPHS","SYSTEMS","LOGIC"]}), captured: {type:"boolean"}, bounty_id: id, title: text, difficulty: { type: "integer", minimum: 1, maximum: 100 }, base_bounty: number, claimed: { type: "boolean" }, hint_tier: { type: "integer", minimum: 0, maximum: 3 } }), 50),
+  bounties: list(object({ category: nullable({type:"string",enum:["ARRAYS","GRAPHS","SYSTEMS","LOGIC"]}), captured: {type:"boolean"}, bounty_id: id, title: text, difficulty: { type: "integer", minimum: 1, maximum: 100 }, base_bounty: number, claimed: { type: "boolean" }, hint_tier: { type: "integer", minimum: 0, maximum: 3 } }), 100),
   pauses: list(object({ scope: { type: "string", enum: ["GLOBAL", "TEAM", "MEMBER"] }, team_round_id: nullable(id), member_round_id: nullable(id) }), 301), wallet: nullable(number),
 });
 const publishedItem = object({ snapshot_id:id,definition_id:id,title:text,difficulty:{type:"integer",minimum:1,maximum:100},base_bounty:number,round_type:{type:"integer",enum:[1,2]} });
@@ -63,6 +63,6 @@ export const publishedPage = object({ items:list(publishedItem,50),next_after:nu
 export const controlRoom = object({ server_time:time,session_id:id,role:{type:"string",enum:["OWNER","ORGANISER","SUPER_ADMIN"]},control_revision:{type:"string",maxLength:19},
   instance:nullable(object({instance_id:id,status:{type:"string",maxLength:16},current:{type:"boolean"}})),
   rounds:list(object({round_id:id,kind:{type:"integer",enum:[1,2]},state:{type:"string",maxLength:16},duration_ms:{type:"string",maxLength:19},
-    revision:{type:"string",maxLength:19},configuration_revision:{type:"string",maxLength:19},selected:list(publishedItem,50),
+    revision:{type:"string",maxLength:19},configuration_revision:{type:"string",maxLength:19},selected:list(publishedItem,100),
     teams:list(object({team_id:id,team_name:text,team_round_id:nullable(id),members:list(object({member_id:id,member_name:text,position:{type:"integer",enum:[1,2]},
       member_round_id:nullable(id),language:nullable({type:"string",maxLength:16})}),2)}),100)}),2),qualified_team_ids:nullable(list(id,50)) });

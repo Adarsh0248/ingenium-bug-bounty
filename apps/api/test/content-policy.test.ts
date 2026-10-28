@@ -5,6 +5,13 @@ import { checkText, contentText, prepareContent } from "../src/content/policy.js
 import { AccessError } from "../src/access/transaction.js";
 
 const invalid = (e: unknown) => e instanceof AccessError && e.code === "INVALID_CONTEXT";
+test("Round 1 authoring accepts only the legacy or fivefold reward scale", () => {
+  const value = {round_type:1,title:"Repair",statement:"Fix it",difficulty:20,checker_mode:"TOKENS"};
+  assert.equal(prepareContent("CREATE",{...value,reward_multiplier:5}).reward_multiplier,5);
+  assert.equal(Object.hasOwn(prepareContent("CREATE",value),"reward_multiplier"),false);
+  for (const reward_multiplier of [0,2,4,6,1.5,"5",null]) assert.throws(()=>prepareContent("CREATE",{...value,reward_multiplier}),invalid);
+  assert.throws(()=>prepareContent("CREATE",{...value,round_type:2,reward_multiplier:5}),invalid);
+});
 test("categories are explicit author metadata, with legacy payload compatibility and strict validation",()=>{
   const value={round_type:1,title:"Arrays",statement:"Find the boundary",difficulty:80,checker_mode:"TOKENS"};
   assert.equal(Object.hasOwn(prepareContent("CREATE",value),"category"),false);

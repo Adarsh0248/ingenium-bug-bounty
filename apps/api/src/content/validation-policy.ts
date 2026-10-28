@@ -1,4 +1,4 @@
-import { LANGUAGES, sha256 } from "../access/credentials.js";
+import { EVENT_LANGUAGES, LANGUAGES, sha256 } from "../access/credentials.js";
 import type { Language } from "../access/credentials.js";
 import { CHECKER_VERSION } from "./policy.js";
 
@@ -32,6 +32,7 @@ export function planValidation(capture: ValidationCapture): { issues: Validation
   };
   if (v.publication_status !== "DRAFT") issue("CONTENT_LOCKED");
   if (!v.title.trim() || !v.statement.trim()) issue("STATEMENT_INCOMPLETE");
+  if (!Number.isInteger(v.difficulty) || v.difficulty < 1 || v.difficulty > 100 || (v.base_bounty !== v.difficulty * 10 && !(v.round_type === 1 && v.base_bounty === v.difficulty * 50))) issue("REWARD_INVALID");
   if (v.submission_format !== "FULL_PROGRAM" || !["TOKENS", "EXACT_TEXT"].includes(v.checker_mode) || v.checker_version !== CHECKER_VERSION) issue("CHECKER_UNSUPPORTED");
   if (!capture.cases.some(c => c.visibility === "SAMPLE")) issue("SAMPLE_REQUIRED");
   if (!capture.cases.some(c => c.visibility === "HIDDEN")) issue("HIDDEN_REQUIRED");
@@ -48,8 +49,9 @@ export function planValidation(capture: ValidationCapture): { issues: Validation
     if (hints.length !== 1 || !hints[0]!.content.trim()) issue("HINT_REQUIRED", null, null, level);
   }
   if (capture.hints.length !== 3) issue("HINT_SET_INVALID");
-  if (capture.variants.length !== 5) issue("LANGUAGE_SET_INCOMPLETE");
-  for (const lang of LANGUAGES) {
+  const required = capture.variants.some(v => v.language === "javascript") ? LANGUAGES : EVENT_LANGUAGES;
+  if (capture.variants.length !== required.length) issue("LANGUAGE_SET_INCOMPLETE");
+  for (const lang of required) {
     const variants = capture.variants.filter(x => x.language === lang);
     if (variants.length !== 1) { issue("LANGUAGE_REQUIRED", lang); continue; }
     const variant = variants[0]!;
@@ -81,17 +83,18 @@ export function planValidation(capture: ValidationCapture): { issues: Validation
 }
 
 export function aggregateValidation(checks: (PlannedCheck & { id: string })[], results: ReadonlyMap<string, CodeResult | "INFRA_ERROR">) {
+  const required = checks.some(c => c.language === "javascript") ? LANGUAGES : EVENT_LANGUAGES;
   const ids = new Set(checks.map(c => c.id));
   const references = checks.filter(c => c.source_role === "REFERENCE"), starters = checks.filter(c => c.source_role === "STARTER");
   const caseSet = new Set(references.map(c => c.test_case_id));
   if (!checks.length || checks.length > 115 || ids.size !== checks.length || caseSet.size < 2 || caseSet.size > 20
-    || LANGUAGES.some(lang => {
+    || required.some(lang => {
       const refs = references.filter(c => c.language === lang), defects = starters.filter(c => c.language === lang);
       return refs.length !== caseSet.size || new Set(refs.map(c => c.test_case_id)).size !== caseSet.size
         || defects.length < 1 || defects.length > 3 || new Set(defects.map(c => c.witness_position)).size !== defects.length
         || new Set([...refs, ...defects].map(c => c.variant_id)).size !== 1;
     })
-    || new Set(checks.map(c => c.variant_id)).size !== 5
+    || new Set(checks.map(c => c.variant_id)).size !== required.length
     || checks.some(c => !LANGUAGES.includes(c.language) || (c.source_role === "REFERENCE"
       ? c.check_type !== "TEST_CASE" || !c.test_case_id || c.witness_position !== null || c.expected_result !== "PASSED"
       : c.source_role !== "STARTER" || c.witness_position === null || c.witness_position < 1 || c.witness_position > 3
@@ -100,7 +103,7 @@ export function aggregateValidation(checks: (PlannedCheck & { id: string })[], r
     || [...results].some(([id, result]) => !ids.has(id) || ![...CODE_RESULTS, "INFRA_ERROR"].includes(result))) throw new Error("Invalid validation result set.");
   const referenceFailures = checks.filter(c => c.source_role === "REFERENCE" && results.has(c.id) && results.get(c.id) !== "PASSED" && results.get(c.id) !== "INFRA_ERROR").length;
   const infrastructureFailures = checks.filter(c => results.get(c.id) === "INFRA_ERROR").length;
-  const unmatchedLanguages = LANGUAGES.filter(lang => !checks.some(c => c.language === lang && c.source_role === "STARTER" && results.get(c.id) === c.expected_result));
+  const unmatchedLanguages = required.filter(lang => !checks.some(c => c.language === lang && c.source_role === "STARTER" && results.get(c.id) === c.expected_result));
   const status = results.size < checks.length ? "PENDING" : infrastructureFailures ? "INFRA_ERROR" : referenceFailures || unmatchedLanguages.length ? "FAILED" : "PASSED";
   return { status, reference_failures: referenceFailures, infrastructure_failures: infrastructureFailures, unmatched_languages: unmatchedLanguages,
     completed_checks: results.size, total_checks: checks.length };

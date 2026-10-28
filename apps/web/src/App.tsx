@@ -150,7 +150,9 @@ export default function App() {
     <>
       {__PREVIEW__ && (
         <div className="preview-label">
-          LOCAL PREVIEW · SYNTHETIC TEAMS · NO CODE EXECUTION
+          {session?.preview_round === 2
+            ? "LOCAL ROUND 2 PREVIEW · AUTHORED DRAFTS · SIMULATED RIVALS/JUDGING"
+            : "LOCAL PREVIEW · SYNTHETIC TEAMS · NO CODE EXECUTION"}
         </div>
       )}
       {screen === "PARTICIPANT" && session ? (

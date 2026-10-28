@@ -15,6 +15,8 @@ import type {
 import { IconButton, Modal } from "./ui";
 import { displayOutput } from "./output";
 import ScoreCorrections from "./ScoreCorrections";
+import ProblemText, { InlineCode } from "./ProblemText";
+import StandingName from "./StandingName";
 
 type Tab = "STANDINGS" | "ATTEMPTS" | "WALLET" | "SAVED_WORK";
 const path = (round: string) => `/api/v1/competition/rounds/${round}/history`;
@@ -224,7 +226,9 @@ function RoundHistory({
           ),
         )}
       </nav>
-      {tab === "STANDINGS" && overview?.final && <ScoreCorrections key={round} api={api} round={round}/>}
+      {tab === "STANDINGS" && overview?.final && (
+        <ScoreCorrections key={round} api={api} round={round} />
+      )}
       {selected ? (
         <HistoryDetail
           key={`${selected.kind}:${selected.id}`}
@@ -259,7 +263,11 @@ function RoundHistory({
                       }
                     >
                       <th scope="row">
-                        {s.rank ?? "--"} / {s.team_name}
+                        {s.rank ?? "--"} /{" "}
+                        <StandingName
+                          name={s.team_name}
+                          overdrive={s.overdrive}
+                        />
                       </th>
                       <td>{s.points.toLocaleString()}</td>
                       <td>
@@ -548,13 +556,15 @@ function HistoryDetail({
           {draft && (
             <>
               <h4>Mission brief</h4>
-              <div className="statement">{statement}</div>
+              <ProblemText text={statement} />
               <h4>Purchased hints</h4>
               {hints.length ? (
                 hints.map((h) => (
                   <section key={h.level}>
                     <h4>Hint {h.level}</h4>
-                    <p className="statement">{h.content}</p>
+                    <p className="statement">
+                      <InlineCode>{h.content}</InlineCode>
+                    </p>
                   </section>
                 ))
               ) : (

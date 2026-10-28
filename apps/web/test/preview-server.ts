@@ -5,9 +5,26 @@ import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { definitions, previewBugs } from "./preview-bugs";
+import { roundOnePack, roundOneBugs } from "../../../content/round-1/load";
+import type { RoundOneLanguage } from "../../../content/round-1/load";
+import { createShopPreview } from "./shop-preview";
+import {
+  roundTwoPack,
+  roundTwoBugs,
+  roundTwoQuestion,
+} from "../../../content/round-2/load";
+const roundKind = Number(
+  process.env.INGENIUM_PREVIEW_ROUND ??
+    (process.argv.includes("--round2") ? 2 : 1),
+);
+if (![1, 2].includes(roundKind)) throw new Error("Invalid preview round");
+const visualFixtures =
+  roundKind === 1 && process.env.INGENIUM_PREVIEW_FIXTURES === "visual-tests";
+const cookieName =
+  roundKind === 2 ? "round2_preview_session" : "preview_session";
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const round = id(1),
+const round = id(roundKind === 2 ? 10001 : 1),
   member = id(2),
   team = id(3),
   teamRound = id(4),
@@ -43,7 +60,7 @@ interface State {
   feedback: Map<string, any>;
   hints: Map<string, any[]>;
   submissions: any[];
-  reports: Map<string,any>;
+  reports: Map<string, any>;
   walletEntries: any[];
   wallet: number;
   points: number;
@@ -51,7 +68,11 @@ interface State {
   closed: boolean;
   dropNext: boolean;
   judgeDelay?: number;
-  statement: string;
+  statement: string | null;
+  shop?: ReturnType<typeof createShopPreview>;
+  shopOffset: number;
+  shopLifecycle?: string;
+  penaltyMs: number;
 }
 const states = new Map<string, State>(),
   tickets = new Map<string, string>();
@@ -60,8 +81,8 @@ function state(req: IncomingMessage, res: ServerResponse) {
   let sid = req.headers.cookie
     ?.split(";")
     .map((x) => x.trim())
-    .find((x) => x.startsWith("preview_session="))
-    ?.slice(16);
+    .find((x) => x.startsWith(cookieName + "="))
+    ?.slice(cookieName.length + 1);
   if (!sid || !states.has(sid)) {
     sid = randomUUID();
     states.set(sid, {
@@ -74,7 +95,11 @@ function state(req: IncomingMessage, res: ServerResponse) {
       started: Date.now(),
       expires: Date.now() + 7200000,
       heads: structuredClone(streams),
-      bugs: previewBugs(),
+      bugs: visualFixtures
+        ? previewBugs()
+        : roundKind === 2
+          ? roundTwoBugs()
+          : roundOneBugs(),
       drafts: new Map(),
       outcomes: new Map(),
       actions: new Map(),
@@ -83,20 +108,55 @@ function state(req: IncomingMessage, res: ServerResponse) {
       submissions: [],
       reports: new Map(),
       walletEntries: [],
-      wallet: 1200,
-      points: 1350,
+      wallet: roundKind === 2 ? 35000 : 1200,
+      points: roundKind === 2 ? 0 : 1350,
+      shopOffset: 0,
+      penaltyMs: 0,
       paused: false,
       closed: false,
       dropNext: false,
-      statement:
-        "A telemetry service combines two signed integers. Its implementation returns the wrong total.\n\nRepair the program so it prints their sum, including values outside the 32-bit range.\n\nInput\nTwo signed integers a and b, separated by whitespace.\n\nOutput\nTheir sum followed by a newline.\n\nConstraints\n-10^12 <= a, b <= 10^12",
+      statement: visualFixtures
+        ? "A telemetry service combines two signed integers. Its implementation returns the wrong total.\n\nRepair the program so it prints their sum, including values outside the 32-bit range.\n\nInput\nTwo signed integers a and b, separated by whitespace.\n\nOutput\nTheir sum followed by a newline.\n\nConstraints\n-10^12 <= a, b <= 10^12"
+        : null,
     });
     res.setHeader(
       "set-cookie",
-      `preview_session=${sid}; HttpOnly; SameSite=Strict; Path=/`,
+      `${cookieName}=${sid}; HttpOnly; SameSite=Strict; Path=/`,
     );
   }
   const s = states.get(sid)!;
+  if (roundKind === 2 && !s.shop) {
+    s.shop = createShopPreview({
+      now: () => Date.now() + s.shopOffset,
+      wallet: () => s.wallet,
+      debit: (amount) => {
+        s.wallet -= amount;
+      },
+      bugs: () => s.bugs,
+      paused: () => s.paused,
+      closed: () => s.closed,
+      intel(bounty) {
+        const q = roundTwoQuestion(bounty);
+        if (!q) throw new Error("Unknown Round 2 question");
+        const probe = q.paid_intel.probe;
+        const section = q.paid_intel.scanner[s.language as RoundOneLanguage];
+        return {
+          probe: { input: probe.input_data, output: probe.expected_output },
+          scanner: {
+            ...section,
+            text: "Inspect how the operations in this subsystem update and use its state.",
+            source: q.variants[s.language as RoundOneLanguage].starter_code
+              .split("\n")
+              .slice(section.from_line - 1, section.to_line)
+              .join("\n"),
+          },
+        };
+      },
+    });
+    s.bugs
+      .filter((_, i) => i % 3 === 0)
+      .forEach((b) => s.shop!.setRivalWorking(b.bounty_id, true));
+  }
   if (s.active && Date.now() >= s.expires) {
     s.active = false;
     s.flow = false;
@@ -114,6 +174,7 @@ function session(s: State) {
     member_name: s.name,
     team_name: "Segfault Society",
     round_state: s.closed ? "CLOSED" : s.paused ? "PAUSED" : "RUNNING",
+    ...(roundKind === 2 ? { preview_round: 2 } : {}),
     expires_at: new Date(s.expires).toISOString(),
     absolute_expires_at: new Date(s.started + 28800000).toISOString(),
     warning_at: new Date(s.expires - 300000).toISOString(),
@@ -137,15 +198,17 @@ function snapshot(s: State, sync: string) {
       team_name: "Segfault Society",
       points: s.points,
       rank: 2,
-      effective_time_ms: 3380000,
-      penalty_ms: 0,
+      effective_time_ms: 3380000 + s.penaltyMs,
+      penalty_ms: s.penaltyMs,
       difficulties: [80, 55],
+      overdrive: s.shop?.view().overdrive ?? false,
     },
     first = {
       ...own,
       team_id: id(20),
       team_round_id: id(21),
       team_name: "Bit Shift",
+      overdrive: false,
       points: 1700,
       rank: 1,
       effective_time_ms: 3090000,
@@ -167,7 +230,7 @@ function snapshot(s: State, sync: string) {
     streams: s.heads,
     round: {
       round_id: round,
-      kind: 1,
+      kind: roundKind,
       state: s.closed ? "CLOSED" : s.paused ? "PAUSED" : "RUNNING",
       duration_ms: "7200000",
       started_at: new Date(s.started).toISOString(),
@@ -176,7 +239,11 @@ function snapshot(s: State, sync: string) {
       arena_status: "IN_PROGRESS",
     },
     arena: { current_instance_id: id(7), status: "IN_PROGRESS" },
-    bounties: s.bugs,
+    bounties: s.bugs.map((b) => ({
+      ...b,
+      claimed: b.claimed || !!s.shop?.unavailable(b.bounty_id),
+    })),
+    ...(s.shop ? { shop: s.shop.view() } : {}),
     pauses: s.paused
       ? [
           {
@@ -260,18 +327,42 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return true;
   };
   if (p === "/api/v1/_fixture") {
+    if (roundKind === 2) {
+      if (b.action === "shop-demo-coins")
+        s.wallet = Math.min(100000, s.wallet + 10000);
+      if (b.action === "shop-incoming-freeze") s.shop!.incomingFreeze();
+      if (b.action === "shop-clear-freeze") s.shop!.clearIncomingFreeze();
+      if (b.action === "shop-rival-claim") {
+        const target = b.bounty ?? s.shop!.view().claim?.bounty_id;
+        if (target) s.shop!.rivalClaim(target);
+      }
+      if (b.action === "shop-rival-working" && typeof b.bounty === "string")
+        s.shop!.setRivalWorking(b.bounty, !!b.working);
+      if (
+        b.action === "shop-advance" &&
+        Number.isSafeInteger(b.ms) &&
+        b.ms >= 0 &&
+        b.ms <= 1860000
+      )
+        s.shopOffset += b.ms;
+    }
     if (b.action === "pause") s.paused = true;
     if (b.action === "resume") s.paused = false;
     if (b.action === "close") s.closed = true;
     if (b.action === "revoke") s.revoked = true;
     if (b.action === "expire") s.expires = Date.now() - 1;
-    if (b.action === "age-round" && Number.isSafeInteger(b.ms) && b.ms >= 0 && b.ms <= 28800000)
+    if (
+      b.action === "age-round" &&
+      Number.isSafeInteger(b.ms) &&
+      b.ms >= 0 &&
+      b.ms <= 28800000
+    )
       s.started = Date.now() - b.ms;
     if (b.action === "drop") s.dropNext = true;
     if (b.action === "full-field")
       s.bugs = Array.from({ length: 50 }, (_, i) => ({
         bounty_id: id(1000 + i),
-        category: ["ARRAYS","GRAPHS","SYSTEMS","LOGIC"][i%4],
+        category: ["ARRAYS", "GRAPHS", "SYSTEMS", "LOGIC"][i % 4],
         title: `${definitions[i % definitions.length].title} / ${i + 1}`,
         difficulty: 1 + ((i * 17) % 100),
         base_bounty: (1 + ((i * 17) % 100)) * 10,
@@ -279,8 +370,20 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         claimed: false,
         hint_tier: 0,
       }));
-    if(b.action==="region-field"&&["ARRAYS","SYSTEMS","GRAPHS","LOGIC"].includes(b.category))
-      s.bugs=Array.from({length:30},(_,i)=>({bounty_id:id(2000+i),category:b.category,title:`Region test bug ${i+1}`,difficulty:10+i*3,base_bounty:(10+i*3)*10,captured:false,claimed:false,hint_tier:0}));
+    if (
+      b.action === "region-field" &&
+      ["ARRAYS", "SYSTEMS", "GRAPHS", "LOGIC"].includes(b.category)
+    )
+      s.bugs = Array.from({ length: 30 }, (_, i) => ({
+        bounty_id: id(2000 + i),
+        category: b.category,
+        title: `Region test bug ${i + 1}`,
+        difficulty: 10 + i * 3,
+        base_bounty: (10 + i * 3) * 10,
+        captured: false,
+        claimed: false,
+        hint_tier: 0,
+      }));
     if (
       b.action === "judge-delay" &&
       Number.isInteger(b.ms) &&
@@ -298,7 +401,10 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     }
     if (b.action === "claim") {
       const bug = s.bugs.find((x) => x.bounty_id === b.bounty);
-      if (bug) bug.claimed = true;
+      if (bug) {
+        if (s.shop) s.shop.rivalClaim(b.bounty);
+        else bug.claimed = true;
+      }
     }
     emit(s, {
       type: "INVALIDATE",
@@ -335,6 +441,13 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     });
   }
   if (p === "/api/v1/entry/activate") {
+    if (
+      !(
+        (roundKind === 2 ? roundTwoPack : roundOnePack)
+          .languages as readonly string[]
+      ).includes(b.language)
+    )
+      return deny("INVALID_CONTEXT", 400);
     s.active = true;
     s.started = Date.now();
     s.expires = s.started + 7200000;
@@ -353,6 +466,46 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       csrf_token: "synthetic-participant-csrf",
     });
   if (!s.active || s.revoked) return deny();
+  const shopPath = `/api/v1/competition/rounds/${round}/shop`;
+  if (s.shop && p === shopPath && req.method === "GET")
+    return send(s.shop.view());
+  if (
+    s.shop &&
+    (p === shopPath + "/purchases" || p === shopPath + "/activations") &&
+    req.method === "POST"
+  ) {
+    if (
+      req.headers.origin !== `http://${req.headers.host}` ||
+      req.headers["x-csrf-token"] !== "synthetic-participant-csrf"
+    )
+      return deny("CSRF_DENIED", 403);
+    try {
+      const receipt = p.endsWith("/activations")
+        ? s.shop.activate(b)
+        : s.shop.purchase(b);
+      emit(s, { type: "INVALIDATE", projection: "competition" });
+      if (s.dropNext) {
+        s.dropNext = false;
+        res.writeHead(200, {
+          "content-type": "application/json",
+          "content-length": "9999",
+        });
+        res.write('{"schema_version":1');
+        setTimeout(() => res.destroy(), 20);
+        return true;
+      }
+      return send(receipt);
+    } catch (e) {
+      return deny(e instanceof Error ? e.message : "INVALID_CONTEXT", 400);
+    }
+  }
+  if (s.shop && p.startsWith(shopPath + "/outcomes/")) {
+    const receipt = s.shop.outcome(p.split("/").at(-1)!);
+    return send({
+      status: receipt ? "OBSERVED" : "NOT_OBSERVED",
+      outcome: receipt,
+    });
+  }
   if (p === "/api/v1/participant/logout") {
     s.active = false;
     s.flow = false;
@@ -380,13 +533,15 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     });
   }
   if (p === "/api/v1/competition/history/rounds")
-    return send([{ round_id: round, kind: 1, state: session(s).round_state }]);
+    return send([
+      { round_id: round, kind: roundKind, state: session(s).round_state },
+    ]);
   const historyPath = `/api/v1/competition/rounds/${round}/history`;
   if (p === historyPath)
     return send({
       round: {
         round_id: round,
-        kind: 1,
+        kind: roundKind,
         state: session(s).round_state,
         language: s.language,
       },
@@ -415,10 +570,16 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return send({ items: s.walletEntries, next_after: null });
   if (p.startsWith(`${historyPath}/hints/`))
     return send(s.hints.get(p.split("/").at(-1)!) ?? []);
-  if(p===`/api/v1/competition/rounds/${round}/score-adjustments`)return send({items:[],next_after:null});
-  if(/\/report\/outcomes\/[^/]+$/.test(p)){
-    const value=[...s.reports.values()].find(r=>r.request_key===p.split("/").at(-1));
-    return send({status:value?"OBSERVED":"NOT_OBSERVED",receipt:value??null});
+  if (p === `/api/v1/competition/rounds/${round}/score-adjustments`)
+    return send({ items: [], next_after: null });
+  if (/\/report\/outcomes\/[^/]+$/.test(p)) {
+    const value = [...s.reports.values()].find(
+      (r) => r.request_key === p.split("/").at(-1),
+    );
+    return send({
+      status: value ? "OBSERVED" : "NOT_OBSERVED",
+      receipt: value ?? null,
+    });
   }
   const outcome = p.match(/\/outcomes\/([^/]+)$/);
   if (outcome && !p.includes("/draft/"))
@@ -434,27 +595,75 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     suffix = match[2],
     bug = s.bugs.find((x) => x.bounty_id === bounty);
   if (!bug) return deny("NOT_FOUND", 404);
-  if(suffix==="/report"){
-    if(req.method==="GET")return send({report:s.reports.get(bounty)??null});
-    const prior=s.reports.get(bounty);if(prior)return prior.request_key===b.request_key?send(prior):deny("REPORT_ALREADY_EXISTS",409);
-    const attached=b.submission_id===null?null:s.submissions.find(x=>x.submission_id===b.submission_id&&x.bounty_id===bounty);
-    if(typeof b.message!=="string"||!b.message.trim()||Buffer.byteLength(b.message)>1024||(b.submission_id!==null&&!attached))return deny("INVALID_REQUEST",400);
-    const value={id:randomUUID(),request_key:b.request_key,round_id:round,bounty_id:bounty,team_round_id:teamRound,submission_id:attached?.submission_id??null,parent_id:attached?.submission_id??null,
-      source_sha256:attached?createHash("sha256").update(attached.source).digest("hex"):null,message:b.message,recorded_at:new Date().toISOString(),title:bug.title,team_name:"Segfault Society",reporter_name:s.name,
-      language:attached?.language??null,submission_result:attached?.result??null,status:"OPEN",decision_note:null};
-    s.reports.set(bounty,value);return send(value);
+  const question = visualFixtures
+      ? undefined
+      : roundKind === 2
+        ? roundTwoQuestion(bounty)
+        : roundOnePack.questions.find((q) => q.id === bounty),
+    original = question
+      ? question.variants[s.language as RoundOneLanguage].starter_code
+      : starter[s.language],
+    publicCases = question?.cases.filter((c) => c.visibility === "SAMPLE");
+  if (!visualFixtures && !question) return deny("NOT_FOUND", 404);
+  if (suffix === "/report") {
+    if (req.method === "GET")
+      return send({ report: s.reports.get(bounty) ?? null });
+    const prior = s.reports.get(bounty);
+    if (prior)
+      return prior.request_key === b.request_key
+        ? send(prior)
+        : deny("REPORT_ALREADY_EXISTS", 409);
+    const attached =
+      b.submission_id === null
+        ? null
+        : s.submissions.find(
+            (x) =>
+              x.submission_id === b.submission_id && x.bounty_id === bounty,
+          );
+    if (
+      typeof b.message !== "string" ||
+      !b.message.trim() ||
+      Buffer.byteLength(b.message) > 1024 ||
+      (b.submission_id !== null && !attached)
+    )
+      return deny("INVALID_REQUEST", 400);
+    const value = {
+      id: randomUUID(),
+      request_key: b.request_key,
+      round_id: round,
+      bounty_id: bounty,
+      team_round_id: teamRound,
+      submission_id: attached?.submission_id ?? null,
+      parent_id: attached?.submission_id ?? null,
+      source_sha256: attached
+        ? createHash("sha256").update(attached.source).digest("hex")
+        : null,
+      message: b.message,
+      recorded_at: new Date().toISOString(),
+      title: bug.title,
+      team_name: "Segfault Society",
+      reporter_name: s.name,
+      language: attached?.language ?? null,
+      submission_result: attached?.result ?? null,
+      status: "OPEN",
+      decision_note: null,
+    };
+    s.reports.set(bounty, value);
+    return send(value);
   }
-  const writable = !s.paused && !s.closed && !bug.claimed,
+  const unavailable = bug.claimed || !!s.shop?.unavailable(bounty);
+  const writable = !s.paused && !s.closed && !unavailable,
     reason = s.closed
       ? "ROUND_NOT_WRITABLE"
       : s.paused
         ? "PAUSED"
-        : bug.claimed
+        : unavailable
           ? "BOUNTY_UNAVAILABLE"
           : null;
   if (!suffix)
     return send({
       ...bug,
+      claimed: unavailable,
       round_id: round,
       member_round_id: id(5),
       language: s.language,
@@ -473,18 +682,30 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       unfinished_runs: [...s.feedback.values()].filter(
         (f) => f.lane === "SAMPLE" && f.status !== "COMPLETED",
       ).length,
-      samples: [{ sample_number: 1, input_bytes: 4, output_bytes: 3 }],
+      samples: publicCases
+        ? publicCases.map((c, i) => ({
+            sample_number: i + 1,
+            input_bytes: Buffer.byteLength(c.input_data),
+            output_bytes: Buffer.byteLength(c.expected_output),
+          }))
+        : [{ sample_number: 1, input_bytes: 4, output_bytes: 3 }],
     });
   if (suffix === "/statement")
-    return send({ bounty_id: bounty, statement: s.statement });
+    return send({
+      bounty_id: bounty,
+      statement: s.statement ?? question!.statement,
+    });
   if (suffix === "/starter")
     return send({
       bounty_id: bounty,
       language: s.language,
-      source: starter[s.language],
+      source: original,
     });
   if (suffix === "/open") {
-    if(!bug!.captured){bug!.captured=true;emit(s,{type:"INVALIDATE",projection:"capture"},1);}
+    if (!bug!.captured) {
+      bug!.captured = true;
+      emit(s, { type: "INVALIDATE", projection: "capture" }, 1);
+    }
     return send({
       opening_id: randomUUID(),
       request_key: b.request_key,
@@ -499,7 +720,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       bounty_id: bounty,
       member_round_id: id(5),
       language: s.language,
-      source: saved?.source ?? starter[s.language],
+      source: saved?.source ?? original,
       source_kind: saved ? "DRAFT" : "STARTER",
       updated_at: saved?.updated_at ?? null,
       revision: saved?.revision ?? "0",
@@ -568,8 +789,22 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       outcome: value ?? null,
     });
   }
-  if (suffix.startsWith("/samples/"))
+  if (suffix.startsWith("/samples/")) {
+    if (publicCases) {
+      const sample = publicCases[Number(suffix.split("/")[2]) - 1];
+      if (
+        !sample ||
+        !["input", "expected_output"].includes(suffix.split("/")[3])
+      )
+        return deny("NOT_FOUND", 404);
+      return send({
+        content: suffix.endsWith("/input")
+          ? sample.input_data
+          : sample.expected_output,
+      });
+    }
     return send({ content: suffix.endsWith("input") ? "7 5\n" : "12\n" });
+  }
   if (suffix === "/hints" && req.method === "GET")
     return send(s.hints.get(bounty) ?? []);
   if (suffix === "/submissions" && req.method === "GET")
@@ -586,6 +821,28 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   if (["/runs", "/submissions", "/hints"].includes(suffix)) {
     const key = b.request_key;
     if (s.actions.has(key)) return send(s.actions.get(key));
+    if (
+      roundKind === 2 &&
+      suffix !== "/hints" &&
+      (typeof b.source !== "string" ||
+        !b.source.trim() ||
+        !b.source.isWellFormed() ||
+        Buffer.byteLength(b.source) > 131072)
+    )
+      return deny("INVALID_CONTEXT", 400);
+    if (
+      roundKind === 2 &&
+      suffix === "/submissions" &&
+      [...s.feedback.values()].some(
+        (f) =>
+          f.bounty_id === bounty &&
+          f.lane === "OFFICIAL" &&
+          f.status !== "COMPLETED",
+      )
+    )
+      return send({
+        result: { status: "REJECTED", reason: "OFFICIAL_PENDING" },
+      });
     if (!writable)
       return send({
         result: { status: "REJECTED", reason: reason ?? "UNAVAILABLE" },
@@ -599,14 +856,36 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       result: { status: "ADMITTED" },
     };
     if (suffix === "/hints") {
-      const content = [
-        "Check the arithmetic operation on the two inputs.",
-        "The output should add the inputs, not subtract them. Keep integer range in mind.",
-        "Use a 64-bit signed integer for both inputs and their sum.",
-      ][b.level - 1];
-      const price = bug.difficulty * [1, 3, 4][b.level - 1];
+      if (s.shop?.purchasingBlocked()) {
+        receipt.result = { status: "REJECTED", reason: "CREDIT_FROZEN" };
+        s.actions.set(key, receipt);
+        return send(receipt);
+      }
+      if (b.level !== bug.hint_tier + 1) {
+        receipt.result = {
+          status: "REJECTED",
+          reason: b.level <= bug.hint_tier ? "ALREADY_OWNED" : "HINT_LOCKED",
+        };
+        s.actions.set(key, receipt);
+        return send(receipt);
+      }
+      const content = question
+        ? question.hints[b.level - 1]?.content
+        : [
+            "Check the arithmetic operation on the two inputs.",
+            "The output should add the inputs, not subtract them. Keep integer range in mind.",
+            "Use a 64-bit signed integer for both inputs and their sum.",
+          ][b.level - 1];
+      if (!content) return deny("INVALID_CONTEXT", 400);
+      const price =
+        (bug.base_bounty / 10) * [1, 3, roundKind === 1 ? 4 : 8][b.level - 1];
+      if (s.wallet < price) {
+        receipt.result = { status: "REJECTED", reason: "INSUFFICIENT_FUNDS" };
+        s.actions.set(key, receipt);
+        return send(receipt);
+      }
       s.wallet -= price;
-      s.points -= price;
+      if (roundKind === 1) s.points -= price;
       s.walletEntries.push({
         id: randomUUID(),
         kind: "HINT",
@@ -626,6 +905,19 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     } else {
       const parent = randomUUID(),
         official = suffix === "/submissions";
+      const protectedAtReceipt = s.shop?.protects(bounty) ?? false,
+        receivedAt = Date.now() + s.shopOffset;
+      const tier = Math.max(
+        bug.hint_tier,
+        s.shop?.intel(bounty).assistance_tier ?? 0,
+      );
+      const shielded = official ? (s.shop?.takeShield() ?? false) : false;
+      const verdict =
+        roundKind === 2 && b.source?.includes("PREVIEW_INFRA")
+          ? "INFRA_ERROR"
+          : roundKind === 2 && b.source?.includes("PREVIEW_WRONG")
+            ? "WRONG_ANSWER"
+            : "PASSED";
       receipt.result[official ? "submission_id" : "run_id"] = parent;
       s.feedback.set(parent, {
         id: parent,
@@ -654,6 +946,13 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
           result: null,
         });
       setTimeout(() => {
+        const submission = s.submissions.find(
+          (x) => x.submission_id === parent,
+        );
+        if (submission) {
+          submission.status = "COMPLETED";
+          submission.result = verdict;
+        }
         s.feedback.set(parent, {
           id: parent,
           bounty_id: bounty,
@@ -663,33 +962,49 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
           completed_at: new Date().toISOString(),
           source: b.source,
           language: s.language,
-          result: "PASSED",
+          result: verdict,
           samples: official
             ? []
-            : [
-                {
-                  sample: 1,
+            : (publicCases ?? [{ expected_output: "12\n" }]).map(
+                (c, index) => ({
+                  sample: index + 1,
                   result: "PASSED",
-                  stdout_b64: "MTIK",
+                  stdout_b64: Buffer.from(c.expected_output).toString("base64"),
                   stderr_b64: null,
                   compiler_output_b64: null,
                   stdout_truncated: false,
                   stderr_truncated: false,
                   compiler_output_truncated: false,
-                },
-              ],
+                }),
+              ),
         });
-        if (official) {
+        if (official && verdict === "INFRA_ERROR" && shielded)
+          s.shop?.restoreShield();
+        if (official && verdict === "WRONG_ANSWER" && !shielded)
+          s.penaltyMs += 300000;
+        const rivalClaim = s.shop?.claimTime(bounty);
+        if (
+          official &&
+          verdict === "PASSED" &&
+          !bug.claimed &&
+          (protectedAtReceipt ||
+            rivalClaim === undefined ||
+            receivedAt < rivalClaim)
+        ) {
           bug.claimed = true;
           s.wallet += bug.base_bounty;
-          s.points += bug.base_bounty;
+          const points =
+            roundKind === 2
+              ? (bug.base_bounty * [10, 9, 7, 5][tier]) / 10
+              : bug.base_bounty;
+          s.points += points;
           s.walletEntries.push({
             id: randomUUID(),
             kind: "AWARD",
             title: bug.title,
             amount: bug.base_bounty,
             hint_level: null,
-            awarded_points: bug.base_bounty,
+            awarded_points: points,
             recorded_at: new Date().toISOString(),
           });
           emit(
@@ -720,7 +1035,9 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   }
   return deny("NOT_FOUND", 404);
 }
-const port = Number(process.env.INGENIUM_PREVIEW_PORT ?? 5174);
+const port = Number(
+  process.env.INGENIUM_PREVIEW_PORT ?? (roundKind === 2 ? 5176 : 5174),
+);
 if (!Number.isInteger(port) || port < 1024 || port > 65535)
   throw new Error("Invalid local preview port");
 const server = await createServer({
@@ -750,7 +1067,18 @@ const server = await createServer({
     host: "127.0.0.1",
     port,
     strictPort: true,
-    fs: { allow: [fileURLToPath(new URL("../../..", import.meta.url))] },
+    fs: {
+      allow: [fileURLToPath(new URL("../../..", import.meta.url))],
+      deny: [
+        "**/.env",
+        "**/.env.*",
+        "**/*.{crt,pem}",
+        "**/.git/**",
+        "**/content/round-1/**",
+        "**/content/round-2/**",
+        "**/test-results/**",
+      ],
+    },
   },
 });
 io = new Server(server.httpServer!, {
@@ -790,8 +1118,31 @@ io.of("/live")
     socket.on("disconnect", () => clearInterval(timer));
   });
 await server.listen();
-console.log(`Synthetic participant preview: http://127.0.0.1:${port}`);
+console.log(
+  `Synthetic Round ${roundKind} participant preview: http://127.0.0.1:${port}`,
+);
+const shopTimer =
+  roundKind === 2
+    ? setInterval(() => {
+        for (const s of states.values())
+          if (s.active && s.shop) {
+            const v = s.shop.view(),
+              key = JSON.stringify([
+                v.ghost_until,
+                v.ghost_cooldown_until,
+                v.claim,
+                v.frozen_until,
+                v.targets.map((t) => t.frozen_until),
+              ]);
+            if (s.shopLifecycle !== key) {
+              s.shopLifecycle = key;
+              emit(s, { type: "INVALIDATE", projection: "competition" });
+            }
+          }
+      }, 1000)
+    : null;
 const stop = async () => {
+  if (shopTimer) clearInterval(shopTimer);
   await io.close();
   await server.close();
 };

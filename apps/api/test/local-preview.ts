@@ -33,6 +33,8 @@ import type {
 } from "../src/content/execution-policy.js";
 import { judgeReply } from "./fixtures/judge.js";
 import { startBrowserApp } from "./integration/browser-app.js";
+import { roundOnePack } from "../../../content/round-1/load.js";
+import type { Language } from "../src/access/credentials.js";
 
 const IMAGE =
   "postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826";
@@ -46,7 +48,10 @@ const sources = {
 };
 
 // This entry point lives under test/: production startup never imports its accounts, clock or simulated driver.
-export async function startLocalPreview(port = 5175) {
+export async function startLocalPreview(
+  port = 5175,
+  contentMode: "round1" | "visual-tests" = "round1",
+) {
   assert.ok(Number.isInteger(port) && port >= 0 && port <= 65535);
   const exec = promisify(execFile),
     nonce = randomUUID(),
@@ -267,6 +272,9 @@ export async function startLocalPreview(port = 5175) {
         key,
       ]);
     }
+    const referenceOutputs = new Map<string, Buffer>();
+    const outputKey = (language: string, source: string, input: string) =>
+      JSON.stringify([language, source, input]);
     async function simulated(p: AuthoringPayload, signal: AbortSignal) {
       signal.throwIfAborted();
       const request = randomUUID();
@@ -274,7 +282,21 @@ export async function startLocalPreview(port = 5175) {
         p.sourceRole === "STARTER" ||
         p.source.toString("utf8").includes("PREVIEW_WRONG");
       return acceptJudgeReply(
-        judgeReply(p, request, Buffer.from(wrong ? "0\n" : "12\n")),
+        judgeReply(
+          p,
+          request,
+          Buffer.from(
+            wrong
+              ? "SIMULATED_WRONG\n"
+              : (referenceOutputs.get(
+                  outputKey(
+                    p.language,
+                    p.source.toString("utf8"),
+                    p.stdin.toString("utf8"),
+                  ),
+                ) ?? "12\n"),
+          ),
+        ),
         p,
         request,
         200,
@@ -358,67 +380,127 @@ export async function startLocalPreview(port = 5175) {
       });
     }
     const roundOne: string[] = [];
-    for (const [round, title, difficulty] of [
+    const fixtures = [
       [1, "Signal checksum", 35],
       [1, "Overflow alert", 80],
       [2, "Race for the checksum", 55],
       [2, "The final signal", 95],
-    ] as const) {
+    ] as const;
+    const missions =
+      contentMode === "round1"
+        ? roundOnePack.questions
+        : fixtures.map(([round_type, title, difficulty]) => ({
+            round_type,
+            title,
+            difficulty,
+            category: "LOGIC",
+            checker_mode: "EXACT_TEXT",
+            statement:
+              "A telemetry service combines two signed integers, but its program subtracts them. Fix it to print their sum.\n\nInput: two integers a and b.\nOutput: a + b followed by a newline.\n\nLocal UI demo only: Run/Submit is simulated. Add PREVIEW_WRONG to your code to preview a wrong answer.",
+            variants: Object.fromEntries(
+              LANGUAGES.map((language) => [
+                language,
+                {
+                  starter_code: sources[language].replaceAll("a + b", "a - b"),
+                  reference_solution_code: sources[language],
+                  defect_description:
+                    "Subtraction is used where addition is required.",
+                },
+              ]),
+            ),
+            cases: [
+              {
+                position: 1,
+                visibility: "SAMPLE",
+                input_data: "7 5\n",
+                expected_output: "12\n",
+              },
+              {
+                position: 2,
+                visibility: "HIDDEN",
+                input_data: "5 7\n",
+                expected_output: "12\n",
+              },
+            ],
+            hints: [
+              "Compare the required arithmetic operation with the implemented one.",
+              "The input parsing is correct; inspect the operator used for the result.",
+              "Replace subtraction with addition, keeping the input/output format unchanged.",
+            ].map((content, index) => ({ level: index + 1, content })),
+          }));
+    for (const mission of missions) {
+      const { round_type: round, title, difficulty } = mission;
+      const selectedLanguages = Object.keys(mission.variants) as Language[];
+      for (const language of selectedLanguages) {
+        const variant = (
+          mission.variants as Record<
+            string,
+            { reference_solution_code: string }
+          >
+        )[language]!;
+        for (const c of mission.cases)
+          referenceOutputs.set(
+            outputKey(language, variant.reference_solution_code, c.input_data),
+            Buffer.from(c.expected_output),
+          );
+      }
       const version = (
         await edit("CREATE", null, {
           round_type: round,
-          category: "LOGIC",
+          category: mission.category,
           title,
           difficulty,
-          checker_mode: "EXACT_TEXT",
-          statement:
-            "A telemetry service combines two signed integers, but its program subtracts them. Fix it to print their sum.\n\nInput: two integers a and b.\nOutput: a + b followed by a newline.\n\nLocal UI demo only: Run/Submit is simulated. Add PREVIEW_WRONG to your code to preview a wrong answer.",
+          reward_multiplier: "base_bounty" in mission ? mission.base_bounty / (difficulty * 10) : 1,
+          checker_mode: mission.checker_mode,
+          statement: mission.statement,
         })
       ).version_id!;
-      for (const language of LANGUAGES)
+      for (const language of selectedLanguages) {
+        const variant = (
+          mission.variants as Record<
+            string,
+            {
+              starter_code: string;
+              reference_solution_code: string;
+              defect_description: string;
+            }
+          >
+        )[language]!;
         await edit("VARIANT", version, {
           language,
-          starter_code: sources[language].replaceAll("a + b", "a - b"),
-          reference_solution_code: sources[language],
-          defect_description: "Subtraction is used where addition is required.",
+          starter_code: variant.starter_code,
+          reference_solution_code: variant.reference_solution_code,
+          defect_description: variant.defect_description,
           runtime_key: runtimes.get(language)!.key,
           cpu_time_limit_ms: 2000,
           wall_time_limit_ms: 10000,
           memory_limit_kb: 524288,
         });
-      await edit("CASE", version, {
-        case_id: null,
-        position: 1,
-        visibility: "SAMPLE",
-        input_data: "7 5\n",
-        expected_output: "12\n",
-      });
-      const hidden = (
-        await edit("CASE", version, {
-          case_id: null,
-          position: 2,
-          visibility: "HIDDEN",
-          input_data: "5 7\n",
-          expected_output: "12\n",
-        })
-      ).case_id!;
-      for (const [index, text] of [
-        "Compare the required arithmetic operation with the implemented one.",
-        "The input parsing is correct; inspect the operator used for the result.",
-        "Replace subtraction with addition, keeping the input/output format unchanged.",
-      ].entries())
-        await edit("HINT", version, { level: index + 1, content: text });
-      for (const language of LANGUAGES)
+      }
+      let hidden: string | undefined;
+      const caseIds = new Map<number, string>();
+      for (const c of mission.cases) {
+        const result = await edit("CASE", version, { case_id: null, ...c });
+        caseIds.set(c.position, result.case_id!);
+        if (c.visibility === "HIDDEN" && !hidden) hidden = result.case_id!;
+      }
+      assert.ok(hidden);
+      for (const hint of mission.hints) await edit("HINT", version, hint);
+      for (const language of selectedLanguages) {
+        const position = (
+          mission.variants as Record<string, { witness_case_position?: number }>
+        )[language]!.witness_case_position;
         await edit("WITNESSES", version, {
           language,
           witnesses: [
             {
               check_type: "TEST_CASE",
-              test_case_id: hidden,
+              test_case_id: position ? caseIds.get(position)! : hidden,
               expected_failure: "WRONG_OUTPUT",
             },
           ],
         });
+      }
       const revision = (
         await owner.query(
           "SELECT content_revision FROM bug_versions WHERE id=$1",

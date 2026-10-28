@@ -33,7 +33,7 @@ test(
         .filter(Boolean)
         .sort();
     const before = await inventory();
-    const preview = await startLocalPreview(0);
+    const preview = await startLocalPreview(0, "visual-tests");
     let browser: Browser | undefined;
     const errors: string[] = [];
     const failedRequests: string[] = [];
@@ -102,6 +102,7 @@ test(
 
       await participant.locator("[data-map-bounty]").first().focus();
       await participant.locator("[data-map-bounty]").first().press("Enter");
+      await participant.getByRole("button", {name:"Open question",exact:true}).click();
       await participant
         .getByRole("button", { name: "Plain text", exact: true })
         .click();

@@ -27,6 +27,7 @@ import type {
 } from "./staff-types";
 import { Brand, IconButton, Modal } from "./ui";
 import StaffAccess from "./StaffAccess";
+import StandingName from "./StandingName";
 import StaffContent from "./StaffContent";
 import StaffTeams from "./StaffTeams";
 import StaffDiscipline from "./StaffDiscipline";
@@ -1060,7 +1061,7 @@ export default function StaffConsole({
         <section className="staff-section">
           <div className="staff-section-heading">
             <h2>Published bugs / Round {round?.kind ?? 1}</h2>
-            <strong>{draft?.snapshots.length ?? 0} / 50 selected</strong>
+            <strong>{draft?.snapshots.length ?? 0} / {round?.kind === 2 ? 100 : 50} selected</strong>
             <button
               disabled={
                 locked ||
@@ -1113,7 +1114,7 @@ export default function StaffConsole({
                             !manager ||
                             !editable ||
                             family ||
-                            (!chosen && (draft?.snapshots.length ?? 0) >= 50)
+                            (!chosen && (draft?.snapshots.length ?? 0) >= (round?.kind === 2 ? 100 : 50))
                           }
                           onChange={(e) =>
                             edit({
@@ -1223,7 +1224,9 @@ export default function StaffConsole({
                   {view?.standings.map((s) => (
                     <tr key={s.team_round_id}>
                       <td>{s.rank ?? "--"}</td>
-                      <td>{s.team_name}</td>
+                      <td>
+                        <StandingName name={s.team_name} overdrive={s.overdrive} />
+                      </td>
                       <td>{s.points}</td>
                       <td>{timeText(s.effective_time_ms)}</td>
                     </tr>

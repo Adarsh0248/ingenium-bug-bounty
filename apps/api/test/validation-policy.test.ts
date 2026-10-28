@@ -16,6 +16,21 @@ function fixture(): ValidationCapture {
 }
 const codes = (capture:ValidationCapture) => planValidation(capture).issues.map(i => i.code);
 
+test("four-language event packs retain all reference and starter evidence gates", () => {
+  const capture=fixture();
+  capture.variants=capture.variants.filter(v=>v.language!=="javascript");
+  capture.witnesses=capture.witnesses.filter(w=>capture.variants.some(v=>v.id===w.variant_id));
+  const plan=planValidation(capture);
+  assert.deepEqual(plan.issues,[]);
+  assert.equal(plan.checks.length,12);
+  const checks=plan.checks.map(c=>({...c,id:randomUUID()}));
+  const results=new Map(checks.map(c=>[c.id,c.expected_result]));
+  assert.equal(aggregateValidation(checks,results).status,"PASSED");
+  assert.throws(()=>aggregateValidation(checks.filter(c=>c.language!=="python"),results));
+  capture.variants=capture.variants.filter(v=>v.language!=="python");
+  assert.ok(codes(capture).includes("LANGUAGE_REQUIRED"));
+});
+
 test("validation plans include all five references against every case and every declared starter witness", () => {
   const capture = fixture();
   capture.witnesses.push({ ...capture.witnesses[0]!,position:2,test_case_id:capture.cases[0]!.id,expected_failure:"RUNTIME_ERROR" });
@@ -34,7 +49,7 @@ test("validation preflight returns only bounded field identifiers, not private s
   assert.deepEqual(result.checks,[]); assert.doesNotMatch(JSON.stringify(result),/Synthetic private defect|Synthetic hint/);
 });
 test("preflight rejects missing language/hints/suite halves and unsupported interpreter compile witnesses", () => {
-  const capture=fixture(); capture.variants.pop(); capture.hints.pop(); capture.cases[0]!.visibility="HIDDEN";
+  const capture=fixture(); capture.variants.splice(2,1); capture.hints.pop(); capture.cases[0]!.visibility="HIDDEN";
   capture.witnesses[3]={ ...capture.witnesses[3]!,check_type:"COMPILATION",test_case_id:null,expected_failure:"COMPILATION_ERROR" };
   const issues=codes(capture); for (const code of ["LANGUAGE_SET_INCOMPLETE","LANGUAGE_REQUIRED","HINT_REQUIRED","HINT_SET_INVALID","SAMPLE_REQUIRED","WITNESS_INVALID"]) assert.ok(issues.includes(code),code);
   capture.version.publication_status="PUBLISHED"; assert.ok(codes(capture).includes("CONTENT_LOCKED"));

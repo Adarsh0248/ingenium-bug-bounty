@@ -50,7 +50,7 @@ export const bounties = pgTable("bounties", {
   id: uuid("id").primaryKey(), roundId: uuid("round_id").notNull().references(() => rounds.id), definitionId: uuid("definition_id").notNull().references(() => bugDefinitions.id),
   snapshotId: uuid("snapshot_id").notNull().references(() => competitionPublications.snapshotId), position: integer("position").notNull(),
 }, t => [unique("bounty_round_definition").on(t.roundId, t.definitionId), unique("bounty_round_position").on(t.roundId, t.position),
-  unique("bounty_round_scope").on(t.id, t.roundId), check("bounty_position", sql`${t.position} between 1 and 50`)]);
+  unique("bounty_round_scope").on(t.id, t.roundId), check("bounty_position", sql`${t.position} between 1 and 100`)]);
 export const competitionPauses = pgTable("competition_pauses", {
   id: uuid("id").primaryKey(), roundId: uuid("round_id").notNull().references(() => rounds.id), scope: text("scope").notNull(),
   teamRoundId: uuid("team_round_id").references(() => teamRounds.id), memberRoundId: uuid("member_round_id").references(() => memberRounds.id),
@@ -87,7 +87,7 @@ export const bountyAwards = pgTable("bounty_awards", {
   roundKind: integer("round_kind").notNull(), baseBounty: integer("base_bounty").notNull(), points: integer("points").notNull(), recordedAt: instant("recorded_at").notNull(),
 }, t => [unique("competition_award_team_bounty").on(t.teamRoundId, t.bountyId), unique("competition_award_submission").on(t.submissionId),
   uniqueIndex("competition_shared_winner").on(t.bountyId).where(sql`${t.roundKind}=2`),
-  check("competition_award_shape", sql`${t.roundKind} in (1,2) and ${t.baseBounty} between 10 and 1000 and ${t.points} between 5 and 1000`)]);
+  check("competition_award_shape", sql`(${t.roundKind}=1 and ${t.baseBounty} between 10 and 5000 and ${t.points}=${t.baseBounty}) or (${t.roundKind}=2 and ${t.baseBounty} between 10 and 1000 and ${t.points} between 5 and 1000)`)]);
 export const wrongSubmissionPenalties = pgTable("wrong_submission_penalties", {
   submissionId: uuid("submission_id").primaryKey().references(() => competitionAssessments.submissionId),
   teamRoundId: uuid("team_round_id").notNull().references(() => teamRounds.id), milliseconds: integer("milliseconds").notNull().default(300000), recordedAt: instant("recorded_at").notNull(),
@@ -95,7 +95,7 @@ export const wrongSubmissionPenalties = pgTable("wrong_submission_penalties", {
 export const hintPurchases = pgTable("hint_purchases", {
   id: uuid("id").primaryKey(), teamRoundId: uuid("team_round_id").notNull().references(() => teamRounds.id), bountyId: uuid("bounty_id").notNull().references(() => bounties.id),
   level: integer("level").notNull(), price: integer("price").notNull(), sourceId: uuid("source_id").notNull().references(() => competitionOutcomes.id), recordedAt: instant("recorded_at").notNull(),
-}, t => [unique("competition_hint_owned").on(t.teamRoundId, t.bountyId, t.level), check("competition_hint_shape", sql`${t.level} between 1 and 3 and ${t.price} between 1 and 800`)]);
+}, t => [unique("competition_hint_owned").on(t.teamRoundId, t.bountyId, t.level), check("competition_hint_shape", sql`${t.level} between 1 and 3 and ${t.price} between 1 and 2000`)]);
 export const roundResults = pgTable("round_results", {
   id: uuid("id").primaryKey(), roundId: uuid("round_id").notNull().references(() => rounds.id), version: integer("version").notNull().default(1),
   standings: jsonb("standings").notNull(), digest: bytes("digest").notNull(), configDigest: bytes("config_digest").notNull(), finalisedAt: instant("finalised_at").notNull(),
@@ -109,13 +109,13 @@ export const qualificationDecisions = pgTable("qualification_decisions", {
 export const roundCarryovers = pgTable("round_carryovers", {
   teamRoundId: uuid("team_round_id").primaryKey().references(() => teamRounds.id), resultId: uuid("result_id").notNull().references(() => qualificationDecisions.resultId),
   sourceTeamRoundId: uuid("source_team_round_id").notNull().references(() => teamRounds.id), amount: integer("amount").notNull(),
-}, t => [unique("competition_carryover_once").on(t.resultId, t.sourceTeamRoundId), check("competition_carryover_amount", sql`${t.amount} between 0 and 40000`)]);
+}, t => [unique("competition_carryover_once").on(t.resultId, t.sourceTeamRoundId), check("competition_carryover_amount", sql`${t.amount} between 0 and 250000`)]);
 export const walletEntries = pgTable("wallet_entries", {
   id: uuid("id").primaryKey(), teamRoundId: uuid("team_round_id").notNull().references(() => teamRounds.id), amount: integer("amount").notNull(),
   awardId: uuid("award_id").references(() => bountyAwards.id), purchaseId: uuid("purchase_id").references(() => hintPurchases.id), carryoverId: uuid("carryover_id").references(() => roundCarryovers.teamRoundId),
   recordedAt: instant("recorded_at").notNull(),
 }, t => [unique("wallet_award_once").on(t.awardId), unique("wallet_hint_once").on(t.purchaseId), unique("wallet_opening_once").on(t.carryoverId),
-  check("wallet_entry_source", sql`num_nonnulls(${t.awardId},${t.purchaseId},${t.carryoverId})=1 and ${t.amount}<>0 and ${t.amount} between -800 and 40000`)]);
+  check("wallet_entry_source", sql`num_nonnulls(${t.awardId},${t.purchaseId},${t.carryoverId})=1 and ${t.amount}<>0 and ${t.amount} between -2000 and 250000`)]);
 export const competitionEvents = pgTable("competition_events", {
   sequence: bigint("sequence", { mode: "bigint" }).primaryKey().generatedAlwaysAsIdentity(), roundId: uuid("round_id").notNull().references(() => rounds.id),
   teamRoundId: uuid("team_round_id").references(() => teamRounds.id), kind: text("kind").notNull(), referenceId: uuid("reference_id").notNull(), createdAt: instant("created_at").notNull(),

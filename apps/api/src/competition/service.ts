@@ -44,7 +44,7 @@ function staffPayload(input: CompetitionCommand) {
     exact(p, ["arena_id", "cancellation_id"]);
     return { arena_id: uuid(p.arena_id), cancellation_id: uuid(p.cancellation_id) };
   }
-  if (input.action === "CONFIGURE") { exact(p, ["snapshots"]); return { snapshots: identifiers(p.snapshots, 50) }; }
+  if (input.action === "CONFIGURE") { exact(p, ["snapshots"]); return { snapshots: identifiers(p.snapshots, 100) }; }
   if (input.action === "SETUP_R2") {
     exact(p, ["teams", "duration_ms"]);
     if (!Number.isSafeInteger(p.duration_ms) || (p.duration_ms as number) < 1 || (p.duration_ms as number) > 18000000) throw new AccessError("INVALID_CONTEXT");
@@ -175,6 +175,10 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
         const now = await decisionTime(client, clock, [input.roundId]), actor = await staff.authorize(client, cookie, now);
         if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
         if (sensitive) await confirmStaffCode(client, actor, input.ownCode);
+        if (input.action === "CONFIGURE") {
+          const round = await first<{ kind: number }>(client, "SELECT kind FROM rounds WHERE id=$1", [input.roundId]);
+          if ((p.snapshots as string[]).length > (round?.kind === 2 ? 100 : 50)) throw new AccessError("INVALID_CONTEXT");
+        }
         // Recover the original generated draw payload before generating any new randomness.
         const prior = await first<{ action: string; fingerprint: Buffer; result: unknown }>(client,
           "SELECT action,fingerprint,result FROM competition_outcomes WHERE round_id=$1 AND actor_id=$2 AND request_key=$3", [input.roundId, actor.staff_id, input.requestKey]);

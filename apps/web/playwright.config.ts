@@ -20,6 +20,10 @@ export default defineConfig({
     },
   },
   webServer: {
+    env: {
+      INGENIUM_PREVIEW_FIXTURES:
+        process.env.INGENIUM_PREVIEW_FIXTURES ?? "visual-tests",
+    },
     command: "npm run preview:participant",
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

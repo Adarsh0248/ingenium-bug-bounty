@@ -28,6 +28,7 @@ import { label, languages } from "./types";
 import { TextField, contentTextError } from "./content-fields";
 import { IconButton, Modal } from "./ui";
 import ContentValidation from "./ContentValidation";
+import ProblemText from "./ProblemText";
 
 type Section =
   "METADATA" | "VARIANT" | "CASE" | "HINT" | "WITNESSES" | "REVIEW";
@@ -43,6 +44,7 @@ const metadata = (v?: ContentDetail) => ({
   title: v?.title ?? "",
   statement: v?.statement ?? "",
   difficulty: v?.difficulty ?? 50,
+  reward_multiplier: v ? v.base_bounty / (v.difficulty * 10) : 5,
   category: v?.category ?? "ARRAYS",
   checker_mode: v?.checker_mode ?? "TOKENS",
 });
@@ -608,7 +610,7 @@ export default function StaffContent({
                 <dt>Checker</dt>
                 <dd>{label(detail.checker_mode)}</dd>
               </dl>
-              <pre>{detail.statement || "No statement"}</pre>
+              <ProblemText text={detail.statement || "No statement"} />
               <button
                 disabled={
                   locked || readOnly || validationBlocked || !detail.category
@@ -979,7 +981,11 @@ export default function StaffContent({
                       aria-label="Round"
                       value={p!.round_type}
                       onChange={(e) =>
-                        update({ round_type: Number(e.target.value) })
+                        update({
+                          round_type: Number(e.target.value),
+                          reward_multiplier:
+                            Number(e.target.value) === 1 ? 5 : 1,
+                        })
                       }
                     >
                       <option value={1}>Round 1</option>
@@ -1030,7 +1036,9 @@ export default function StaffContent({
                     </option>
                   </select>
                 </label>
-                <output>Bounty: {p!.difficulty * 10}</output>
+                <output>
+                  Bounty: {p!.difficulty * 10 * p!.reward_multiplier}
+                </output>
                 <label>
                   Checker
                   <select

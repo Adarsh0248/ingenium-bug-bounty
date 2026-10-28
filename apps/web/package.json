@@ -10,7 +10,8 @@
     "test": "node --import tsx --test test/*.test.ts",
     "test:browser": "playwright test",
     "test:bundle": "node --test test/bundle.check.mjs",
-    "preview:participant": "node --import tsx test/preview-server.ts"
+    "preview:participant": "node --import tsx test/preview-server.ts",
+    "preview:round2": "node --import tsx test/preview-server.ts --round2"
   },
   "dependencies": {
     "@react-three/fiber": "9.8.2",

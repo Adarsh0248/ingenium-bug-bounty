@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { syncRoamers, stepSwarm } from "../src/bug-swarm";
+import { syncRoamers, stepSwarm, closestRoamer } from "../src/bug-swarm";
 import type { Roamer, RoamerSpec } from "../src/bug-swarm";
 import { bugSpecies, bugAppearance } from "../src/bug-art";
 import { mapBounds, mapExtent, regionTarget } from "../src/region-map";
@@ -157,6 +157,72 @@ test("thirty actual creature footprints also fit compact screens in each region"
     for (let step = 0; step < 100; step++) {
       stepSwarm(actors, 0.05, smallWorld);
       clear(actors);
+    }
+  }
+});
+test("transparent drawing rectangles do not steal selection from a neighbouring body", () => {
+  const memory = new Map<string, Roamer>();
+  syncRoamers(memory, [spec("a", 800, 800), spec("b", 950, 800)], world);
+  const a = memory.get("a")!,
+    b = memory.get("b")!;
+  assert.equal(closestRoamer({ x: a.x, y: a.y }, memory.values(), "neon"), "a");
+  assert.equal(closestRoamer({ x: b.x, y: b.y }, memory.values(), "neon"), "b");
+  assert.equal(
+    closestRoamer({ x: 10, y: 10 }, memory.values(), "neon"),
+    undefined,
+  );
+  assert.equal(
+    closestRoamer({ x: a.x, y: a.y }, memory.values(), "foundry"),
+    undefined,
+  );
+});
+
+test("indexed avoidance finds the same opposing pair as exhaustive neighbours at low and high speed", () => {
+  const large = { width: 20000, height: 20000 };
+  for (const speed of [0, 220]) {
+    const memory = new Map<string, Roamer>();
+    syncRoamers(
+      memory,
+      Array.from({ length: 39 }, (_, i) =>
+        spec(
+          String(i),
+          i === 1 ? 1250 : 1000 + (i % 7) * 2200,
+          1000 + Math.floor(i / 7) * 2200,
+          i,
+        ),
+      ),
+      large,
+    );
+    const brute = [...memory.values()];
+    brute[0].heading = travelHeading(1, 0);
+    brute[0].goalX = 3000;
+    brute[0].goalY = 1000;
+    brute[1].heading = travelHeading(-1, 0);
+    brute[1].goalX = 400;
+    brute[1].goalY = 1000;
+    for (const a of brute) {
+      a.held = Number(a.id) > 1;
+      a.velocity = speed;
+      a.vx = -Math.sin(a.heading) * speed;
+      a.vy = -Math.cos(a.heading) * speed;
+    }
+    const indexed = structuredClone(brute);
+    indexed.push({
+      ...indexed[0],
+      id: "far-away",
+      x: 19000,
+      y: 19000,
+      held: true,
+    });
+    for (let tick = 0; tick < 100; tick++) {
+      stepSwarm(brute, 0.05, large, "3");
+      stepSwarm(indexed, 0.05, large, "3");
+      brute.forEach((a, i) =>
+        assert.ok(
+          Math.hypot(a.x - indexed[i].x, a.y - indexed[i].y) < 1e-7,
+          `missed neighbour for ${a.id} at speed ${speed}`,
+        ),
+      );
     }
   }
 });

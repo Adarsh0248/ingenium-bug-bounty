@@ -1,5 +1,14 @@
 # Participant Interface
 
+Round 2 now uses a separate **Kernel Breach** Canvas 2D arena: one fixed-scale
+4096x2560 world with pan-only exploration, cached scenery and eight cyber-entity
+families. Its local preview contains 100 practice targets. Bug tools are bought
+into inventory and activated from the question page, without charging twice.
+See [Round 2 design and implementation scope](round-2-arena-design.md) and
+[the shop startup guide](round-2-items.md#review-the-local-shop). Round 1 retains
+the four-area interface described below. Production item enforcement remains
+pending; the isolated preview simulates judging and rivals.
+
 The first connected participant interface lives in `apps/web`. It includes common
 code entry, the registered member/language step, session restoration and browser
 replacement, the restored four-area pixel arena with separate region navigation, live/minimisable HUD, keyboard target
@@ -59,10 +68,13 @@ code. It never connects to the project database or judge and is not imported by
 the production build. Restarting it clears its synthetic state. Do not use real
 team codes or sensitive source in this preview.
 
-The default demo has **40 dummy bugs: ten in each region**. Every region includes
-all six creature families and Common, Rare, Elite and Apex bounties. Foundry also
-includes small unarmed scouts, pulse cannons and heavy siege bots. Questions use
-the same dummy addition exercise; these are visual-review fixtures, not event content.
+The default preview now has **50 authored Protocol Rebellion questions** with
+four language variants: C, C++, Java and Python. They are split 13/13/12/12 across
+Neon District, Silicon Hive, Verdant Nexus and Zero-Day Core. Each question has
+its own statement, faulty starter, two public samples and three progressive hints.
+See the [private question catalogue](../content/round-1/README.md).
+Judging in this preview remains simulated. The old 40-bug high-bounty setup is
+used only by isolated graphics regressions, with `INGENIUM_PREVIEW_FIXTURES=visual-tests`.
 
 Each confirmed entry starts a fresh two-hour synthetic round and session window,
 independent of when the preview server was launched. If the demo timer has run
@@ -107,6 +119,12 @@ worker policy; HTTP transport/frame/backup/runtime installation gates remain.
 - Draft revision conflicts require review. Pauses and claims retain code. New
   gameplay is disabled while live state is stale; no offline Run/Submit is queued.
   Run/Submit captures the actual current editor source, not a previous autosave.
+- **Reset code** loads the original buggy starter for the open question and the
+  enrolled language. A confirmation warns before replacing any edits; Cancel or
+  Escape keeps the current code. Confirming uses the same private draft save and
+  recovery flow as normal editing. Reset is unavailable while read-only, offline,
+  saving or resolving a draft conflict/unknown save outcome. Failed starter reads
+  preserve the draft; submitted answers, hints and scoring are not reset.
 - Unknown action replies retain the original key and payload across target
   navigation. Outcome recovery is GET-only, with no automatic new POST. A known
   domain refusal is distinct from transport uncertainty.
@@ -169,6 +187,38 @@ Regions mix six creature types, with independent destinations across the whole r
 
 The world overview now contains scenery-only navigation tiles: click anywhere on a tile to enter its full area, with no capture or question opening on the miniature. Bugs use shared size-aware steering and keep their positions and animation memory across region changes. See [bug movement and navigation](bug-movement.md) for collision behaviour and memory scope.
 
+Acknowledged awards trigger one of four [regional weapon sequences](regional-weapons.md) after the workbench closes: Vector Lance, Polarity Crusher, Graph Reaper or Nullpoint Cannon. Deployment, charge, target reaction and retraction take roughly six seconds. Reduced motion uses a compact confirmation instead. The visual sequence does not change award or judging authority.
+
+Fresh awards also show a two-second [Tecnoesis coin reward](bounty-coins.md) as soon as they are confirmed, with a single coin, pile, stack or heap according to the earned wallet bounty. This popup can appear over the workbench; the weapon continues to wait for exit.
+
+Unsolved entries in the left list now [locate the bug and show its information card](bug-inspection.md), including an authenticated statement preview. The bug pauses until the card closes. Opening the question is a separate action on the card or the creature; solved entries retain their direct review shortcut.
+
 Ground creatures turn to face their path before moving. Jointed legs use a distance-driven planted-foot gait, while crawlers contract along their forward axis. Wing flapping is independent of leg motion. Hover and motion controls freeze the current pose.
 
 Neon District's background is a dynamic 2D runtime/circuit world: memory banks, code traces, processor blocks and moving data packets in cyan, pink and violet. It uses directly drawn geometry rather than a city backdrop image. The existing fixed-scale panning and motion controls apply to this scenery.
+
+Round 2's [Kernel Breach](round-2-arena-design.md) uses one larger pan-only
+mainframe arena with eight armoured creature families. Detailed floor panels,
+cables, sockets and distinct processor/memory/firewall modules are cached;
+packets and core rings animate above them. Creature positions interpolate between
+fixed steering updates, most bodies reuse articulated pose sheets, and crawler
+segments follow their travelled path. Presentation, collision avoidance, cards,
+shop access and the deferred finisher retain the existing competition rules.
+Desktop throttling checks are local regression evidence; actual old-laptop
+smoothness and production multi-team capacity still need verification.
+
+The left question list supports title/topic search, multiple public topic tags,
+availability/capture filters and numeric difficulty sorting in either direction.
+Question numbers keep their original map identity after sorting. These controls
+filter the list without removing creatures from the map. Clear filters & sort
+restores the full list and its original order; filters stay selected while the
+participant opens and closes the workbench.
+
+A compact collapsible leaderboard on the right shows up to five ranked team
+names, followed by the participant team's actual rank and name in a pinned row
+(including when that team is already in the top five). It uses the existing live
+standings, marks reconnecting data as last verified, and shows no competitive
+ranking for a cancelled round. Full leaderboard opens the existing detailed
+standings dialog. Phone entry starts collapsed; the compact header retains the
+team's rank. The local demo shows the teams actually supplied by its fixture,
+without inventing additional ranked teams to fill five rows.

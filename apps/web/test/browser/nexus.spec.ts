@@ -103,6 +103,9 @@ test("Nexus has a living graph, six cached cyber-anomalies, visible dummy questi
   await expect(pulse).toHaveCSS("animation-play-state", "paused");
   const target = page.locator("button.target[data-region=verdant]").last();
   await target.click();
+  await page
+    .getByRole("button", { name: "Open question", exact: true })
+    .click();
   await expect(page.locator(".statement")).toContainText("Repair the program");
   await page
     .getByRole("button", { name: "Close workbench", exact: true })
@@ -172,7 +175,9 @@ test("Nexus parts and signal footprints articulate, freeze on pause and hover, a
     "SKITTER",
     "WALK",
   ]);
-  expect(animated.before.every((s: { legs: number }) => s.legs === 0)).toBe(true);
+  expect(animated.before.every((s: { legs: number }) => s.legs === 0)).toBe(
+    true,
+  );
   for (const s of animated.before)
     expect(s.count).toBe(
       (

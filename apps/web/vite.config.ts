@@ -34,7 +34,18 @@ export default defineConfig(({ command }) => ({
         changeOrigin: false,
       },
     },
-    fs: { allow: ["../.."] },
+    fs: {
+      allow: ["../.."],
+      deny: [
+        "**/.env",
+        "**/.env.*",
+        "**/*.{crt,pem}",
+        "**/.git/**",
+        "**/content/round-1/**",
+        "**/content/round-2/**",
+        "**/test-results/**",
+      ],
+    },
   },
   build: { target: "es2024", sourcemap: false },
 }));

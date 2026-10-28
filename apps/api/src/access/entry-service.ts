@@ -240,6 +240,7 @@ export function createEntryService(pool: Pool, clock: ClockGuard, delivery: Sess
         if (!flow || !sameVerifier(flow.proof_verifier, proof.verifier)) throw new AccessError("INVALID_FLOW");
         const member = flow?.round_id ? await first<Member>(client, "SELECT * FROM member_rounds WHERE round_id=$1 AND team_id=$2 AND member_id=$3", [flow.round_id, flow.team_id, input.memberId]) : undefined;
         if (!member) throw new AccessError("ROUND_OR_MEMBER_UNAVAILABLE");
+        if (member.language === null && input.language === "javascript") throw new AccessError("INVALID_CONTEXT");
         const old = await first<{ round_id: string }>(client, "SELECT s.round_id FROM member_session_slots slot JOIN participant_sessions s ON s.id=slot.session_id WHERE slot.member_id=$1", [input.memberId]);
         const roundIds = [...(flow.round_id ? [flow.round_id] : []), ...(old ? [old.round_id] : []), ...await memberHandoffRounds(client, input.memberId)];
         await lockedRounds(client, roundIds);

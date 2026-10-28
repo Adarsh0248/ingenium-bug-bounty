@@ -163,7 +163,11 @@ export default function Entry({
         <h1>
           HUNT THE<span>GLITCH.</span>
         </h1>
-        <p className="entry-intro">The city has a bug problem.<br />You're the fix.</p>
+        <p className="entry-intro">
+          The city has a bug problem.
+          <br />
+          You're the fix.
+        </p>
         <div className="entry-form">
           {state.step === "CODE" && (
             <form
@@ -243,11 +247,13 @@ export default function Entry({
                     value={language}
                     onChange={(e) => setLanguage(e.target.value as Language)}
                   >
-                    {Object.entries(languages).map(([key, name]) => (
-                      <option key={key} value={key}>
-                        {name}
-                      </option>
-                    ))}
+                    {Object.entries(languages)
+                      .filter(([key]) => key !== "javascript")
+                      .map(([key, name]) => (
+                        <option key={key} value={key}>
+                          {name}
+                        </option>
+                      ))}
                   </select>
                   <span className="field-note">
                     <LockKeyhole size={13} /> Locked for this round
