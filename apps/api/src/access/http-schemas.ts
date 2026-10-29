@@ -145,6 +145,8 @@ export const arenaCurrentData = object({ control_revision: revision, instance: {
   round: { anyOf: [object({ round_id: id, kind: { type: "integer", const: 1 }, state: sessionSchema.properties.round_state,
     duration_ms: duration, configuration_revision: revision, teams: { type: "array", maxItems: 100, items: arenaTeam }, can_start: { type: "boolean", const: false } }), { type: "null" }] } });
 export const contentCommandBody = object({ request_key: id, expected_revision: revision, reason, payload: { type: "object" } });
+export const contentImportBody = object({ question: { type: "object", maxProperties: 10 } });
+export const contentListQuery = object({ after: id, round_type: { type: "string", enum: ["1", "2"] } }, []);
 export const contentDefinitionParams = object({ definition_id: id });
 export const contentVersionParams = object({ version_id: id });
 export const contentOperationParams = object({ version_id: id, operation: { type: "string", enum: ACTIONS.filter(a => a !== "CREATE" && a !== "NEW_VERSION") } });
@@ -156,11 +158,13 @@ export const contentReceipt = object({ outcome_id: id, action: { type: "string",
 export const contentOutcomeParams = object({ action: { type: "string", enum: ACTIONS }, target: { anyOf: [id, { type: "string", const: "catalogue" }] }, request_key: id });
 export const contentOutcomeData = object({ status: { type: "string", enum: ["OBSERVED", "NOT_OBSERVED"] }, outcome: { anyOf: [contentReceipt, { type: "null" }] } });
 const contentProperties = { category: { anyOf: [{type:"string",enum:["ARRAYS","GRAPHS","SYSTEMS","LOGIC"]},{type:"null"}] }, version_id: id, definition_id: id, version_number: { type: "integer", minimum: 1, maximum: 1000 },
-  title: { type: "string", maxLength: 160 }, difficulty: { type: "integer", minimum: 1, maximum: 100 }, base_bounty: { type: "integer", minimum: 10, maximum: 1000 },
+  title: { type: "string", maxLength: 160 }, difficulty: { type: "integer", minimum: 1, maximum: 100 }, base_bounty: { type: "integer", minimum: 10, maximum: 5000 },
   publication_status: { type: "string", enum: ["DRAFT", "PUBLISHED"] }, content_revision: revision, round_type: { type: "integer", enum: [1, 2] }, definition_revision: revision };
 const lang = { type: "string", enum: LANGUAGES }, byteCount = { type: "integer", minimum: 0, maximum: 1048576 }, level = { type: "integer", minimum: 1, maximum: 3 };
 const nullableRuntime = { anyOf: [{ type: "string", maxLength: 64 }, { type: "null" }] };
-export const contentListData = object({ control_revision: revision, catalogue_bytes: revision, items: { type: "array", maxItems: 50, items: object(contentProperties) }, next_after: nullableId });
+export const contentListData = object({ control_revision: revision, catalogue_bytes: revision,
+  round_counts: object({ round_1: { type: "integer", minimum: 0 }, round_2: { type: "integer", minimum: 0 } }),
+  items: { type: "array", maxItems: 50, items: object(contentProperties) }, next_after: nullableId });
 export const contentDescribeData = object({ ...contentProperties, statement: { type: "string", maxLength: 65536 }, submission_format: { type: "string", const: "FULL_PROGRAM" },
   checker_mode: { type: "string", enum: ["TOKENS", "EXACT_TEXT"] }, checker_version: { type: "string", const: "ingenium-text-v1" }, can_publish: { type: "boolean", const: false },
   variants: { type: "array", maxItems: 5, items: object({ language: lang, runtime_key: nullableRuntime, starter_bytes: byteCount, reference_bytes: byteCount }) },

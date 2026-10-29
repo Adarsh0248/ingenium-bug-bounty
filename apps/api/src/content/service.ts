@@ -9,6 +9,7 @@ import { AccessError, accessTransaction, decisionTime, first } from "../access/t
 import type { ClockGuard } from "../access/transaction.js";
 import { ACTIONS, prepareContent } from "./policy.js";
 import type { ContentAction } from "./policy.js";
+import { prepareQuestionImport } from "./question-import.js";
 
 export interface ContentCommand { action: ContentAction; targetId: string | null; requestKey: string; expectedRevision: string; reason: string; payload: unknown; }
 interface Version { id: string; definition_id: string; content_revision: string; publication_status: string; }
@@ -45,58 +46,62 @@ export function createContentService(pool: Pool, clock: ClockGuard, delivery: Se
     if (!row) throw new AccessError("CONTENT_UNAVAILABLE");
     return row;
   }
+  function commandWork(cookie: unknown, input: ContentCommand) {
+    if (!ACTIONS.includes(input.action) || (input.action === "CREATE") !== (input.targetId === null)) throw new AccessError("INVALID_CONTEXT");
+    identifier(input.requestKey); if (input.targetId) identifier(input.targetId);
+    staffRevision(input.expectedRevision); boundedStaffText(input.reason, 1024);
+    const payload = prepareContent(input.action, input.payload), payloadText = JSON.stringify(payload), digest = sha256(payloadText);
+    const fingerprint = commandFingerprint(["CONTENT", input.action, input.targetId, input.expectedRevision, input.reason, digest.toString("hex")]);
+    return async (client: PoolClient) => {
+      const gate = await first<{ revision: string }>(client, "SELECT revision FROM lock_catalogue()");
+      if (!gate) throw new AccessError("SECURITY_UNAVAILABLE");
+      const now = await decisionTime(client, clock), actor = await principal(client, cookie, now);
+      const definitionId = input.action === "NEW_VERSION" ? input.targetId : null;
+      const versionId = input.action !== "CREATE" && input.action !== "NEW_VERSION" ? input.targetId : null;
+      const prior = await first<Receipt>(client, `SELECT * FROM content_outcomes WHERE actor_id=$1 AND action=$2
+        AND definition_id IS NOT DISTINCT FROM $3::uuid AND version_id IS NOT DISTINCT FROM $4::uuid AND request_key=$5`,
+        [actor.staff_id, input.action, definitionId, versionId, input.requestKey]);
+      if (prior) { if (!sameVerifier(prior.fingerprint, fingerprint)) throw new AccessError("INTENT_CONFLICT"); return receiptView(prior); }
+      // Edit keys are version-wide, so a changed operation cannot recycle a previous key.
+      if (versionId && await first(client, "SELECT id FROM content_outcomes WHERE actor_id=$1 AND version_id=$2 AND request_key=$3", [actor.staff_id, versionId, input.requestKey])) throw new AccessError("INTENT_CONFLICT");
+      const current = versionId ? await version(client, versionId) : undefined;
+      const definition = definitionId ? await first<{ id: string; revision: string }>(client, "SELECT id,revision FROM bug_definitions WHERE id=$1", [definitionId]) : undefined;
+      if (definitionId && !definition) throw new AccessError("CONTENT_UNAVAILABLE");
+      if (input.action === "VARIANT" && payload.runtime_key !== null && !await first(client,
+        "SELECT key FROM runtime_manifests WHERE key=$1 AND language=$2", [payload.runtime_key, payload.language])) throw new AccessError("INVALID_CONTEXT");
+      let outcome: Receipt["outcome"] = "APPLIED", denial: string | null = null;
+      if (input.expectedRevision !== (current?.content_revision ?? definition?.revision ?? gate.revision)) denial = "STALE_VERSION";
+      else if (current) {
+        const decision = await first<{ state: string }>(client, "SELECT content_edit_status($1,$2,$3::jsonb) AS state", [input.action, current.id, payloadText]);
+        if (!decision) throw new AccessError("SECURITY_UNAVAILABLE");
+        if (decision.state === "UNCHANGED") outcome = "UNCHANGED";
+        else if (decision.state !== "APPLIED") denial = decision.state;
+      }
+      if (denial) outcome = "REJECTED";
+      await staffOutcomeCapacity(client);
+      const id = randomUUID(), resultVersion = outcome === "REJECTED" ? null : current?.id ?? randomUUID();
+      const resultDefinition = outcome === "REJECTED" ? null : current?.definition_id ?? definitionId ?? randomUUID();
+      const revision = outcome === "REJECTED" ? null : current ? (BigInt(current.content_revision) + (outcome === "APPLIED" ? 1n : 0n)).toString() : "1";
+      const caseId = outcome !== "REJECTED" && input.action === "CASE" ? payload.case_id as string | null ?? randomUUID() : null;
+      await client.query(`INSERT INTO content_outcomes(id,actor_id,session_id,credential_id,credential_version,action,control_id,definition_id,version_id,request_key,
+        fingerprint,payload_digest,expected_revision,reason,outcome,denial_reason,recorded_at,result_definition_id,result_version_id,result_revision,result_case_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+        [id, actor.staff_id, actor.id, actor.credential_id, actor.credential_version, input.action, input.action === "CREATE" ? 1 : null, definitionId, versionId, input.requestKey,
+          fingerprint, digest, input.expectedRevision, input.reason, outcome, denial, now, resultDefinition, resultVersion, revision, caseId]);
+      if (outcome === "APPLIED") {
+        await client.query("SELECT apply_content_edit($1,$2)", [id, payloadText]);
+        await client.query("UPDATE staff_sessions SET last_activity_at=$2 WHERE id=$1", [actor.id, now]);
+      }
+      const row = await first<Receipt>(client, "SELECT * FROM content_outcomes WHERE id=$1", [id]);
+      if (!row) throw new AccessError("SECURITY_UNAVAILABLE");
+      return receiptView(row);
+    };
+  }
   const service = {
     async command(cookie: unknown, input: ContentCommand) {
-      if (!ACTIONS.includes(input.action) || (input.action === "CREATE") !== (input.targetId === null)) throw new AccessError("INVALID_CONTEXT");
-      identifier(input.requestKey); if (input.targetId) identifier(input.targetId);
-      staffRevision(input.expectedRevision); boundedStaffText(input.reason, 1024);
-      const payload = prepareContent(input.action, input.payload), payloadText = JSON.stringify(payload), digest = sha256(payloadText);
-      const fingerprint = commandFingerprint(["CONTENT", input.action, input.targetId, input.expectedRevision, input.reason, digest.toString("hex")]);
+      const work = commandWork(cookie, input);
       await budget(cookie, true);
-      try { return await accessTransaction(pool, clock, async client => {
-        const gate = await first<{ revision: string }>(client, "SELECT revision FROM lock_catalogue()");
-        if (!gate) throw new AccessError("SECURITY_UNAVAILABLE");
-        const now = await decisionTime(client, clock), actor = await principal(client, cookie, now);
-        const definitionId = input.action === "NEW_VERSION" ? input.targetId : null;
-        const versionId = input.action !== "CREATE" && input.action !== "NEW_VERSION" ? input.targetId : null;
-        const prior = await first<Receipt>(client, `SELECT * FROM content_outcomes WHERE actor_id=$1 AND action=$2
-          AND definition_id IS NOT DISTINCT FROM $3::uuid AND version_id IS NOT DISTINCT FROM $4::uuid AND request_key=$5`,
-          [actor.staff_id, input.action, definitionId, versionId, input.requestKey]);
-        if (prior) { if (!sameVerifier(prior.fingerprint, fingerprint)) throw new AccessError("INTENT_CONFLICT"); return receiptView(prior); }
-        // Edit keys are version-wide, so a changed operation cannot recycle a previous key.
-        if (versionId && await first(client, "SELECT id FROM content_outcomes WHERE actor_id=$1 AND version_id=$2 AND request_key=$3", [actor.staff_id, versionId, input.requestKey])) throw new AccessError("INTENT_CONFLICT");
-        const current = versionId ? await version(client, versionId) : undefined;
-        const definition = definitionId ? await first<{ id: string; revision: string }>(client, "SELECT id,revision FROM bug_definitions WHERE id=$1", [definitionId]) : undefined;
-        if (definitionId && !definition) throw new AccessError("CONTENT_UNAVAILABLE");
-        if (input.action === "VARIANT" && payload.runtime_key !== null && !await first(client,
-          "SELECT key FROM runtime_manifests WHERE key=$1 AND language=$2", [payload.runtime_key, payload.language])) throw new AccessError("INVALID_CONTEXT");
-        let outcome: Receipt["outcome"] = "APPLIED", denial: string | null = null;
-        if (input.expectedRevision !== (current?.content_revision ?? definition?.revision ?? gate.revision)) denial = "STALE_VERSION";
-        else if (current) {
-          const decision = await first<{ state: string }>(client, "SELECT content_edit_status($1,$2,$3::jsonb) AS state", [input.action, current.id, payloadText]);
-          if (!decision) throw new AccessError("SECURITY_UNAVAILABLE");
-          if (decision.state === "UNCHANGED") outcome = "UNCHANGED";
-          else if (decision.state !== "APPLIED") denial = decision.state;
-        }
-        if (denial) outcome = "REJECTED";
-        await staffOutcomeCapacity(client);
-        const id = randomUUID(), resultVersion = outcome === "REJECTED" ? null : current?.id ?? randomUUID();
-        const resultDefinition = outcome === "REJECTED" ? null : current?.definition_id ?? definitionId ?? randomUUID();
-        const revision = outcome === "REJECTED" ? null : current ? (BigInt(current.content_revision) + (outcome === "APPLIED" ? 1n : 0n)).toString() : "1";
-        const caseId = outcome !== "REJECTED" && input.action === "CASE" ? payload.case_id as string | null ?? randomUUID() : null;
-        await client.query(`INSERT INTO content_outcomes(id,actor_id,session_id,credential_id,credential_version,action,control_id,definition_id,version_id,request_key,
-          fingerprint,payload_digest,expected_revision,reason,outcome,denial_reason,recorded_at,result_definition_id,result_version_id,result_revision,result_case_id)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
-          [id, actor.staff_id, actor.id, actor.credential_id, actor.credential_version, input.action, input.action === "CREATE" ? 1 : null, definitionId, versionId, input.requestKey,
-            fingerprint, digest, input.expectedRevision, input.reason, outcome, denial, now, resultDefinition, resultVersion, revision, caseId]);
-        if (outcome === "APPLIED") {
-          await client.query("SELECT apply_content_edit($1,$2)", [id, payloadText]);
-          await client.query("UPDATE staff_sessions SET last_activity_at=$2 WHERE id=$1", [actor.id, now]);
-        }
-        const row = await first<Receipt>(client, "SELECT * FROM content_outcomes WHERE id=$1", [id]);
-        if (!row) throw new AccessError("SECURITY_UNAVAILABLE");
-        return receiptView(row);
-      }, "EXCLUSIVE"); } catch (error) {
+      try { return await accessTransaction(pool, clock, work, "EXCLUSIVE"); } catch (error) {
         if (error && typeof error === "object" && "code" in error) {
           if (error.code === "54000") throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");
           if (error.code === "22023") throw new AccessError("CONTENT_LIMIT_EXCEEDED");
@@ -104,16 +109,54 @@ export function createContentService(pool: Pool, clock: ClockGuard, delivery: Se
         throw error;
       }
     },
-    async list(cookie: unknown, after?: string) {
+    async importQuestion(cookie: unknown, question: unknown) {
+      const q = prepareQuestionImport(question);
+      await budget(cookie, true);
+      return accessTransaction(pool, clock, async client => {
+        await client.query("SELECT * FROM lock_catalogue()");
+        await principal(client, cookie, await decisionTime(client, clock));
+        const prior = (await client.query<Receipt & { reason: string }>(
+          "SELECT * FROM content_outcomes WHERE action='CREATE' AND request_key=$1 LIMIT 2", [q.sourceId])).rows;
+        if (prior.length) {
+          if (prior.length !== 1 || prior[0]!.reason !== q.reason || prior[0]!.outcome !== "APPLIED") throw new AccessError("INTENT_CONFLICT");
+          return receiptView(prior[0]!);
+        }
+        const edit = async (action: ContentAction, targetId: string | null, payload: unknown) => {
+          const row = await first<{ revision: string }>(client, targetId
+            ? "SELECT content_revision revision FROM bug_versions WHERE id=$1" : "SELECT revision FROM catalogue_control WHERE id=1", targetId ? [targetId] : []);
+          if (!row) throw new AccessError("CONTENT_UNAVAILABLE");
+          const result = await commandWork(cookie, { action, targetId, payload, expectedRevision: row.revision,
+            requestKey: action === "CREATE" ? q.sourceId : randomUUID(), reason: q.reason })(client);
+          if (result.outcome !== "APPLIED") throw new AccessError("INTENT_CONFLICT");
+          // Check each exact revision before the next edit advances it, retaining whole-question rollback.
+          await client.query("SET CONSTRAINTS content_effect IMMEDIATE; SET CONSTRAINTS content_effect DEFERRED");
+          return result;
+        };
+        const created = await edit("CREATE", null, q.metadata), versionId = created.version_id!;
+        for (const variant of q.languages) await edit("VARIANT", versionId, variant.payload);
+        const cases = new Map<unknown, string>();
+        for (const testcase of q.cases) cases.set(testcase.position, (await edit("CASE", versionId, testcase)).case_id!);
+        for (const hint of q.hints) await edit("HINT", versionId, hint);
+        for (const variant of q.languages) await edit("WITNESSES", versionId, {
+          language: variant.payload.language, witnesses: [{ check_type: "TEST_CASE", test_case_id: cases.get(variant.witnessPosition), expected_failure: "WRONG_OUTPUT" }],
+        });
+        return created;
+      }, "EXCLUSIVE");
+    },
+    async list(cookie: unknown, after?: string, roundType?: number) {
+      if (roundType !== undefined && roundType !== 1 && roundType !== 2) throw new AccessError("INVALID_CONTEXT");
       if (after) identifier(after); await budget(cookie);
       return accessTransaction(pool, clock, async client => {
         await principal(client, cookie, await decisionTime(client, clock));
         const rows = await client.query<ContentSummary>(`SELECT ${versionColumns} FROM bug_versions v JOIN bug_definitions d ON d.id=v.definition_id
-          WHERE ($1::uuid IS NULL OR v.id>$1) ORDER BY v.id LIMIT 51`, [after ?? null]);
+          WHERE ($1::uuid IS NULL OR v.id>$1) AND ($2::integer IS NULL OR d.round_type=$2)
+          ORDER BY v.id LIMIT 51`, [after ?? null, roundType ?? null]);
+        const counts = await first<{ round_1: number; round_2: number }>(client,
+          "SELECT count(DISTINCT d.id) FILTER (WHERE d.round_type=1)::integer round_1, count(DISTINCT d.id) FILTER (WHERE d.round_type=2)::integer round_2 FROM bug_versions v JOIN bug_definitions d ON d.id=v.definition_id");
         const gate = await first<{ revision: string; committed_bytes: string }>(client, "SELECT revision,committed_bytes FROM catalogue_control WHERE id=1");
         if (!gate) throw new AccessError("SECURITY_UNAVAILABLE");
         const items = rows.rows.slice(0, 50);
-        return { control_revision: gate.revision, catalogue_bytes: gate.committed_bytes, items, next_after: rows.rows.length > 50 ? items.at(-1)!.version_id : null };
+        return { control_revision: gate.revision, catalogue_bytes: gate.committed_bytes, round_counts: counts!, items, next_after: rows.rows.length > 50 ? items.at(-1)!.version_id : null };
       }, "SHARED");
     },
     async describe(cookie: unknown, versionId: string) {

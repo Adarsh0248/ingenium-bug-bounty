@@ -28,6 +28,7 @@ import { staffRecoveryLinuxChecks } from "./staff-recovery-linux.checks.js";
 import { linuxLoadChecks } from "./load-linux.checks.js";
 import {runLocalRoundFlow} from "../fixtures/host-round-flow.js";
 import {eventPackChecks} from "./event-packs.checks.js";
+import {eventImportChecks} from "./event-import.checks.js";
 import type {RuntimeManifestFixture} from "../fixtures/host-round-flow.js";
 import {createAuthoringJudgeDriver} from "../../src/content/judge-driver.js";
 import type {JudgeDriverSettings} from "../../src/content/judge-driver.js";
@@ -113,6 +114,7 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     const apiUrl = url.toString();
     api = new Pool({ connectionString: apiUrl, max: 4, connectionTimeoutMillis: 2000 });
     if(process.env.INGENIUM_TEST_SUITE==='event-packs'){await eventPackChecks(t,owner,api);return;}
+    if(process.env.INGENIUM_TEST_SUITE==='event-import'){await eventImportChecks(t,owner,api);return;}
     if(process.env.INGENIUM_TEST_SUITE==="event-capacity"){
       await t.test("event capacity preserves existing slots, refuses a ninth slot and stays owner-only",async()=>{
         const before=(await owner!.query("SELECT * FROM execution_capacity_slots ORDER BY id")).rows;

@@ -67,14 +67,21 @@ export default function StaffContent({
   api,
   available,
   blockNavigation,
+  initialRoundType = 1,
 }: {
   api: Api;
   available: boolean;
   blockNavigation: (blocked: boolean) => void;
+  initialRoundType?: 1 | 2;
 }) {
   const [list, setList] = useState<
-      (Page<ContentSummary> & { control_revision: string }) | null
+      | (Page<ContentSummary> & {
+          control_revision: string;
+          round_counts: { round_1: number; round_2: number };
+        })
+      | null
     >(null),
+    [roundType, setRoundType] = useState<1 | 2>(initialRoundType),
     [cursors, setCursors] = useState<(string | undefined)[]>([undefined]),
     [detail, setDetail] = useState<ContentDetail | null>(null),
     [section, setSection] = useState<Section>("METADATA"),
@@ -121,12 +128,13 @@ export default function StaffContent({
     setError(errorText(e));
   }
   async function catalogue() {
+    const request = ++generation.current;
     const value = await api.request<NonNullable<typeof list>>(
-      `${base}/versions${cursor ? `?after=${cursor}` : ""}`,
+      `${base}/versions?round_type=${roundType}${cursor ? `&after=${cursor}` : ""}`,
       undefined,
       "STAFF",
     );
-    if (mounted.current) {
+    if (mounted.current && generation.current === request) {
       setList(value);
       setDenied(false);
     }
@@ -152,7 +160,7 @@ export default function StaffContent({
       mounted.current = false;
       generation.current++;
     };
-  }, [cursor]);
+  }, [cursor, roundType]);
   useEffect(() => {
     blockNavigation(blocked);
   }, [blocked]);
@@ -460,8 +468,9 @@ export default function StaffContent({
               setPreparation(null);
               setPlan(null);
               begin("CREATE", "catalogue", list!.control_revision, {
-                round_type: 1,
+                round_type: roundType,
                 ...metadata(),
+                reward_multiplier: roundType === 1 ? 5 : 1,
               });
             }}
           >
@@ -487,6 +496,39 @@ export default function StaffContent({
       )}
       {!detail && !edit && (
         <>
+          <nav className="question-rounds" aria-label="Question rounds">
+            {([1, 2] as const).map((kind) => (
+              <button
+                key={kind}
+                aria-label={`Round ${kind} questions`}
+                aria-current={roundType === kind ? "page" : undefined}
+                disabled={locked || validationBlocked}
+                onClick={() => {
+                  if (kind !== roundType) {
+                    setList(null);
+                    setCursors([undefined]);
+                    setRoundType(kind);
+                  }
+                }}
+              >
+                <span>Round {kind}</span>
+                <strong>
+                  {list?.round_counts[kind === 1 ? "round_1" : "round_2"] ??
+                    "…"}{" "}
+                  questions
+                </strong>
+                <small>
+                  {kind === 1
+                    ? "Individual hunting · beginner friendly"
+                    : "Shared arena · advanced challenges"}
+                </small>
+              </button>
+            ))}
+          </nav>
+          <p className="muted">
+            Showing only Round {roundType} questions. Drafts need validation and
+            publication before arena selection.
+          </p>
           <div className="staff-table-wrap">
             <table>
               <thead>
@@ -504,7 +546,7 @@ export default function StaffContent({
                 {list?.items.map((v) => (
                   <tr key={v.version_id} data-version-id={v.version_id}>
                     <td>{v.title}</td>
-                    <td>{v.round_type}</td>
+                    <td>Round {v.round_type}</td>
                     <td>{v.version_number}</td>
                     <td>{v.difficulty} / 100</td>
                     <td>{v.base_bounty}</td>
@@ -526,7 +568,7 @@ export default function StaffContent({
           {list?.items.length === 0 && (
             <div className="staff-empty">
               <BookOpen size={28} />
-              <h3>Your question library is empty</h3>
+              <h3>No Round {roundType} questions yet</h3>
               <p>
                 Use Add question manually to write the statement and buggy code.
                 Questions remain drafts until you validate and publish them.

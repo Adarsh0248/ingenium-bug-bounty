@@ -108,3 +108,22 @@ protected question publication are available.
 
 The earlier failed judge-capacity records, held permits and old lab disks remain
 untouched. No infrastructure guard, result or clock fault was bypassed.
+
+## Event question library update — 29 October 2026
+
+The next release separates the staff question library by round and adds an
+authenticated, atomic question import using the existing authoring guards. No
+additional database migration is needed; the migration count remains 89.
+The production preflight found zero questions and zero runtime manifests.
+
+Load the reviewed packs through `scripts/import-event-questions.mjs` after the
+release passes readiness. Keep its private progress receipt outside the source
+tree and verify the resulting 50/100 definitions, 600 language variants, 450
+hints, 1,135 test cases and 600 hidden starter witnesses. All remain drafts until
+actual runtime configuration and protected validation/publication. See
+[event question library](event-question-library.md) for the import procedure.
+
+The website release receipt remains `/var/lib/ingenium/deployments/current.json`.
+A separate private post-import database backup and source-free verification
+receipt retain the question counts and pack hashes. Existing arena/team/staff
+rows are preserved, and importing does not configure or start any arena.

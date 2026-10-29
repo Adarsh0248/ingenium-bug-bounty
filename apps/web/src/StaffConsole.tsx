@@ -1068,6 +1068,7 @@ export default function StaffConsole({
       {tab === "LIBRARY" && manager && (
         <StaffContent
           api={api}
+          initialRoundType={round?.kind === 2 ? 2 : 1}
           available={
             ready &&
             !!data &&
@@ -1464,11 +1465,11 @@ export default function StaffConsole({
           {!bugRows.length && (
             <div className="staff-empty">
               <BookOpen size={30} />
-              <h3>No published questions yet</h3>
+              <h3>No published Round {round?.kind ?? 1} questions yet</h3>
               <p>
-                Create a question manually in Questions. Add its code, test
-                cases and hints, then validate and publish it before selecting
-                it here.
+                Open Questions → Round {round?.kind ?? 1} to review the draft
+                library. Questions appear here after validation and publication.
+                This picker only includes questions for the current round.
               </p>
               <button
                 disabled={locked || !!draft?.dirty}

@@ -633,8 +633,12 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
       return wrap(request, result);
     });
   }
-  app.get<{ Querystring: { after?: string } }>("/staff/content/versions", { exposeHeadRoute: false, schema: { querystring: schema.staffListQuery, response: schema.responses(schema.contentListData) } }, async request =>
-    wrap(request, await content.list(request.cookies[policy.names.staff], request.query.after)));
+  app.post<{ Body: { question: unknown } }>("/staff/content/import-question", {
+    bodyLimit: 524288, config: { largeContent: true }, onRequest: writeHooks("STAFF"),
+    schema: { querystring: schema.empty, body: schema.contentImportBody, response: schema.responses(schema.contentReceipt) },
+  }, async request => wrap(request, await content.importQuestion(request.cookies[policy.names.staff], request.body.question)));
+  app.get<{ Querystring: { after?: string; round_type?: string } }>("/staff/content/versions", { exposeHeadRoute: false, schema: { querystring: schema.contentListQuery, response: schema.responses(schema.contentListData) } }, async request =>
+    wrap(request, await content.list(request.cookies[policy.names.staff], request.query.after, request.query.round_type === undefined ? undefined : Number(request.query.round_type))));
   app.get<{ Params: { version_id: string } }>("/staff/content/versions/:version_id", { exposeHeadRoute: false,
     schema: { querystring: schema.empty, params: schema.contentVersionParams, response: schema.responses(schema.contentDescribeData) } }, async request =>
     wrap(request, await content.describe(request.cookies[policy.names.staff], request.params.version_id)));

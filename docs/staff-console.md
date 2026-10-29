@@ -143,3 +143,9 @@ covered the new regular-admin setup workflow, Super Admin staff creation without
 code re-entry, desktop/mobile layout, and the complete existing two-round browser
 flow including registration, discipline and cancellation recovery. Synthetic judge
 fixtures in these checks do not qualify a production judge or real event capacity.
+
+The question library now has separate Round 1 and Round 2 tabs with question
+counts and independent page navigation. Manual creation defaults to the chosen
+round. The arena picker continues to show only published questions for its own
+round. See [event question library](event-question-library.md) for the 50/100
+private-pack import and its validation/publication boundary.

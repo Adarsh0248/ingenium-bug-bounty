@@ -70,6 +70,48 @@
 .staff-more:not([open]) > div {
   display: none;
 }
+.question-rounds {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 22px 0 14px;
+}
+.question-rounds button {
+  display: grid;
+  justify-content: stretch;
+  gap: 9px;
+  padding: 20px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.question-rounds button[aria-current="page"] {
+  border-color: var(--lime);
+  background: #80fff00b;
+}
+.question-rounds span {
+  color: var(--lime);
+  font-size: 12px;
+}
+.question-rounds strong {
+  font-size: 21px;
+}
+.question-rounds small {
+  color: var(--muted);
+  line-height: 1.5;
+  font-weight: 400;
+}
+@media (max-width: 600px) {
+  .question-rounds {
+    gap: 9px;
+  }
+  .question-rounds button {
+    padding: 14px;
+  }
+  .question-rounds strong {
+    font-size: 17px;
+  }
+}
 .setup-intro {
   display: flex;
   justify-content: space-between;

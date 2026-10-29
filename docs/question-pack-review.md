@@ -57,4 +57,7 @@ hours. The two rounds intentionally share some concepts, such as circular
 queues and caches, while their individual faults and tasks differ. Their
 engineering checks do not replace an event organiser's pacing decision.
 
-No event database was changed and the event remains undeployed.
+The checks above used disposable databases. The subsequent staff-library import
+is documented in [event question library](event-question-library.md) and the
+[production deployment record](production-deployment.md). Importing drafts does
+not turn these compiler reports into protected validation or publication.
