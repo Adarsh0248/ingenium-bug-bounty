@@ -18,9 +18,9 @@ export function language(value: unknown): Language {
 }
 
 export function canonicalCode(value: unknown): string {
-  if (typeof value !== "string" || !/^[A-Za-z2-7 -]{32,96}$/.test(value)) throw new Error("Invalid access code.");
+  if (typeof value !== "string" || !/^[A-Za-z2-7 -]{8,96}$/.test(value)) throw new Error("Invalid access code.");
   const code = value.replace(/[ -]/g, "").toUpperCase();
-  if (code.length !== 32) throw new Error("Invalid access code.");
+  if (code.length !== 8 && code.length !== 32) throw new Error("Invalid access code.");
   return code;
 }
 
@@ -39,8 +39,8 @@ export function commandFingerprint(fields: readonly (string | boolean | null)[])
   return sha256(Buffer.concat(parts));
 }
 
-export function newAccessCode(): { code: string; verifier: Buffer } {
-  const code = base32.encode(randomBytes(20));
+export function newAccessCode(audience: "TEAM" | "STAFF" = "STAFF"): { code: string; verifier: Buffer } {
+  const code = base32.encode(randomBytes(audience === "TEAM" ? 5 : 20));
   return { code, verifier: sha256(code) };
 }
 

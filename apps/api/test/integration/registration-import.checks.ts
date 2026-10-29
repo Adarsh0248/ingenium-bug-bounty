@@ -176,6 +176,7 @@ export async function registrationImportChecks(
         const issued = responses.find(
           (r) => r.issued_codes.length,
         )!.issued_codes;
+        for (const c of issued) assert.match(c.code, /^[A-Z2-7]{8}$/);
         for (const c of issued)
           assert.equal(
             (

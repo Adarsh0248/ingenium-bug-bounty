@@ -11,7 +11,7 @@ const nullableId = { anyOf: [id, { type: "null" }] };
 
 export const empty = object({});
 export const bootstrapQuery = object({ audience });
-export const verifyBody = object({ code: { type: "string", minLength: 32, maxLength: 96, pattern: "^[A-Za-z2-7 -]+$" } });
+export const verifyBody = object({ code: { type: "string", minLength: 8, maxLength: 96, pattern: "^[A-Za-z2-7 -]+$" } });
 export const activationBody = object({ member_id: id, language: { type: "string", enum: LANGUAGES }, request_key: id });
 export const sessionSchema = object({ session_id: id, member_id: id, member_round_id: id, team_id: id, round_id: id,
   language: { type: "string", enum: LANGUAGES }, member_name: name, team_name: name,
@@ -104,7 +104,7 @@ export const teamTargetParams=object({team_id:id});
 export const teamManagementReceipt=object({outcome_id:id,request_key:id,action:{type:"string",enum:["CREATE","ROTATE","ISSUE","REVOKE"]},target_team_id:nullableId,
   expected_revision:revision,outcome:{type:"string",enum:["APPLIED","REJECTED"]},reason:{anyOf:[{type:"string",enum:["STALE_VERSION","TEAM_CAPACITY","TEAM_INCOMPLETE","CODE_INACTIVE","CODE_ACTIVE"]},{type:"null"}]},
   result_team_id:nullableId,code_version:{anyOf:[revision,{type:"null"}]},recorded_at:instant});
-export const teamManagementData=object({outcome:teamManagementReceipt,issued_code:{anyOf:[{type:"string",pattern:"^[A-Z2-7]{32}$"},{type:"null"}]}});
+export const teamManagementData=object({outcome:teamManagementReceipt,issued_code:{anyOf:[{type:"string",pattern:"^(?:[A-Z2-7]{8}|[A-Z2-7]{32})$"},{type:"null"}]}});
 export const teamOutcomeData=object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[teamManagementReceipt,{type:"null"}]}});
 export const teamListQuery=object({after:id,search:{type:"string",maxLength:120}},[]);
 export const teamListData=object({control_revision:revision,total:{type:"integer",minimum:0},matched:{type:"integer",minimum:0},search:{type:"string",maxLength:120},items:{type:"array",maxItems:50,items:object({team_id:id,team_name:name,
@@ -124,7 +124,7 @@ export const registrationPreviewData=object({csv_digest:{anyOf:[csvDigest,{type:
 export const registrationReceipt=object({outcome_id:id,request_key:id,expected_revision:revision,csv_digest:csvDigest,outcome:{type:"string",enum:["APPLIED","UNCHANGED","REJECTED"]},
   reason:{anyOf:[{type:"string",enum:["STALE_VERSION","REGISTRATION_CONFLICT","TEAM_CAPACITY"]},{type:"null"}]},
   items:{type:"array",minItems:1,maxItems:100,items:importItem},recorded_at:instant});
-export const registrationImportData=object({outcome:registrationReceipt,issued_codes:{type:"array",maxItems:100,items:object({registration_id:registrationId,team_id:id,code:{type:"string",pattern:"^[A-Z2-7]{32}$"}})}});
+export const registrationImportData=object({outcome:registrationReceipt,issued_codes:{type:"array",maxItems:100,items:object({registration_id:registrationId,team_id:id,code:{type:"string",pattern:"^(?:[A-Z2-7]{8}|[A-Z2-7]{32})$"}})}});
 export const registrationOutcomeData=object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[registrationReceipt,{type:"null"}]}});
 const duration = { type: "integer", minimum: 1, maximum: 18000000 };
 export const arenaSetupBody = object({ request_key: id, expected_revision: revision, duration_ms: duration,

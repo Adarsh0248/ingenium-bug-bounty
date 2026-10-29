@@ -6,7 +6,7 @@ import { canonicalCode, language, newAccessCode, newProof, parseProof, sameVerif
 import { refill } from "../src/access/quotas.js";
 import { participantDeadlines, participantTimeValid } from "../src/access/entry-service.js";
 
-test("access codes contain 160 random bits with strict ASCII-only display normalisation", () => {
+test("staff and legacy codes contain 160 random bits with strict ASCII-only display normalisation", () => {
   const seen = new Set<string>();
   for (let index = 0; index < 100; index++) {
     const result = newAccessCode();
@@ -18,6 +18,20 @@ test("access codes contain 160 random bits with strict ASCII-only display normal
   }
   assert.equal(seen.size, 100);
   for (const value of [null, {}, "A".repeat(31), "A".repeat(33), "0".repeat(32), "1".repeat(32), "A".repeat(31) + "\u00df", "A".repeat(31) + "\n", "A".repeat(31) + "\t", "-".repeat(97)]) assert.throws(() => canonicalCode(value));
+});
+
+test("new team codes have eight random Base32 characters and preserve strict display normalisation", () => {
+  const seen = new Set<string>();
+  for (let index = 0; index < 100; index++) {
+    const result = newAccessCode("TEAM");
+    assert.match(result.code, /^[A-Z2-7]{8}$/);
+    assert.deepEqual(result.verifier, sha256(result.code));
+    assert.equal(canonicalCode(result.code.toLowerCase().match(/.{4}/g)!.join(" - ")), result.code);
+    seen.add(result.code);
+  }
+  assert.equal(seen.size, 100);
+  for (const value of ["A".repeat(7), "A".repeat(9), "0".repeat(8), "1".repeat(8), "A".repeat(7) + "\u00df", "A".repeat(7) + "\n", "A".repeat(7) + "\t", "-".repeat(8)]) assert.throws(() => canonicalCode(value));
+  assert.equal(newAccessCode("STAFF").code.length, 32);
 });
 
 test("opaque credentials require the version, a UUIDv4 lookup and a canonical 32-byte secret", () => {

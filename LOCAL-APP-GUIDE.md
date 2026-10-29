@@ -86,7 +86,7 @@ Keep that terminal running and open **http://127.0.0.1:5174**.
 Enter this synthetic team code:
 
 ```text
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAA
 ```
 
 Select Asha or Dev, choose a language, then confirm entry. Click a bug on the map

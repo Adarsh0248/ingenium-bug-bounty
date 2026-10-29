@@ -114,7 +114,7 @@ export async function staffTeamsChecks(
       .getByRole("button", { name: "Reveal team code", exact: true })
       .click();
     await expect(code).toHaveAttribute("type", "text");
-    assert.match(await code.inputValue(), /^[A-Z2-7]{32}$/);
+    assert.match(await code.inputValue(), /^[A-Z2-7]{8}$/);
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await page.evaluate(
       "navigator.clipboard.writeText = () => Promise.reject(new Error('synthetic denied clipboard'))",

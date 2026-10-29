@@ -150,7 +150,7 @@ export async function teamAccessBrowserChecks(
             exact: true,
           })
           .click();
-        await expect(panel.getByRole("status")).toContainText(
+        await expect(panel.getByRole("status").filter({ hasText: "No replacement code was issued" })).toContainText(
           "No replacement code was issued",
         );
         assert.equal(posts, 1);
@@ -187,7 +187,7 @@ export async function teamAccessBrowserChecks(
           .getByRole("button", { name: "Confirm team change", exact: true })
           .click();
         team.code = (await (await issuedReply).json()).data.issued_code;
-        assert.match(team.code, /^[A-Z2-7]{32}$/);
+        assert.match(team.code, /^[A-Z2-7]{8}$/);
         const issued = operator.getByRole("dialog", {
           name: "New team code",
           exact: true,

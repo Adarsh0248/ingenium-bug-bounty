@@ -1,5 +1,10 @@
 # Team Registration and Code Management
 
+New team login codes contain eight random uppercase Base32 characters (A-Z, 2-7).
+Existing 32-character team codes still work until normal rotation; staff codes
+remain 32 characters. Creating, importing, rotating or reissuing a team code uses
+the new length. Internal team UUIDs remain stable.
+
 ## Available Now
 
 Current normal Owners and Super Admins have a **Teams** control-room view.

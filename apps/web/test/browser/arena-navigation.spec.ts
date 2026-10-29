@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 
 async function enter(page: Page) {
   await page.goto("/");
-  await page.getByLabel("Team or staff code").fill("A".repeat(32));
+  await page.getByLabel("Team or staff code").fill("A".repeat(8));
   await page.getByRole("button", { name: "Enter arena", exact: true }).click();
   await page.getByRole("radio", { name: "Asha", exact: true }).check();
   await page.getByLabel("Language", { exact: true }).selectOption("cpp");

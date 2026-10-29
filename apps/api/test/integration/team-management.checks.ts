@@ -518,7 +518,7 @@ export async function teamManagementChecks(
           await owner.query("DELETE FROM quota_buckets");
           const result = await send("/api/v1/staff/teams", body, token);
           assert.equal(result.statusCode, 200);
-          assert.match(result.json().data.issued_code, /^[A-Z2-7]{32}$/);
+          assert.match(result.json().data.issued_code, /^[A-Z2-7]{8}$/);
           assert.equal(result.headers["cache-control"], "no-store");
           assert.equal(
             (await send("/api/v1/staff/teams", body, token)).json().data

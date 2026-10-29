@@ -6,7 +6,7 @@ questions, offline edits, recovery and production caching limits.
 
 For the separate **Round 2 Black Market preview**, run `npm.cmd run preview:round2`
 and open **http://127.0.0.1:5176**. Use the team code
-`AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, choose a member/language and click **Black Market**.
+`AAAAAAAA`, choose a member/language and click **Black Market**.
 It starts with 35,000 demo coins and all seven approved items. See the
 [shop preview guide](round-2-items.md#review-the-local-shop) for controls and limitations.
 This mode needs no Docker and does not modify another preview or database.
@@ -71,7 +71,7 @@ It exercises normal staff/team code entry, admin-to-contestant live pause/resume
 simulated submission feedback, role separation and removal of its own database.
 
 The lighter `npm.cmd run preview:participant` remains available independently
-at port 5174, with its existing `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA` team code.
+at port 5174, with its existing `AAAAAAAA` team code.
 It uses a separate in-memory preview, so admin changes on 5175 do not affect it.
 It also loads the 50 real missions by default; its judging is simulated and its
 default wallet/standings are synthetic UI data. Restart either preview after

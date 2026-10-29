@@ -28,7 +28,7 @@ export async function accessChecks(t: TestContext, owner: Pool, api: Pool): Prom
   async function fixture() {
     const id = randomUUID(), first = randomUUID(), second = randomUUID(), teamRound = randomUUID();
     const credentialId = randomUUID();
-    const access = newAccessCode();
+    const access = newAccessCode("TEAM");
     await owner.query("INSERT INTO teams (id,display_name) VALUES ($1,'Synthetic team')", [id]);
     await owner.query("INSERT INTO team_members (id,team_id,position,display_name) VALUES ($1,$3,1,'Synthetic first'),($2,$3,2,'Synthetic second')", [first, second, id]);
     await owner.query("INSERT INTO access_credentials (id,team_id,verifier,version,issued_at) VALUES ($1,$2,$3,1,date_trunc('milliseconds',clock_timestamp()))", [credentialId, id, access.verifier]);

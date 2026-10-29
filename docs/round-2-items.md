@@ -250,7 +250,7 @@ npm.cmd run preview:round2
 ```
 
 Open **http://127.0.0.1:5176**, enter the preview-only team code
-`AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, choose Asha or Dev and a language, then click
+`AAAAAAAA`, choose Asha or Dev and a language, then click
 **Black Market**. The preview starts Round 2 with 35,000 demo coins and zero
 competition points. Buying Boundary Probe, Hex Scanner or Claim Lock puts it in
 the shared demo inventory, without a target or active timer. Open a question and

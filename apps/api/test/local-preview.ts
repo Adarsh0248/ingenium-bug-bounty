@@ -339,7 +339,7 @@ export async function startLocalPreview(
       ["Syntax Raiders", ["Mira", "Kabir"]],
     ] as const) {
       const id = randomUUID(),
-        code = newAccessCode();
+        code = newAccessCode("TEAM");
       await owner.query("INSERT INTO teams(id,display_name) VALUES($1,$2)", [
         id,
         name,

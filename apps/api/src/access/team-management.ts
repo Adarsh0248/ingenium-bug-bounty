@@ -116,7 +116,7 @@ export function createTeamManagement(
           throw new AccessError("INVALID_CONTEXT");
       } else throw new AccessError("INVALID_CONTEXT");
       await budget(cookie, true);
-      const generated = input.action === "REVOKE" ? null : newAccessCode();
+      const generated = input.action === "REVOKE" ? null : newAccessCode("TEAM");
       return accessTransaction(
         pool,
         clock,

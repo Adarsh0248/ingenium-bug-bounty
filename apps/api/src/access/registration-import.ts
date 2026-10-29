@@ -136,7 +136,7 @@ export function createRegistrationImport(
       if (parsed.issues.length || parsed.digest !== input.csvDigest)
         throw new AccessError("INVALID_CONTEXT");
       const generated = new Map(
-        parsed.rows.map((r) => [r.registration_id, newAccessCode()]),
+        parsed.rows.map((r) => [r.registration_id, newAccessCode("TEAM")]),
       );
       return accessTransaction(
         pool,

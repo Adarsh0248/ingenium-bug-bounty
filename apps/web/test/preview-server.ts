@@ -431,7 +431,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     return deny();
   }
   if (p === "/api/v1/entry/verify") {
-    if (b.code?.replaceAll(" ", "") !== "A".repeat(32))
+    if (typeof b.code !== "string" || !["A".repeat(8), "A".repeat(32)].includes(b.code.replace(/[ -]/g, "").toUpperCase()))
       return deny("INVALID_CODE", 401);
     s.flow = true;
     return send({
