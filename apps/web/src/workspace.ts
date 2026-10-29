@@ -10,7 +10,13 @@ import type {
 import type { Api } from "./api";
 import { Command } from "./api";
 import { bugPath } from "./types";
-import type { Session, Snapshot } from "./types";
+import type { Metadata, Session, Snapshot } from "./types";
+export interface QuestionMemory {
+  meta: Metadata;
+  statement: string;
+  hints: { level: number; content: string }[];
+  samples: Record<number, { input: string; output: string }>;
+}
 export interface BufferState {
   source: string;
   revision: string;
@@ -48,7 +54,9 @@ export function createWorkspace(
       }
     >(),
     commands = new Map<string, Command>(),
-    opening = new Map<string, Promise<any>>();
+    opening = new Map<string, Promise<any>>(),
+    questions = new Map<string, { value: QuestionMemory; bytes: number }>();
+  let questionBytes = 0;
   let destroyed = false,
     lastSnapshot: Snapshot | null = null,
     lastReady = false,
@@ -112,6 +120,30 @@ export function createWorkspace(
   return {
     items,
     open,
+    question(bounty: string) {
+      const entry = questions.get(bounty);
+      if (!entry || destroyed) return null;
+      questions.delete(bounty);
+      questions.set(bounty, entry);
+      return entry.value;
+    },
+    rememberQuestion(bounty: string, value: QuestionMemory) {
+      if (destroyed) return;
+      const previous = questions.get(bounty);
+      if (previous) questionBytes -= previous.bytes;
+      questions.delete(bounty);
+      const bytes = new TextEncoder().encode(JSON.stringify(value)).length;
+      if (bytes <= 4194304) {
+        questions.set(bounty, { value, bytes });
+        questionBytes += bytes;
+      }
+      // Session memory only: bounded briefs never evict dirty source or enter browser storage.
+      while (questions.size > 8 || questionBytes > 4194304) {
+        const oldest = questions.keys().next().value!;
+        questionBytes -= questions.get(oldest)!.bytes;
+        questions.delete(oldest);
+      }
+    },
     command(bounty: string) {
       if (!commands.has(bounty))
         commands.set(
@@ -161,6 +193,8 @@ export function createWorkspace(
       }
       items.clear();
       commands.clear();
+      questions.clear();
+      questionBytes = 0;
     },
   };
 }

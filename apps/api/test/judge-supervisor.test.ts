@@ -138,7 +138,7 @@ test("eight independent workers own nine queues and close every resource without
   }
 });
 
-test("eight workers perform every pre-claim check without concurrent preflight bursts",async()=>{
+test("eight workers serialise every fresh pre-claim check to protect the inspection budget",async()=>{
   const f=fixture();while(f.queues.length<9)f.queues.push({...f.queues[0]!});while(f.executors.length<8)f.executors.push({...f.executors[0]!});
   let active=0,maximum=0,checks=0;
   for(const executor of f.executors)executor.assertReady=async signal=>{signal.throwIfAborted();active++;maximum=Math.max(maximum,active);await delay(20);active--;checks++;};

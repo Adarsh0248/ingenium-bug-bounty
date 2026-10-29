@@ -28,6 +28,7 @@ export default function BugInfoCard({
   open,
   close,
   kernel = false,
+  cachedStatement,
 }: {
   api: Api;
   roundId: string;
@@ -37,6 +38,7 @@ export default function BugInfoCard({
   open: () => void;
   close: () => void;
   kernel?: boolean;
+  cachedStatement?: string;
 }) {
   const art = bugAppearance(
       bug.bounty_id,
@@ -54,6 +56,11 @@ export default function BugInfoCard({
     heading.current?.focus({ preventScroll: true });
   }, []);
   useEffect(() => {
+    if (cachedStatement) {
+      setPreview(statementPreview(cachedStatement));
+      setFailed(false);
+      return;
+    }
     let active = true;
     setFailed(false);
     setPreview("");
@@ -79,7 +86,7 @@ export default function BugInfoCard({
     return () => {
       active = false;
     };
-  }, [api, roundId, bug.bounty_id, retry]);
+  }, [api, roundId, bug.bounty_id, retry, cachedStatement]);
   return (
     <section
       className="bug-info-card"

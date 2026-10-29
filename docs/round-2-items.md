@@ -1,7 +1,8 @@
 # Round 2 special items
 
-Approved design and prices, 28 October 2026. The shop frontend and a separate
-functional local preview now exist. Production item enforcement is not implemented.
+Approved design and prices, 28 October 2026. The shop frontend, isolated preview
+and durable application backend now exist. This is implementation status, not
+event deployment or participant-pilot balance evidence.
 Amounts are whole game coins, charged to the shared team wallet. Round 2 solves
 continue to earn coins, and only committed funds can be spent.
 
@@ -21,7 +22,7 @@ usable during Black ICE, subject to the normal round and bug eligibility rules.
 This supersedes immediate activation for those three items. The local preview
 now implements inventory and question-page activation. Other items retain their
 existing activation flow. Production persistence and multi-team enforcement
-still require integration.
+are enforced by the guarded application backend.
 The requested single-map Round 2 arena is described, separately from the proposed
 art direction, in [the arena design](round-2-arena-design.md).
 
@@ -44,8 +45,9 @@ Overdrive Core adds an amber glow to the equipped team's name in the small
 leaderboard, full standings and results views. The glow has no scoring effect.
 Reduced-motion settings keep the glow still. The frontend reads the team's
 public `overdrive` standing flag; the local preview retains it with the original
-purchase across reloads. Production publishing of this flag remains part of
-the pending durable item integration.
+purchase across reloads. Production live standings, the full standings endpoint
+and participant results/history read the durable cosmetic flag. It never changes
+the frozen sporting result or exported score digest.
 
 ## Hex Scanner balance correction
 
@@ -81,8 +83,8 @@ coin use against unaided solving and ordinary hints.
 - Both teammates share purchases and their effects.
 - Boundary Probe counts as Hint 1-level assistance and Hex Scanner as Hint
   2-level assistance for scoring. Use the highest assistance level, rather
-  than stacking score reductions. These effects are demonstrated in the local
-  preview; production awards and past submissions are unchanged.
+  than stacking score reductions. The highest assistance tier is captured when
+  the official submission is admitted; later purchases do not rewrite that attempt.
 - Chrono Shield, Claim Lock and outgoing Black ICE are each limited to one use
   per team per round. Ghost Scan has a two-minute cooldown.
 - A target team can receive Black ICE only once per round across all attackers;
@@ -116,14 +118,128 @@ received within the window still qualifies if judging finishes later. When the
 window expires without a qualifying solve, the protection ends and normal bug
 availability applies. Previously earned rewards remain valid.
 
-## Implementation boundary
+## Durable backend and timer policy
 
-This document records decisions and a local preview, not production or balance evidence.
-Durable protected activation/expiry, purchase recovery, simultaneous claims, new
-award exceptions and assistance-tier handling require production implementation
-and tests before event use. Exact timer behaviour during staff pauses and activation eligibility
-must be settled before wiring the items into the round engine. No deployment or
-database migration is authorised by this design record.
+Reviewed migrations `0083`–`0086` add immutable purchases, single-use activations,
+submission-bound protection/shield records, private snapshot intelligence and
+once-only expiry notices. Wallet debits and receipts commit with the purchase;
+activation consumes the original held purchase without charging it again. Both
+members share inventory. The same round lock orders purchases, hints, activation,
+admission and settlement, preventing overspending and competing Black ICE hits.
+The API role cannot directly write shop tables or read unpurchased intelligence.
+
+All timed shop effects and Ghost Scan's cooldown use the shared round clock:
+global technical pauses freeze their remaining time; team/member pauses do not.
+During any applicable pause a member cannot buy or activate new items. Previously
+purchased intelligence remains readable. Effect eligibility is checked against
+trusted time on every command, even if maintenance has not emitted the expiry
+notice yet. The regular maintenance loop publishes bounded, once-only expiry
+updates; neither a restart nor a reload resets an effect.
+
+Chrono Shield attaches atomically to the next **admitted official** submission,
+across both members. A rejected submission, sample Run or duplicate receipt does
+not consume it. A correct result uses the shield without awarding a bonus;
+an infrastructure failure does not rearm it or create a penalty. Retry recovery
+stays attached to the original submission.
+
+Claim Lock can be activated only on an eligible, unsolved, not already ordinarily
+claimed bug. Its receipt-time protection is captured at admission. An eligible
+submission received before expiry can earn its protected award after expiry.
+Protected awards clear the target for that solving team, never emit a global
+claim or prevent a separate ordinary winner. Ordinary claims still allow an
+already protected team to keep editing and submit during its window. Each team
+can earn that bug once. An earlier unresolved ordinary submission holds up later
+ordinary claims; protected submissions do not hold up that ordinary race.
+
+Ghost Scan combines unfinished rival sample/official work with authenticated
+editor-presence leases across languages and tabs. Own-team activity is excluded.
+A disconnected editor remains conservatively busy until its 45-second lease
+expires; renewals use the existing 15-second live cadence. During an active scan
+the browser refreshes its private indication every 1.5 seconds and hides it while
+live authority is stale/offline. No identities, source, hints or progress are
+returned. This is still an activity indication, not proof nobody is working
+outside the application. No additional polling runs for teams without a scan.
+
+The separate preview continues to use in-memory demo state. Production routes
+use the database and contain no demo coin/freeze controls. Migrations have only
+been exercised on disposable test databases; no event database or cloud host has
+been changed. Participant balance review and existing event-capacity/host gates
+remain separate.
+
+## Protected clue installation
+
+Probe/scanner content is authored separately from the hidden judging suite. A
+schema-owner content operation installs reviewed JSON bindings for frozen,
+unselected Round 2 snapshots. It checks snapshot/starter hashes, four supported
+languages, clue bounds, broad faulty-code coverage and a probe input distinct
+from every judging case. All bindings commit together or none do. An identical
+import is a no-op; changed or already-selected bindings cannot replace content.
+The importer never creates a question, publishes it or starts an arena.
+
+Each array entry has this structure; use actual reviewed IDs/hashes and clue text:
+
+```json
+{
+  "snapshot_id": "<frozen snapshot UUID>",
+  "language": "cpp",
+  "snapshot_fingerprint": "<64-character SHA-256>",
+  "starter_sha256": "<64-character SHA-256>",
+  "data": {
+    "probe": {"input": "<separate authored input>", "output": "<verified output>"},
+    "scanner": {
+      "label": "<subsystem>", "text": "<broad direction, no repair>",
+      "from_line": 4, "to_line": 16
+    }
+  }
+}
+```
+
+Keep the complete bindings array outside public assets. With the normal private
+schema-owner migration connection configured, the built operator entry point is:
+
+```powershell
+npm.cmd run content:shop-intel --workspace @ingenium/api -- --bindings <private-reviewed-json>
+```
+
+This command requires `MIGRATION_DATABASE_URL` in its environment, uses a loopback
+schema-owner connection and prints only binding counts. It does not load `.env`
+files or accept the API/worker role. Each probe's output must first pass its
+reference-program checks; the importer does not execute arbitrary code.
+The four-language authored pack already carries private `paid_intel` data, but
+binding it to the final frozen production snapshots belongs to content publication.
+
+Participant routes under `/api/v1/competition/rounds/:round_id/shop` are GET `/`,
+POST `/purchases`, POST `/activations`, GET `/outcomes/:request_key` and GET
+`/intel/:bounty_id`. Writes require normal Origin/CSRF and current authority.
+After an uncertain reply, read the original outcome; do not issue another purchase.
+Intel is fetched only for the open question after activation, rather than copying
+private source into every live snapshot.
+
+Run the isolated backend/browser integration checks with
+`INGENIUM_TEST_SUITE=shop npm run test:db:schema` (set the environment variable
+using the shell's syntax on Windows). These use a new disposable PostgreSQL
+container and synthetic judging; they do not require the retained cloud lab.
+
+## Verification recorded for this implementation
+
+The focused durable-shop matrix passes 19 checks, including guarded private clue
+installation, three independent teams, concurrent purchases/activations/attacks,
+exact receipt recovery, all pause scopes and expiry, assistance at admission,
+Chrono Shield consumption, normal/protected awards, and two real browser contexts
+sharing inventory and reopening purchased clues after reload. Judging in this
+matrix is synthetic. The wider 145 competition and 144 foundation checks pass,
+as do six reward checks, 365 API/92 web unit checks, builds/typechecks and public
+bundle checks. This does not rerun or certify the previously deferred real-host
+maximum-load/endurance work. Nothing has been deployed.
+
+The 29 October isolated Linux rehearsal additionally passed the two-round flow
+against the real protected compiler and production shop/competition services.
+It verified all seven items, simultaneous teammate purchase, exact lost-reply
+recovery, owned clues, Black ICE with coding still allowed, one-use shield,
+protected and ordinary rewards, wallet carryover and frozen clocks during pause.
+Publication setup and the clock in that harness remain synthetic; this does not
+certify maximum compiler capacity or a five-hour endurance window. Evidence:
+`apps/api/test-results/readiness-rounds-completed-20261029.log`.
 
 ## Review the local shop
 
@@ -161,12 +277,14 @@ separate authored edge example, checked against all four references and distinct
 from every judging input. It never exposes a hidden judging test. Hex Scanner
 highlights a broad section around the intended fault in the enrolled language;
 it does not return the reference program. These local item payloads remain private
-until activation. Human clue/balance review and production item enforcement remain
-required. Judging in this visual preview is still simulated:
+until activation. Human clue/balance review and final published-content validation remain
+required before event publication. Durable item enforcement is exercised separately
+from this preview. Judging in this visual preview is still simulated:
 `PREVIEW_WRONG` in submitted source demonstrates a wrong result, and
 `PREVIEW_INFRA` demonstrates an infrastructure result. Other source is not executed.
 
 Expand **Local preview controls** inside the shop to add demo coins, demonstrate
 an incoming freeze, clear that simulated freeze, or let a rival claim the
 protected bug. These controls are excluded from production assets. Timers use
-wall time in this demonstration; final pause/expiry policy needs production work.
+wall time in this demonstration; the durable backend uses the shared round
+clock and global-pause policy described above.

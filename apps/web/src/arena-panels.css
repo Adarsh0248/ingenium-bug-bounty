@@ -194,8 +194,8 @@
 }
 @media (max-width: 720px) {
   .participant .target-dock {
-    height: min(38dvh, calc(100dvh - 367px));
-    max-height: min(38dvh, calc(100dvh - 367px));
+    height: min(29dvh, calc(100dvh - 367px));
+    max-height: min(29dvh, calc(100dvh - 367px));
   }
   .arena-standings {
     right: 72px;

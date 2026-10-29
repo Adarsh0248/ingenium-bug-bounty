@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, customType, foreignKey, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, check, customType, foreignKey, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { rounds, teamRounds, memberRounds, participantSessions, staffIdentities, accessCredentials } from "./access-schema.js";
 import { staffSessions } from "./staff-schema.js";
 import { teams } from "./schema.js";
@@ -84,9 +84,9 @@ export const competitionCaseResults = pgTable("competition_case_results", {
 export const bountyAwards = pgTable("bounty_awards", {
   id: uuid("id").primaryKey(), submissionId: uuid("submission_id").notNull().references(() => competitionAssessments.submissionId),
   teamRoundId: uuid("team_round_id").notNull().references(() => teamRounds.id), bountyId: uuid("bounty_id").notNull().references(() => bounties.id),
-  roundKind: integer("round_kind").notNull(), baseBounty: integer("base_bounty").notNull(), points: integer("points").notNull(), recordedAt: instant("recorded_at").notNull(),
+  roundKind: integer("round_kind").notNull(), baseBounty: integer("base_bounty").notNull(), points: integer("points").notNull(), recordedAt: instant("recorded_at").notNull(), protected: boolean("protected").notNull().default(false),
 }, t => [unique("competition_award_team_bounty").on(t.teamRoundId, t.bountyId), unique("competition_award_submission").on(t.submissionId),
-  uniqueIndex("competition_shared_winner").on(t.bountyId).where(sql`${t.roundKind}=2`),
+  check("protected_round_two",sql`not ${t.protected} or ${t.roundKind}=2`), uniqueIndex("competition_shared_winner").on(t.bountyId).where(sql`${t.roundKind}=2 and not ${t.protected}`),
   check("competition_award_shape", sql`(${t.roundKind}=1 and ${t.baseBounty} between 10 and 5000 and ${t.points}=${t.baseBounty}) or (${t.roundKind}=2 and ${t.baseBounty} between 10 and 1000 and ${t.points} between 5 and 1000)`)]);
 export const wrongSubmissionPenalties = pgTable("wrong_submission_penalties", {
   submissionId: uuid("submission_id").primaryKey().references(() => competitionAssessments.submissionId),
@@ -112,11 +112,42 @@ export const roundCarryovers = pgTable("round_carryovers", {
 }, t => [unique("competition_carryover_once").on(t.resultId, t.sourceTeamRoundId), check("competition_carryover_amount", sql`${t.amount} between 0 and 250000`)]);
 export const walletEntries = pgTable("wallet_entries", {
   id: uuid("id").primaryKey(), teamRoundId: uuid("team_round_id").notNull().references(() => teamRounds.id), amount: integer("amount").notNull(),
-  awardId: uuid("award_id").references(() => bountyAwards.id), purchaseId: uuid("purchase_id").references(() => hintPurchases.id), carryoverId: uuid("carryover_id").references(() => roundCarryovers.teamRoundId),
+  awardId: uuid("award_id").references(() => bountyAwards.id), purchaseId: uuid("purchase_id").references(() => hintPurchases.id), carryoverId: uuid("carryover_id").references(() => roundCarryovers.teamRoundId), shopPurchaseId: uuid("shop_purchase_id").unique().references(() => shopPurchases.id),
   recordedAt: instant("recorded_at").notNull(),
 }, t => [unique("wallet_award_once").on(t.awardId), unique("wallet_hint_once").on(t.purchaseId), unique("wallet_opening_once").on(t.carryoverId),
-  check("wallet_entry_source", sql`num_nonnulls(${t.awardId},${t.purchaseId},${t.carryoverId})=1 and ${t.amount}<>0 and ${t.amount} between -2000 and 250000`)]);
+  check("wallet_entry_source", sql`num_nonnulls(${t.awardId},${t.purchaseId},${t.carryoverId},${t.shopPurchaseId})=1 and ${t.amount}<>0 and ${t.amount} between -15000 and 250000`)]);
 export const competitionEvents = pgTable("competition_events", {
   sequence: bigint("sequence", { mode: "bigint" }).primaryKey().generatedAlwaysAsIdentity(), roundId: uuid("round_id").notNull().references(() => rounds.id),
   teamRoundId: uuid("team_round_id").references(() => teamRounds.id), kind: text("kind").notNull(), referenceId: uuid("reference_id").notNull(), createdAt: instant("created_at").notNull(),
 }, t => [check("competition_event_kind", sql`${t.kind} in ('ROUND_CHANGED','HINT_PURCHASED','SUBMISSION_RECEIVED','ASSESSMENT_RECORDED','BOUNTY_AWARDED','PENALTY_APPLIED','RESULT_FINALISED','QUALIFICATION_LOCKED')`)]);
+
+export const shopPurchases=pgTable("shop_purchases",{
+  id:uuid("id").primaryKey(),roundId:uuid("round_id").notNull().references(()=>rounds.id),teamRoundId:uuid("team_round_id").notNull().references(()=>teamRounds.id),
+  itemId:text("item_id").notNull(),price:integer("price").notNull(),sourceId:uuid("source_id").notNull().unique().references(()=>competitionOutcomes.id),purchasedAt:instant("purchased_at").notNull(),
+},t=>[check("shop_purchases_item_id_check",sql`${t.itemId} in ('boundary-probe','hex-scanner','overdrive-core','ghost-scan','chrono-shield','claim-lock','black-ice')`),
+  check("shop_purchases_price_check",sql`${t.price} between 400 and 15000`),index("shop_team_inventory").on(t.teamRoundId,t.purchasedAt,t.id),
+  uniqueIndex("shop_once_per_round").on(t.teamRoundId,t.itemId).where(sql`${t.itemId} in ('overdrive-core','chrono-shield','claim-lock','black-ice')`)]);
+export const shopActivations=pgTable("shop_activations",{
+  id:uuid("id").primaryKey(),purchaseId:uuid("purchase_id").notNull().unique().references(()=>shopPurchases.id),roundId:uuid("round_id").notNull().references(()=>rounds.id),
+  teamRoundId:uuid("team_round_id").notNull().references(()=>teamRounds.id),itemId:text("item_id").notNull(),bountyId:uuid("bounty_id").references(()=>bounties.id),
+  targetTeamRoundId:uuid("target_team_round_id").references(()=>teamRounds.id),sourceId:uuid("source_id").notNull().unique().references(()=>competitionOutcomes.id),
+  activatedAt:instant("activated_at").notNull(),activeMs:bigint("active_ms",{mode:"bigint"}).notNull(),expiresMs:bigint("expires_ms",{mode:"bigint"}),
+},t=>[check("shop_activations_check",sql`${t.expiresMs} is null or ${t.expiresMs}>${t.activeMs}`),
+  uniqueIndex("shop_intel_once").on(t.teamRoundId,t.bountyId,t.itemId).where(sql`${t.bountyId} is not null`),
+  uniqueIndex("shop_freeze_once").on(t.targetTeamRoundId).where(sql`${t.itemId}='black-ice'`)]);
+export const shopSubmissionEffects=pgTable("shop_submission_effects",{
+  submissionId:uuid("submission_id").primaryKey().references(()=>competitionSubmissions.id),protectionId:uuid("protection_id").references(()=>shopActivations.id),
+  shieldId:uuid("shield_id").unique().references(()=>shopActivations.id),
+},t=>[check("shop_submission_effects_check",sql`${t.protectionId} is not null or ${t.shieldId} is not null`)]);
+export const shopSnapshotIntel=pgTable("shop_snapshot_intel",{
+  snapshotId:uuid("snapshot_id").notNull().references(()=>validationSnapshots.id),language:text("language").notNull(),
+  snapshotFingerprint:bytes("snapshot_fingerprint").notNull(),starterSha256:bytes("starter_sha256").notNull(),data:jsonb("data").notNull(),
+},t=>[primaryKey({columns:[t.snapshotId,t.language]}),check("shop_snapshot_intel_snapshot_fingerprint_check",sql`octet_length(${t.snapshotFingerprint})=32`),
+  check("shop_snapshot_intel_starter_sha256_check",sql`octet_length(${t.starterSha256})=32`),check("shop_snapshot_intel_data_check",sql`jsonb_typeof(${t.data})='object' and octet_length(${t.data}::text)<=180000`)]);
+export const shopPresence=pgTable("shop_presence",{
+  sessionId:uuid("session_id").notNull().references(()=>participantSessions.id),connectionId:text("connection_id").notNull(),
+  memberRoundId:uuid("member_round_id").notNull().references(()=>memberRounds.id),bountyId:uuid("bounty_id").notNull().references(()=>bounties.id),expiresAt:instant("expires_at").notNull(),
+},t=>[primaryKey({columns:[t.sessionId,t.connectionId]}),check("shop_presence_connection_id_check",sql`octet_length(${t.connectionId}) between 1 and 64`),index("shop_activity_target").on(t.bountyId,t.expiresAt)]);
+export const shopExpiryNotices=pgTable("shop_expiry_notices",{
+  activationId:uuid("activation_id").notNull().references(()=>shopActivations.id),kind:text("kind").notNull(),recordedAt:instant("recorded_at").notNull(),
+},t=>[primaryKey({columns:[t.activationId,t.kind]}),check("shop_expiry_notices_kind_check",sql`${t.kind} in ('EFFECT','COOLDOWN')`)]);

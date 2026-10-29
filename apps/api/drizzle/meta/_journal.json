@@ -582,6 +582,41 @@
       "when": 1793203200000,
       "tag": "0082_round_two_hundred_bounties",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1793289600000,
+      "tag": "0083_round_two_shop",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793376000000,
+      "tag": "0084_shop_competition",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793462400000,
+      "tag": "0085_shop_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793548800000,
+      "tag": "0086_shop_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1793635200000,
+      "tag": "0087_four_language_validation_runs",
+      "breakpoints": true
     }
   ]
 }

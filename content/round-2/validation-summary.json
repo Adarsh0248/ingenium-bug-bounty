@@ -16,9 +16,9 @@
   },
   "test_image_id": "sha256:727b56f40ae170a74b61ed7cd9a87a6e05516909e7b4a75db5898d80aaca38b3",
   "c_cpp_undefined_behavior_checks": true,
-  "unchanged_variants_reused": 388,
+  "unchanged_variants_reused": 0,
   "changed_question_variants_rechecked": 12,
-  "evidence_note": "388 unchanged variants reuse the complete initial Linux run. All twelve variants of the three corrected questions were rerun; exact source hashes, unchanged complete question objects, all judging cases and separate probes are checked before combining results.",
+  "evidence_note": "Fresh complete Linux checks on 29 October 2026: every organiser-authored starter/reference variant, every judging case, every hidden starter witness and every separate paid probe rerun. C/C++ undefined-behaviour checks enabled. This is trusted local content evidence, not protected event-host publication approval.",
   "production_judge_validated": false,
   "human_pilot_difficulty_reviewed": false,
   "scanner_validation_source_pack_sha256": "a8307985a7b3088ec939f773dc038336faadf66db4ee0faf0bc5f1a275fe00b2",
@@ -56,5 +56,12 @@
   },
   "prose_validation_source_pack_sha256": "a0ad99e2d237e2ada3cb8373d5b2f3b2b0c38185c9d01cebe60aebf2f9ceaaac",
   "prose_change_note": "Only participant statement and hint text changed. Exact program bytes, tests, witnesses, paid examples, scanner scopes, metadata and rewards match the preceding validated pack. Existing compiler results are reused; prose/UI checks do not certify human difficulty or production publication.",
-  "plain_english_questions_reviewed": 100
+  "plain_english_questions_reviewed": 100,
+  "database_staging": {
+    "questions": 100,
+    "variants": 400,
+    "paid_clue_bindings": 400,
+    "production_guards_passed": true,
+    "published": false
+  }
 }

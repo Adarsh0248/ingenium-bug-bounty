@@ -27,6 +27,7 @@ import { backupFixture, backupDocker } from "./backup-fixture.js";
 import { staffRecoveryLinuxChecks } from "./staff-recovery-linux.checks.js";
 import { linuxLoadChecks } from "./load-linux.checks.js";
 import {runLocalRoundFlow} from "../fixtures/host-round-flow.js";
+import {eventPackChecks} from "./event-packs.checks.js";
 import type {RuntimeManifestFixture} from "../fixtures/host-round-flow.js";
 import {createAuthoringJudgeDriver} from "../../src/content/judge-driver.js";
 import type {JudgeDriverSettings} from "../../src/content/judge-driver.js";
@@ -111,6 +112,7 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     url.password = apiPassword;
     const apiUrl = url.toString();
     api = new Pool({ connectionString: apiUrl, max: 4, connectionTimeoutMillis: 2000 });
+    if(process.env.INGENIUM_TEST_SUITE==='event-packs'){await eventPackChecks(t,owner,api);return;}
     if(process.env.INGENIUM_TEST_SUITE==="event-capacity"){
       await t.test("event capacity preserves existing slots, refuses a ninth slot and stays owner-only",async()=>{
         const before=(await owner!.query("SELECT * FROM execution_capacity_slots ORDER BY id")).rows;
@@ -156,7 +158,7 @@ test("registration migrations work on isolated PostgreSQL and preserve their con
     if(["worker-validation","diagnostics","diagnostics-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){await validationChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="imports"){await registrationImportChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="teams"){await teamManagementChecks(t,ownerUrl,apiUrl);return;}
-    if(["reports","reward-boost"].includes(process.env.INGENIUM_TEST_SUITE??"")){await competitionChecks(t,ownerUrl,apiUrl);return;}
+    if(["reports","reward-boost","shop"].includes(process.env.INGENIUM_TEST_SUITE??"")){await competitionChecks(t,ownerUrl,apiUrl);return;}
     if(process.env.INGENIUM_TEST_SUITE==="judge-supervisor"){await judgeGatewayChecks(t,ownerUrl);return;}
     if (["hundred-bounties", "load", "load-soak", "race-load", "operations", "operations-browser", "restore", "backup", "https", "competition", "worker", "maintenance", "participant", "live", "workbench", "history", "history-browser", "judging", "judging-browser", "review", "review-browser", "audit", "audit-browser", "announcements", "announcements-browser", "team-access", "team-access-browser", "results", "results-browser", "retention", "browser", "registration-browser", "discipline", "discipline-browser", "cancellation", "cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE ?? "")) { await competitionChecks(t, ownerUrl, apiUrl, backup ? { fixture: backup, container } : undefined); return; }
     if (process.env.INGENIUM_TEST_SUITE !== "foundation") {

@@ -1,5 +1,9 @@
 # Local admin and contestant preview
 
+For short network interruptions, keep the tab open. See
+[performance and reconnection](performance-and-reconnection.md) for retained
+questions, offline edits, recovery and production caching limits.
+
 For the separate **Round 2 Black Market preview**, run `npm.cmd run preview:round2`
 and open **http://127.0.0.1:5176**. Use the team code
 `AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, choose a member/language and click **Black Market**.

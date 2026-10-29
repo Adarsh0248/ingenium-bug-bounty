@@ -7,6 +7,16 @@ troubleshooting, see the [local app guide](LOCAL-APP-GUIDE.md).
 
 ## Status
 
+Current shop update, 28 October: the seven approved Round 2 items now use durable
+team inventory, source-linked wallet debits, original-receipt recovery, trusted
+timers, Black ICE purchase freezes and submission-bound protection/assistance.
+The shop is wired into live state, question eligibility, judging settlement and
+participant results; the separate visual preview remains synthetic. See
+[the implementation and test boundary](docs/round-2-items.md). Production-host
+deployment, reviewed content publication and the previously deferred capacity
+gate remain separate. Overall development is roughly **96%**, not a launch
+certificate. Earlier status notes below describe their original dates.
+
 Current update, 25 October: roughly **91%** complete; event deployment remains on
 hold. Individual real executions pass for all five languages, and the approved
 6-CPU/24-GiB test VM is running the five-hour concurrent judge rehearsal. The

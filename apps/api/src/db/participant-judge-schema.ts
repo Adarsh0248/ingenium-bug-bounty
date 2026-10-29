@@ -23,7 +23,7 @@ export const participantJudging = pgTable("participant_judging", {
   status: text("status").notNull(), result: text("result"), startedAt: instant("started_at"), completedAt: instant("completed_at"),
   cancellationId: uuid("cancellation_id").references(() => roundCancellations.id),
   reservedBytes: bigint("reserved_bytes", { mode: "bigint" }).notNull(),
-}, t => [unique("participant_official_plan").on(t.submissionId), unique("participant_sample_receipt").on(t.sourceId), unique("participant_queue_order").on(t.queueOrder),
+}, t => [index("shop_unfinished_work").on(t.bountyId,t.teamRoundId).where(sql`${t.completedAt} is null and ${t.status}<>'CANCELLED'`), unique("participant_official_plan").on(t.submissionId), unique("participant_sample_receipt").on(t.sourceId), unique("participant_queue_order").on(t.queueOrder),
   check("participant_parent_shape", sql`${t.policyVersion}=1 and octet_length(${t.source}) between 1 and 131072 and octet_length(${t.runtimeDigest})=32
     and ${t.language} in ('c','cpp','java','python','javascript') and ${t.reservedBytes} between 524288 and 21495808
     and ((${t.lane}='OFFICIAL' and ${t.submissionId} is not null and ${t.submissionId}=${t.id} and ${t.sourceId} is null) or (${t.lane}='SAMPLE' and ${t.submissionId} is null and ${t.sourceId} is not null))

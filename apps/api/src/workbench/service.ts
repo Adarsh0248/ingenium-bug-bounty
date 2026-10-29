@@ -26,10 +26,10 @@ export function createWorkbenchService(pool:Pool,clock:ClockGuard){
       const {client,memberRoundId,teamRoundId}=context;
       const selected=await first<Scope["bounty"]>(client,`SELECT b.snapshot_id,s.title,s.difficulty,s.base_bounty,s.submission_format,s.checker_mode,r.state,r.started_at,r.closes_at,
         (a.status='IN_PROGRESS' AND c.current_instance_id=a.id) AS current,
-        EXISTS(SELECT 1 FROM bounty_awards w WHERE w.bounty_id=b.id AND (r.kind=2 OR w.team_round_id=$3)) AS claimed,
+        competition_bounty_unavailable(b.id,$3,$5) AS claimed,
         EXISTS(SELECT 1 FROM competition_pauses p WHERE p.round_id=r.id AND p.ended_at IS NULL AND (p.scope='GLOBAL' OR p.team_round_id=$3 OR p.member_round_id=$4)) AS paused
         FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id JOIN arena_instances a ON a.id=r.arena_instance_id CROSS JOIN arena_control c
-        WHERE b.id=$2 AND b.round_id=$1 AND c.id=1 AND r.started_at IS NOT NULL AND r.state NOT IN ('DRAFT','READY')`,[round,bounty,teamRoundId,memberRoundId]);
+        WHERE b.id=$2 AND b.round_id=$1 AND c.id=1 AND r.started_at IS NOT NULL AND r.state NOT IN ('DRAFT','READY')`,[round,bounty,teamRoundId,memberRoundId,context.now]);
       if(!selected)throw new AccessError("WORKBENCH_UNAVAILABLE");
       return work({...context,bounty:selected});
     });

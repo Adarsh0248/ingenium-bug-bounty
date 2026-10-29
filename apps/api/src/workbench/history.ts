@@ -36,7 +36,7 @@ export function createHistoryService(pool: Pool, clock: ClockGuard) {
         }>(
           c.client,
           `SELECT r.id AS round_id,r.kind,r.state,EXISTS(SELECT 1 FROM round_results WHERE round_id=r.id) AS final,
-            competition_balance($2)::integer AS wallet,competition_display_standings(r.id) AS standings
+            competition_balance($2)::integer AS wallet,shop_standings(r.id) AS standings
             FROM rounds r WHERE r.id=$1`,
           [round, c.teamRoundId],
         );
@@ -46,12 +46,12 @@ export function createHistoryService(pool: Pool, clock: ClockGuard) {
         const bounties = (
           await c.client.query(
             `SELECT b.id AS bounty_id,s.title,s.difficulty,s.base_bounty,
-          EXISTS(SELECT 1 FROM bounty_awards a WHERE a.bounty_id=b.id AND (r.kind=2 OR a.team_round_id=$2)) AS claimed,
+          competition_bounty_unavailable(b.id,$2,$4) AS claimed,
           COALESCE((SELECT max(level) FROM hint_purchases WHERE bounty_id=b.id AND team_round_id=$2),0) AS hint_tier,
           EXISTS(SELECT 1 FROM code_drafts WHERE bounty_id=b.id AND member_round_id=$3) AS draft_saved,
           (SELECT points FROM bounty_awards WHERE bounty_id=b.id AND team_round_id=$2) AS awarded_points
           FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`,
-            [round, c.teamRoundId, c.memberRoundId],
+            [round, c.teamRoundId, c.memberRoundId,c.now],
           )
         ).rows;
         return {

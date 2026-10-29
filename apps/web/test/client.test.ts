@@ -228,3 +228,40 @@ test("countdown is presentation-only, bounded at zero and never wraps at one hou
   assert.equal(timeText(3600000), "01:00:00");
   assert.equal(timeText(18000000), "05:00:00");
 });
+
+test("opened question memory is bounded, session-scoped and cleared without touching dirty source", () => {
+  const api = createApi(async () => envelope({}));
+  const first = createWorkspace(
+    api,
+    { round_id: "round", member_round_id: "one" } as any,
+    () => {},
+  );
+  const second = createWorkspace(
+    api,
+    { round_id: "round", member_round_id: "two" } as any,
+    () => {},
+  );
+  const brief = (statement = "Opened question") => ({
+    meta: {} as any,
+    statement,
+    hints: [],
+    samples: {},
+  });
+  try {
+    for (let i = 0; i < 8; i++) first.rememberQuestion(String(i), brief());
+    assert.ok(first.question("0"));
+    first.rememberQuestion("8", brief());
+    assert.ok(first.question("0"));
+    assert.equal(first.question("1"), null);
+    assert.equal(second.question("0"), null);
+    first.rememberQuestion("huge", brief("x".repeat(4194304)));
+    assert.equal(first.question("huge"), null);
+    first.close();
+    assert.equal(first.question("0"), null);
+    first.rememberQuestion("late", brief());
+    assert.equal(first.question("late"), null);
+  } finally {
+    first.close();
+    second.close();
+  }
+});

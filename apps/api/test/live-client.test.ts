@@ -7,6 +7,37 @@ const event=(sequence:string,patch:Record<string,unknown>={type:"INVALIDATE",pro
 function fixture(){let now=0;const invalidations:string[]=[],awards:string[]=[],replica=new LiveReplica(()=>now,s=>invalidations.push(s),s=>awards.push(s));replica.begin("sync");replica.snapshot("sync",streams());
   return{replica,invalidations,awards,time(value:number){now=value;}};}
 
+test("known network outages stop reconnect traffic and restoration starts a fresh sync immediately", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  let tickets = 0, installed = 0;
+  const listeners = new Map<string, (value:any) => void>();
+  const client = connectLive("PARTICIPANT", null, {
+    now: () => 0,
+    async post(path) {
+      if(path.endsWith("tickets")) { tickets++; return { ticket: "ticket" }; }
+      if(path.endsWith("snapshot")) return { sync_id: "sync", streams: streams() };
+      if(path.endsWith("replay")) return { sync_id: "sync", events: [], next: "0", through: "0", heads: streams() };
+      throw new Error("Unexpected write");
+    },
+    transport() { return { connected: true, on(name,fn) { listeners.set(name,fn); }, connect() { listeners.get("sync")!({sync_id:"sync"}); }, disconnect() {}, volatile: { emit(name) { if(name==="ready") listeners.get("ready")!({sync_id:"sync",heads:streams()}); } } }; },
+    install() { installed++; }, invalidate(){}, award(){}, presence(){}, state(){}
+  });
+  try {
+    for(let i=0;i<30;i++) await Promise.resolve();
+    assert.equal(client.replica.phase,"READY");
+    client.network(false);
+    t.mock.timers.tick(60000);
+    for(let i=0;i<30;i++) await Promise.resolve();
+    assert.equal(tickets,1);
+    assert.equal(client.replica.phase,"STALE");
+    client.network(true);
+    for(let i=0;i<30;i++) await Promise.resolve();
+    assert.equal(tickets,2);
+    assert.equal(installed,2);
+    assert.equal(client.replica.phase,"READY");
+  } finally { client.close(); }
+});
+
 for(const changed of [null,"member"]){
   test(`synchronisation establishes one server barrier and reads only streams with missing events (${changed})`,async()=>{
     const listeners=new Map<string,(value:any)=>void>(),requests:string[]=[],awards:string[]=[];

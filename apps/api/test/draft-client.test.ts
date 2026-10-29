@@ -87,6 +87,23 @@ test("a known read-only view stays read-only offline and shrinking oversized tex
   try{editor.edit("x".repeat(131073));editor.edit("small again");assert.equal(f.changes.at(-1).reason,null);}finally{editor.close();}
 });
 
+test("a permission refresh interrupted by a network drop keeps the last permitted local editor writable offline", async () => {
+  const f = fixture();
+  let reject!: (error: Error) => void;
+  f.hooks.load = () => new Promise<DraftView>((_resolve, fail) => { reject = fail; });
+  const editor = createDraftEditor(view(), f.hooks);
+  try {
+    editor.availability(true, true);
+    editor.availability(false, true);
+    reject(new Error("connection lost"));
+    await settle();
+    editor.edit("retained offline edit");
+    assert.equal(editor.source, "retained offline edit");
+    assert.equal(editor.state, "OFFLINE");
+    assert.equal(f.sent.length, 0);
+  } finally { editor.close(); }
+});
+
 test("overlapping explicit retries cannot dispatch twice while permission recovery is still pending",async t=>{
   t.mock.timers.enable({apis:["setTimeout"]});const f=fixture();let fail=true,loads=0,resolve!:(v:DraftView)=>void;
   f.hooks.save=async intent=>{f.sent.push({...intent});if(fail)throw new Error("lost response");return receipt(intent);};

@@ -80,7 +80,7 @@ export async function browserChecks(t: TestContext, owner: Pool, api: Pool, deli
 
     await t.test("HTTP lost-response recovery after restart redelivers exactly one original cookie without renewing activity", async () => {
       const team = await fixture(), client = browser(), entry = await client.start(team.code);
-      const body = { member_id: team.first, language: "javascript", request_key: randomUUID() };
+      const body = { member_id: team.first, language: "c", request_key: randomUUID() };
       const replies = await Promise.all([client.send("/api/v1/entry/activate", { body, token: entry.csrf_token }), client.send("/api/v1/entry/activate", { body, token: entry.csrf_token })]);
       assert.ok(replies.every((reply) => reply.statusCode === 200));
       const original = client.cookies.get(policy.names.participant);

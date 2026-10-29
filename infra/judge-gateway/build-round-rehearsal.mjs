@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {randomUUID,createHash} from 'node:crypto';
+import {mkdir,readFile,writeFile,copyFile,cp} from 'node:fs/promises';
+import {join,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {build} from 'esbuild';
+import {execFileSync} from 'node:child_process';
+assert.equal(process.argv.length,2);
+const repo=fileURLToPath(new URL('../../',import.meta.url)),directory=join(repo,'build',`linux-round-rehearsal-${randomUUID()}`);await mkdir(directory);
+await build({absWorkingDir:repo,entryPoints:['infra/judge-gateway/test/host-round-flow-check.ts'],outfile:join(directory,'round-check.mjs'),bundle:true,platform:'node',format:'esm',target:'node24',external:['pg-native'],banner:{js:"import {createRequire as cr} from 'node:module'; const require=cr(import.meta.url);"},plugins:[{name:'rehearsal-fixture-paths',setup(b){b.onLoad({filter:/[\\/]migrate\.ts$|[\\/]host-round-flow\.ts$/},async args=>({loader:'ts',resolveDir:dirname(args.path),contents:(await readFile(args.path,'utf8')).replace('new URL("../../drizzle/", import.meta.url)','new URL("./drizzle/", import.meta.url)').replace('new URL("../../../../infra/app-host/event-capacity.sql",import.meta.url)','new URL("./event-capacity.sql",import.meta.url)')}));}}]});
+await cp(join(repo,'apps/api/drizzle'),join(directory,'drizzle'),{recursive:true});
+await copyFile(join(repo,'infra/postgres/01-api-role.sql'),join(directory,'01-api-role.sql'));
+await copyFile(join(repo,'infra/app-host/event-capacity.sql'),join(directory,'event-capacity.sql'));
+assert.throws(()=>execFileSync(process.execPath,[join(directory,'round-check.mjs'),'--foreign','/foreign'],{stdio:'pipe'}));
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+await writeFile(join(directory,'entry.sha256'),hash(await readFile(join(directory,'round-check.mjs')))+'  round-check.mjs\n');
+console.log(JSON.stringify({directory,event_deployed:false,scope:'ISOLATED_LINUX_ROUND_REHEARSAL'}));

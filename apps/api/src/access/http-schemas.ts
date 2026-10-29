@@ -203,7 +203,7 @@ export const validationRunReport = object({run_id:id,snapshot_id:id,configuratio
     witness_position:{anyOf:[level,{type:"null"}]},expected_result:validationResult,result:{anyOf:[validationResult,{type:"null"}]},available_at:instant,completed_at:optionalInstant,
     attempts:{type:"integer",minimum:0,maximum:3},physical_pending:{type:"boolean"},dispatches:{type:"array",maxItems:3,items:object({id,number:{type:"integer",minimum:1,maximum:3},result:{anyOf:[validationResult,{type:"null"}]},resolved_at:optionalInstant,physical_pending:{type:"boolean"}})}})}});
 export const validationSnapshotData = object({ snapshot_id:id,version_id:id,content_revision:revision,fingerprint:{ type:"string",pattern:"^[0-9a-f]{64}$" },
-  created_at:instant,planned_checks:{ type:"integer",minimum:15,maximum:115 },validation_run_id:{ type:"null" },...notExecutable,
+  created_at:instant,planned_checks:{ type:"integer",minimum:12,maximum:115 },validation_run_id:{ type:"null" },...notExecutable,
   checks:{ type:"array",maxItems:115,items:object({ check_id:id,position:{ type:"integer",minimum:1,maximum:115 },variant_id:id,language:lang,
     source_role:{ type:"string",enum:["REFERENCE","STARTER"] },check_type:{ type:"string",enum:["COMPILATION","TEST_CASE"] },case_id:nullableId,
     witness_position:{ anyOf:[level,{ type:"null" }] },expected_result:{ type:"string",enum:["PASSED","WRONG_ANSWER","COMPILATION_ERROR","RUNTIME_ERROR","TIME_LIMIT_EXCEEDED","MEMORY_LIMIT_EXCEEDED"] } }) } });

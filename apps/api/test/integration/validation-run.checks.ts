@@ -53,6 +53,7 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
       }
       if(mode==="FAIL_REFERENCE" && p.checkId===targetCheck)observation.stdout=Buffer.from("synthetic incorrect reference");
       saved.set(p.attemptId,observation);
+      if(mode==="PIPELINE")return {state:"PENDING"};
       if(mode==="LOST_REPLY"){mode="NORMAL";throw new Error("Synthetic lost POST reply");}
       return observation;
     },async observe(p){return saved.get(p.attemptId)??{state:"PENDING"};}};
@@ -104,13 +105,24 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
     const initial=(await owner.query("SELECT *,extract(epoch FROM deadline_at-created_at)::integer AS budget FROM validation_runs WHERE id=$1",[runId])).rows[0];
     assert.equal(initial.check_count,15);assert.equal(initial.budget,600);assert.equal(initial.status,"QUEUED");assert.equal(initial.started_at,null);
     mode="LOST_REPLY";assert.equal(await worker.tick(),"UNCERTAIN");
-    const count=sends;assert.equal(await worker.tick(),"IDLE");assert.equal(await observeTick(),"OBSERVED");assert.equal(sends,count);
+    const originalAttempt=(await owner.query("SELECT a.id FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1",[runId])).rows[0].id;
+    assert.equal(await observeTick(),"OBSERVED");
     assert.equal(await finish(runId),"PASSED");
     const report=await service.report(actor.sessionCookie,runId);assert.equal(report.physical_pending,false);assert.equal(report.can_publish,false);assert.ok(report.checks.every(c=>c.attempts===1));
     assert.deepEqual(report.configuration_fingerprint,snapshot.fingerprint.toString("hex"));
     assert.equal((await owner.query("SELECT count(*)::integer AS n FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1",[runId])).rows[0].n,15);
+    assert.ok((await owner.query("SELECT released_at FROM authoring_attempts WHERE id=$1",[originalAttempt])).rows[0].released_at);
     assert.equal((await owner.query("SELECT publication_status FROM bug_versions WHERE id=$1",[snapshot.version_id])).rows[0].publication_status,"DRAFT");
     assert.doesNotMatch(JSON.stringify(report),/private expected|private source|compiler_output|stdout_prefix|endpoint_ref/);
+  });
+  await t.test("independent authoring checks use both slots while original pending attempts keep their identity and polling backoff",async()=>{
+    mode="PIPELINE";const run=await start(),before=sends;
+    assert.equal(await worker.tick(),'PENDING');assert.equal(await worker.tick(),'PENDING');
+    const pending=(await owner.query("SELECT a.id,a.check_id FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1 AND a.released_at IS NULL",[run])).rows;
+    assert.equal(pending.length,2);assert.equal(new Set(pending.map(r=>r.check_id)).size,2);assert.equal(sends,before+2);
+    assert.equal((await owner.query('SELECT count(*)::int n FROM execution_capacity_slots WHERE authoring_attempt_id IS NOT NULL')).rows[0].n,2);
+    mode='NORMAL';assert.equal(await finish(run),'PASSED');
+    assert.equal((await owner.query('SELECT max(a.number)::int n FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1',[run])).rows[0].n,1);
   });
   await t.test("reliable reference failure is FAILED, never retried, and the other language checks still finish",async()=>{
     mode="FAIL_REFERENCE";targetCheck=undefined;const run=await start();assert.equal(await finish(run),"FAILED");
@@ -142,8 +154,11 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
       await owner.query("UPDATE judge_control SET lease_until=date_trunc('milliseconds',clock_timestamp())-interval '1 millisecond' WHERE id=1");
       const successor=createValidationWorker(api,clock,driver);assert.equal(await successor.claim(),true);const count=sends;
       const oldWorker=worker;worker=successor;
+      await setTimeout(550);
       assert.equal(await observeTick(),"PENDING");assert.equal(sends,count);
       release();await assert.rejects(oldTick,{code:"55000"});assert.notEqual(worker.workerId,oldWorker.workerId);
+      const nextPoll=(await owner.query('SELECT min(a.next_poll_at) due FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1 AND a.released_at IS NULL',[run])).rows[0].due as Date;
+      await setTimeout(Math.max(0,nextPoll.getTime()-Date.now()+25));
       assert.equal(await observeTick(),"OBSERVED");assert.equal(sends,count);assert.equal(await finish(run),"PASSED");
       assert.equal((await owner.query("SELECT max(number)::integer AS n FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1",[run])).rows[0].n,1);
     }finally{release();sendHook=undefined;await oldTick.catch(()=>{});}

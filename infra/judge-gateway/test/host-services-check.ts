@@ -29,6 +29,7 @@ let stage="caller",directory="",redis:Awaited<ReturnType<typeof createTestRedis>
 try{
   const endurance=process.argv[2]==="--endurance";
   const bridge=process.argv[2]==="--bridge";
+  const bridgeDuration=5400000;
   const capacity=process.argv[2]==="--capacity";
   assert.equal(process.argv.length,endurance||bridge||capacity?3:2);assert.equal(hostname(),"ingenium-judge-verification-01");assert.equal(process.getuid?.(),0);process.umask(0o077);
   const settings=parseHostRuntime(await rootRuntimeJson("/etc/ingenium/judge-launcher.json",4194304));
@@ -36,7 +37,7 @@ try{
   const previous=await rootRuntimeJson(`${context}/completed`,32768) as {results:unknown[]};assert.equal(previous.results.length,5);
   directory=`/var/lib/ingenium/services-rehearsal-${randomUUID()}`;await mkdir(directory,{mode:0o700});
   async function save(name:string,value:unknown){const f=await open(`${directory}/${name}`,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o400);try{await f.writeFile(JSON.stringify(value)+"\n");await f.sync();}finally{await f.close();}const d=await open(directory,constants.O_RDONLY|constants.O_DIRECTORY);try{await d.sync();}finally{await d.close();}}
-  await save("run-intent",{endurance,bridge,capacity,duration_ms:endurance?18000000:bridge?1800000:0,boot_id:settings.bootId,event_deployed:false});
+  await save("run-intent",{endurance,bridge,capacity,duration_ms:endurance?18000000:bridge?bridgeDuration:0,boot_id:settings.bootId,event_deployed:false});
   const pool=(url:string,max=3)=>{const p=new Pool({connectionString:url,max,connectionTimeoutMillis:1000,query_timeout:5000});p.on("error",()=>{});pools.push(p);return p;};
   const ingressSecret=await rootRuntimeJson(`${context}/credential-ingenium_rehearsal_ingress_${settings.hostEpochId.replaceAll("-","").slice(0,12)}`,4096) as {secret:string};
   const ingressUrl=new URL(settings.databaseUrl);ingressUrl.username=ingressUrl.username.replace("_runner_","_ingress_");ingressUrl.password=ingressSecret.secret;
@@ -71,7 +72,7 @@ try{
     await save("bridge-process",{pid:process.pid});
     console.log(JSON.stringify({scope:"ISOLATED_ROUND_FLOW_BRIDGE",pid:process.pid,port:address.port,evidence:directory,event_deployed:false}));
     let stop=false;const requested=()=>{stop=true;};process.once("SIGTERM",requested);process.once("SIGINT",requested);
-    try{while(!stop&&performance.now()-runStarted<1800000){assert.equal(serviceFailed,false);await delay(250);}}finally{process.removeListener("SIGTERM",requested);process.removeListener("SIGINT",requested);}
+    try{while(!stop&&performance.now()-runStarted<bridgeDuration){assert.equal(serviceFailed,false);await delay(250);}}finally{process.removeListener("SIGTERM",requested);process.removeListener("SIGINT",requested);}
     assert.deepEqual(await store.held(),[]);assert.equal(await redis.control.sendCommand(["XLEN",`ingenium:authoring:${settings.hostEpochId}:${settings.bootId}`]),0);
   }else{
   do{

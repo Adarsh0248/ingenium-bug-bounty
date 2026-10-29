@@ -1,3 +1,5 @@
+import { createShopService } from "../competition/shop.js";
+import * as shopSchema from "../competition/shop-schemas.js";
 import { randomUUID } from "node:crypto";
 import cookie from "@fastify/cookie";
 import csrf from "@fastify/csrf-protection";
@@ -76,6 +78,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   const discipline=createDisciplineService(options.pool,options.clock,options.delivery);
   const replacements = createReplacementService(options.pool, options.clock, options.delivery);
   const arenas = createArenaService(options.pool, options.clock, options.delivery);
+  const shop = createShopService(options.pool, options.clock);
   const competition = createCompetitionService(options.pool, options.clock, options.delivery, options.competition);
   const submissionReviews = createSubmissionReviewService(options.pool, options.clock, options.delivery);
   const reports = createReportService(options.pool, options.clock, options.delivery);
@@ -336,6 +339,21 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   app.get<{Params:{round_id:string}}>("/staff/competition/rounds/:round_id/results",{exposeHeadRoute:false,preSerialization:boundedResponse(270336),
     schema:{params:competitionSchema.roundParams,querystring:schema.empty,response:schema.responses(competitionSchema.finalResults)}},async request=>
     wrap(request,await competition.results(request.cookies[policy.names.staff],request.params.round_id)));
+  app.get<{Params:{round_id:string}}>("/competition/rounds/:round_id/shop",{exposeHeadRoute:false,preSerialization:boundedResponse(262144),
+    schema:{params:competitionSchema.roundParams,querystring:schema.empty,response:schema.responses(shopSchema.view)}},
+    async request=>wrap(request,await shop.view(request.cookies[policy.names.participant],request.params.round_id)));
+  app.post<{Params:{round_id:string};Body:{request_key:string;item_id:string;target_id:string|null}}>("/competition/rounds/:round_id/shop/purchases",{
+    onRequest:writeHooks("PARTICIPANT"),schema:{params:competitionSchema.roundParams,querystring:schema.empty,body:shopSchema.purchase,response:schema.responses(shopSchema.receipt)}},
+    async request=>wrap(request,await shop.command(request.cookies[policy.names.participant],request.params.round_id,request.body.request_key,"SHOP_PURCHASE",{item_id:request.body.item_id,target_id:request.body.target_id})));
+  app.post<{Params:{round_id:string};Body:{request_key:string;purchase_id:string;bounty_id:string}}>("/competition/rounds/:round_id/shop/activations",{
+    onRequest:writeHooks("PARTICIPANT"),schema:{params:competitionSchema.roundParams,querystring:schema.empty,body:shopSchema.activation,response:schema.responses(shopSchema.receipt)}},
+    async request=>wrap(request,await shop.command(request.cookies[policy.names.participant],request.params.round_id,request.body.request_key,"SHOP_ACTIVATE",{purchase_id:request.body.purchase_id,bounty_id:request.body.bounty_id})));
+  app.get<{Params:{round_id:string;request_key:string}}>("/competition/rounds/:round_id/shop/outcomes/:request_key",{exposeHeadRoute:false,
+    schema:{params:competitionSchema.outcomeParams,querystring:schema.empty,response:schema.responses(shopSchema.outcome)}},
+    async request=>wrap(request,await shop.outcome(request.cookies[policy.names.participant],request.params.round_id,request.params.request_key)));
+  app.get<{Params:{round_id:string;bounty_id:string}}>("/competition/rounds/:round_id/shop/intel/:bounty_id",{exposeHeadRoute:false,preSerialization:boundedResponse(524288),
+    schema:{params:competitionSchema.bountyParams,querystring:schema.empty,response:schema.responses(shopSchema.intel)}},
+    async request=>wrap(request,await shop.intel(request.cookies[policy.names.participant],request.params.round_id,request.params.bounty_id)));
   app.post<{ Params: { round_id: string; bounty_id: string }; Body: { request_key: string; level: number } }>("/competition/rounds/:round_id/bounties/:bounty_id/hints", {
     onRequest: writeHooks("PARTICIPANT"), schema: { querystring: schema.empty, params: competitionSchema.bountyParams, body: competitionSchema.hintBody, response: schema.responses(competitionSchema.receipt) },
   }, async request => wrap(request, await competition.buyHint(request.cookies[policy.names.participant], request.params.round_id, request.params.bounty_id, request.body.level, request.body.request_key)));

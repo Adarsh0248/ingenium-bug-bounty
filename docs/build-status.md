@@ -1,5 +1,52 @@
 # Build Status and 22 October Target
 
+Readiness update, 29 October 2026: the extended two-round rehearsal now passes
+against the real protected compiler and durable seven-item shop. It includes
+simultaneous teammate purchases, exact lost-reply recovery, Black ICE, shield
+consumption, paid clues, ordinary/protected rewards, wallet carryover and paused
+shop clocks. The clock and fixture-publication setup are explicitly synthetic.
+All 361 complete PostgreSQL regressions pass after migration 0087.
+The real 100-team burst missed its timing target; all original receipts were
+reconciled without replay. A claim/recovery lifetime race is fixed. The two-lane
+observation experiment failed the protected reference-inspection deadline and was reverted to single-
+lane preparation. Its eight uncertain physical permits remain held; its failed
+application database is backed up privately. Capacity is not certified.
+
+All 150 actual questions passed fresh trusted Linux program/case/witness checks
+and production database snapshot staging, including all 400 paid-clue bindings.
+Protected-host publication validation remains outstanding. The emulated browser
+checks pass, but no older laptop or campus LAN was available. See the current
+[readiness ledger](pre-deployment-readiness.md) for exact boundaries. Overall
+completion remains roughly **96%**; no event deployment is authorised.
+
+Shop update, 28 October 2026: all seven approved Round 2 items now have durable
+shared inventory, guarded purchases/activations, exact receipt recovery and
+trusted expiry. Submission admission freezes assistance, Chrono Shield and Claim
+Lock effects; protected awards coexist with the ordinary shared winner. Black
+ICE enforces incoming/outgoing limits without stopping coding or owned items.
+Live projections and the real contestant interface use this backend. The separate
+preview continues to simulate judging. See [the current shop notes](round-2-items.md).
+The previous capacity failure and deferred endurance window are unchanged; no
+event deployment or event-database migration has occurred.
+
+Current whole-project estimate: roughly **96%** after the durable shop batch;
+this remains a rough engineering estimate, not an event-readiness certificate.
+Current checks pass: 363 API + 92 web unit checks, 19 shop/database/browser checks,
+145 competition regressions, 144 foundation checks, six Round 1 reward checks,
+11 focused report checks, both builds/typechecks and two public-bundle checks.
+The shop matrix uses three separate teams, concurrent teammate/attacker requests,
+real PostgreSQL transactions and two real browser contexts; judging is synthetic.
+It tests exact lost-reply receipts, wallet overspending, source/role boundaries,
+clue imports and privacy, activity scans, all pause scopes, expiry, protected and
+ordinary awards, shield use, closed-round history and inventory after reload.
+Earlier all-matrix fixture failures are corrected without weakening authority:
+new event entries use the four allowed languages, and report role tests create
+an independent current organiser session after earlier suites revoke theirs.
+No real registration, cloud host, retained judge record or development database
+was changed. New migrations and reviewed snapshot-specific clue bindings must
+still be installed through the normal authorised release/content process.
+
+
 Updated: 26 October 2026. The user requires the full approved initial application
 by 22 October, not a demo, silently reduced MVP or feature-skipping release.
 The 22 October target was missed. It is not a completion or event-readiness guarantee.

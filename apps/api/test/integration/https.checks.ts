@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium, expect } from "@playwright/test";
 import { sha256 } from "../../src/access/credentials.js";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import type { participantBrowserChecks } from "./frontend-browser.checks.js";
 import { withHttpsApp } from "./https-app.js";
 
@@ -54,6 +55,27 @@ export async function httpsChecks(
               ),
             ),
           );
+          for (const encoding of ["br", "gzip"]) {
+            const compressed = await get(asset, {
+              headers: { "accept-encoding": encoding },
+            });
+            assert.equal(compressed.headers["content-encoding"], encoding);
+            assert.match(String(compressed.headers.vary), /Accept-Encoding/i);
+            assert.equal(
+              compressed.headers["cache-control"],
+              "public, max-age=31536000, immutable",
+            );
+            assert.deepEqual(
+              encoding === "br"
+                ? brotliDecompressSync(compressed.body)
+                : gunzipSync(compressed.body),
+              saved.body,
+            );
+            assert.ok(compressed.body.length < saved.body.length);
+          }
+          const coin = await get("/graphics/tecnoesis-coin.svg");
+          assert.equal(coin.status, 200);
+          assert.equal(coin.headers["cache-control"], "public, max-age=86400");
           for (const path of [
             "/assets/missing-12345678.js",
             "/.env",

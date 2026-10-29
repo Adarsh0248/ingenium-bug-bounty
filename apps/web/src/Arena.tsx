@@ -276,6 +276,11 @@ function Target({
       setHover(false);
       document.body.style.cursor = "";
     }
+    return () => {
+      const actor = positions.current.get(bug.bounty_id);
+      if (actor) actor.held = false;
+      document.body.style.cursor = "";
+    };
   }, [active, positions, bug.bounty_id]);
   useFrame(() => {
     if (!group.current) return;
@@ -409,7 +414,13 @@ function Target({
           appearance.region.id !== "neon" ? Math.max(0.48, appearance.size) : 1
         }
       >
-        <ringGeometry args={[1.3, bug.scan_clear ? 1.39 : hover ? 1.34 : 1.31, bug.scan_clear ? 24 : 4]} />
+        <ringGeometry
+          args={[
+            1.3,
+            bug.scan_clear ? 1.39 : hover ? 1.34 : 1.31,
+            bug.scan_clear ? 24 : 4,
+          ]}
+        />
         <meshBasicMaterial
           color={bug.scan_clear ? "#8effb9" : color}
           transparent
@@ -462,8 +473,6 @@ export default function Arena({
         item.id,
     ),
   );
-  const visited = useRef(new Set<RegionId>());
-  if (focus) visited.current.add(focus);
   const finish = useRef(onTerminated),
     weaponPanel = useRef<HTMLDivElement>(null);
   const weapon = regionWeapons[focus ?? "neon"];
@@ -482,6 +491,8 @@ export default function Arena({
       dragged: boolean;
     } | null>(null);
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
+  const [visited,setVisited]=useState<RegionId[]>([]);
+  useLayoutEffect(()=>{if(focus)setVisited(previous=>previous.includes(focus)?previous:[...previous,focus]);},[focus]);
   const bounds = mapBounds(mapSize.width, mapSize.height),
     locked = !onRegionChange || !!strike;
   const navigation = useRef({
@@ -721,91 +732,97 @@ export default function Arena({
         locked={!!strike}
         mapRef={scenery}
       />
-      <Boundary fallback={fallback}>
-        <div
-          className="arena-canvas"
-          aria-label="Three-dimensional bounty arena"
-          aria-hidden={!focus}
-          style={
-            focus
-              ? {
-                  clipPath: `inset(${bounds.top}px ${Math.max(0, mapSize.width - bounds.left - bounds.width)}px ${Math.max(0, mapSize.height - bounds.top - bounds.height)}px ${bounds.left}px)`,
-                }
-              : { visibility: "hidden", pointerEvents: "none" }
-          }
-        >
-          <Canvas
-            dpr={[1, 1.5]}
-            frameloop={still || !focus ? "demand" : "always"}
-            camera={{ position: new Vector3(0, 0, 10), fov: 48 }}
-            gl={{ antialias: false, alpha: true, preserveDrawingBuffer: true }}
-            fallback={fallback}
-            onCreated={(state) => {
-              invalidate.current = state.invalidate;
-            }}
-          >
-            <SwarmController
-              bugs={bugs}
-              pending={pending}
-              focus={focus}
-              still={still}
-              frozen={strike?.bountyId ?? inspection?.bountyId}
-              memory={positions}
-            />
-            <ambientLight intensity={0.9} />
-            <directionalLight position={[4, 7, 9]} intensity={1.8} />
-            <pointLight position={[-4, 2, 4]} intensity={7} color="#49e8ed" />
-            <pointLight position={[4, -1, 3]} intensity={6} color="#ef418d" />
-            {bugs.map((bug, index) => {
-              const appearance = bugAppearance(
-                bug.bounty_id,
-                bug.difficulty,
-                bug.category,
-              );
-              if (
-                !visited.current.has(appearance.region.id) ||
-                (bug.claimed && !pending.includes(bug.bounty_id))
-              )
-                return null;
-              return (
-                <Target
-                  key={bug.bounty_id}
-                  bug={bug}
-                  index={index}
-                  active={focus === appearance.region.id}
-                  open={(id) => {
-                    if (!ignoreClick.current && !strike) onOpen(id);
-                  }}
-                  still={still}
-                  frozen={
-                    strike?.bountyId === bug.bounty_id ||
-                    inspection?.bountyId === bug.bounty_id
+      {(focus || visited.length>0) && (
+        <Boundary fallback={fallback}>
+          <div
+            className="arena-canvas"
+            aria-label="Three-dimensional bounty arena"
+            aria-hidden={!focus}
+            style={
+              focus
+                ? {
+                    clipPath: `inset(${bounds.top}px ${Math.max(0, mapSize.width - bounds.left - bounds.width)}px ${Math.max(0, mapSize.height - bounds.top - bounds.height)}px ${bounds.left}px)`,
                   }
-                  mapView={mapView}
+                : { visibility: "hidden", pointerEvents: "none" }
+            }
+          >
+            <Canvas
+              dpr={1}
+              frameloop={still || !focus ? "demand" : "always"}
+              camera={{ position: new Vector3(0, 0, 10), fov: 48 }}
+              gl={{
+                antialias: false,
+                alpha: true,
+                preserveDrawingBuffer: false,
+              }}
+              fallback={fallback}
+              onCreated={(state) => {
+                invalidate.current = state.invalidate;
+              }}
+            >
+              <SwarmController
+                bugs={bugs}
+                pending={pending}
+                focus={focus}
+                still={still}
+                frozen={strike?.bountyId ?? inspection?.bountyId}
+                memory={positions}
+              />
+              <ambientLight intensity={0.9} />
+              <directionalLight position={[4, 7, 9]} intensity={1.8} />
+              <pointLight position={[-4, 2, 4]} intensity={7} color="#49e8ed" />
+              <pointLight position={[4, -1, 3]} intensity={6} color="#ef418d" />
+              {bugs.map((bug, index) => {
+                const appearance = bugAppearance(
+                  bug.bounty_id,
+                  bug.difficulty,
+                  bug.category,
+                );
+                if (
+                  (appearance.region.id !== focus && !visited.includes(appearance.region.id)) ||
+                  (bug.claimed && !pending.includes(bug.bounty_id))
+                )
+                  return null;
+                return (
+                  <Target
+                    key={bug.bounty_id}
+                    bug={bug}
+                    index={index}
+                    active={focus === appearance.region.id}
+                    open={(id) => {
+                      if (!ignoreClick.current && !strike) onOpen(id);
+                    }}
+                    still={still}
+                    frozen={
+                      strike?.bountyId === bug.bounty_id ||
+                      inspection?.bountyId === bug.bounty_id
+                    }
+                    mapView={mapView}
+                    positions={positions}
+                  />
+                );
+              })}
+              {inspection && (
+                <InspectedTarget
+                  request={inspection}
+                  anchor={card}
                   positions={positions}
+                  mapView={mapView}
+                  locate={locateInspected}
                 />
-              );
-            })}
-            {inspection && (
-              <InspectedTarget
-                request={inspection}
-                anchor={card}
-                positions={positions}
-                mapView={mapView}
-                locate={locateInspected}
-              />
-            )}
-            {strike && destination && !still && (
-              <TerminationSequence
-                key={strike.awardId}
-                bug={destination}
-                onComplete={() => finish.current?.()}
-                panel={weaponPanel}
-              />
-            )}
-          </Canvas>
-        </div>
-      </Boundary>
+              )}
+              {strike && destination && !still && (
+                <TerminationSequence
+                  key={strike.awardId}
+                  bug={destination}
+                  onComplete={() => finish.current?.()}
+                  panel={weaponPanel}
+                />
+              )}
+            </Canvas>
+          </div>
+        </Boundary>
+      )}
       {inspection && infoCard && (
         <div
           ref={card}

@@ -84,7 +84,7 @@ interface ClientHooks {
 }
 export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,hooks:ClientHooks){
   const replica=new LiveReplica(hooks.now,projection=>{hooks.invalidate(projection);dirty=true;queueRefresh();},hooks.award),prefix=audience==="STAFF"?"/api/v1/staff/live":"/api/v1/live";
-  let socket:LiveTransport|null=null,stopped=false,working=false,connecting=false,generation=0,retry:ReturnType<typeof setTimeout>|undefined,handshake:ReturnType<typeof setTimeout>|undefined,editor:string|null=null,renewed=0,attempt=0;
+  let socket:LiveTransport|null=null,stopped=false,offline=false,working=false,connecting=false,generation=0,retry:ReturnType<typeof setTimeout>|undefined,handshake:ReturnType<typeof setTimeout>|undefined,editor:string|null=null,renewed=0,attempt=0;
   let dirty=false,refreshing=false,refreshFailures=0,projectionVersion=0,refreshTimer:ReturnType<typeof setTimeout>|undefined;
   const notify=()=>hooks.state(replica.phase);
   const send=(event:string,value:unknown)=>{if(socket?.connected)socket.volatile.emit(event,value);};
@@ -101,7 +101,7 @@ export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,h
     finally{refreshing=false;queueRefresh();}
   }
   async function connect(){
-    if(stopped||connecting)return;
+    if(stopped||offline||connecting)return;
     // A slow ticket must not race the stale timer or install over a newer connection.
     connecting=true;const current=++generation;
     handshake=setTimeout(()=>{if(current===generation&&!stopped)reconnect();},LIVE_LIMITS.syncMs);
@@ -168,16 +168,24 @@ export function connectLive(audience:"PARTICIPANT"|"STAFF",roundId:string|null,h
   function reconnect(busy=false){
     generation++;connecting=false;if(handshake)clearTimeout(handshake);handshake=undefined;
     replica.stale();replica.syncId="";working=false;refreshFailures=0;notify();hooks.presence([]);const previous=socket;socket=null;previous?.disconnect();
-    if(stopped||retry)return;
+    if(stopped||offline||retry)return;
     if(busy)attempt=Math.max(attempt,5);
     // Keep jitter across the whole capped window instead of synchronising repeated failures at one fixed delay.
     retry=setTimeout(()=>{retry=undefined;void connect();},Math.max(busy?1000:0,250+Math.random()*Math.min(30000,1000*2**Math.min(attempt++,5))));
   }
   const timer=setInterval(()=>{
+    if(offline)return;
     if(!replica.writable()){notify();if(replica.phase==="STALE"&&!working&&!connecting&&!retry)reconnect();return;}
     if(editor&&hooks.now()-renewed>=LIVE_LIMITS.presenceRenewMs){send("presence",{action:"RENEW",bounty_id:editor});renewed=hooks.now();}
   },1000);
   void connect();
-  return {replica,edit(bounty:string|null){editor=bounty;if(!replica.writable())return;send("presence",bounty?{action:"ENTER",bounty_id:bounty}:{action:"LEAVE"});renewed=hooks.now();},
+  return {replica,
+    network(online:boolean){
+      if(stopped)return;
+      offline=!online;
+      if(offline){if(retry)clearTimeout(retry);retry=undefined;reconnect();}
+      else if(replica.phase==="STALE"&&!connecting&&!working){if(retry)clearTimeout(retry);retry=undefined;void connect();}
+    },
+    edit(bounty:string|null){editor=bounty;if(!replica.writable())return;send("presence",bounty?{action:"ENTER",bounty_id:bounty}:{action:"LEAVE"});renewed=hooks.now();},
     close(){stopped=true;generation++;clearInterval(timer);if(retry)clearTimeout(retry);if(handshake)clearTimeout(handshake);if(refreshTimer)clearTimeout(refreshTimer);const previous=socket;socket=null;previous?.disconnect();replica.stale();notify();}};
 }

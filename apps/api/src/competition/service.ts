@@ -299,7 +299,7 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
         await lockedRounds(client, [roundId], true); const now = await decisionTime(client, clock, [roundId]);
         if (audience === "STAFF") await staff.authorize(client, cookie, now);
         else await participant(client, cookie, roundId, now);
-        const row = await first<{ standings: unknown; final: boolean; cancelled: boolean }>(client, `SELECT competition_display_standings($1) AS standings,
+        const row = await first<{ standings: unknown; final: boolean; cancelled: boolean }>(client, `SELECT shop_standings($1) AS standings,
           EXISTS(SELECT 1 FROM round_results WHERE round_id=$1) AS final,(SELECT state IN ('CANCELLING','CANCELLED') FROM rounds WHERE id=$1) AS cancelled`, [roundId]);
         if (!row || !Array.isArray(row.standings)) throw new AccessError("SECURITY_UNAVAILABLE");
         return { ...row, standings: row.standings.map(({ wallet: _privateWallet, ...standing }: { wallet: number }) => ({ ...standing, ...(row.cancelled ? { rank: null } : {}) })) };
@@ -316,9 +316,9 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
         const teamRound = actor ? await first<{ team_round_id: string }>(client, "SELECT team_round_id FROM member_rounds WHERE id=$1", [actor.member_round_id]) : null;
         const bounties = (await client.query(`SELECT b.id AS bounty_id,s.title,s.difficulty,s.base_bounty,s.manifest_text::jsonb#>>'{version,category}' AS category,
       EXISTS(SELECT 1 FROM workbench_activities w JOIN member_rounds m ON m.id=w.member_round_id WHERE w.bounty_id=b.id AND m.team_round_id=$2 AND w.request_key IS NOT NULL) AS captured,
-          EXISTS(SELECT 1 FROM bounty_awards a WHERE a.bounty_id=b.id AND (r.kind=2 OR a.team_round_id=$2)) AS claimed,
+          competition_bounty_unavailable(b.id,$2,$3) AS claimed,
           COALESCE((SELECT max(level) FROM hint_purchases WHERE bounty_id=b.id AND team_round_id=$2),0) AS hint_tier
-          FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`, [roundId, teamRound?.team_round_id ?? null])).rows;
+          FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`, [roundId, teamRound?.team_round_id ?? null,now])).rows;
         const wallet = teamRound ? await first<{ balance: string }>(client, "SELECT competition_balance($1) AS balance", [teamRound.team_round_id]) : null;
         const pauses = (await client.query(`SELECT scope,team_round_id,member_round_id FROM competition_pauses WHERE round_id=$1 AND ended_at IS NULL
           AND ($2::uuid IS NULL OR scope='GLOBAL' OR team_round_id=$2 OR member_round_id IN(SELECT id FROM member_rounds WHERE team_round_id=$2))`, [roundId, teamRound?.team_round_id ?? null])).rows;

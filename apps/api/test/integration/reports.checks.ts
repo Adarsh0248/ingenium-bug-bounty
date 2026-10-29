@@ -15,8 +15,11 @@ export async function reportChecks(
     startRace(
       round: string,
     ): ReturnType<Parameters<typeof participantJudgingChecks>[1]["newRound"]>;
+    newStaff(role?:string):Promise<{sessionCookie:string;code:string}>;
   },
 ) {
+  // Earlier discipline suites retire their organiser grant; role checks need a current, independent fixture.
+  c={...c,organiser:await c.newStaff("ORGANISER")};
   const a = await c.newRound(),
     reports = createReportService(c.api, c.clock, c.delivery),
     review = createSubmissionReviewService(c.api, c.clock, c.delivery);

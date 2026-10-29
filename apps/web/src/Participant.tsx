@@ -182,7 +182,18 @@ export default function Participant({
       state: setPhase,
     });
     live.current = client;
+    const network = () => client.network(navigator.onLine);
+    const visible = () => {
+      if (!document.hidden) network();
+    };
+    addEventListener("online", network);
+    addEventListener("offline", network);
+    document.addEventListener("visibilitychange", visible);
+    network();
     return () => {
+      removeEventListener("online", network);
+      removeEventListener("offline", network);
+      document.removeEventListener("visibilitychange", visible);
       client.close();
       live.current = null;
       workspace.close();
@@ -215,11 +226,11 @@ export default function Participant({
     remaining > 0 && !!round && ["RUNNING", "PAUSED"].includes(round.state);
   const shop = snapshot?.shop,
     shopNow =
-      now +
+      (shop?.timers_paused ? Date.parse(snapshot!.server_time) : now) +
       (shop && snapshot
         ? Date.parse(shop.server_time) - Date.parse(snapshot.server_time)
         : 0),
-    scanActive = shopRemaining(shop?.ghost_until, shopNow) > 0,
+    scanActive = ready && shopRemaining(shop?.ghost_until, shopNow) > 0,
     creditFrozen = shopRemaining(shop?.frozen_until, shopNow) > 0;
   const markedBugs = useMemo(
     () =>
@@ -254,6 +265,17 @@ export default function Participant({
         : old,
     );
   }
+  useEffect(()=>{
+    if(!ready || !roundOpen || !scanActive || !shop || shop.preview)return;
+    let active=true,pending=false;
+    const timer=setInterval(()=>{
+      if(pending)return;pending=true;
+      void api.request<ShopView>(`/api/v1/competition/rounds/${session.round_id}/shop`)
+        .then(value=>{if(active)updateShop(value);},()=>{})
+        .finally(()=>{pending=false;});
+    },1500);
+    return()=>{active=false;clearInterval(timer);};
+  },[api,session.round_id,ready,roundOpen,scanActive,shop?.preview]);
   useEffect(() => {
     workspace.update(snapshot, ready, roundOpen);
   }, [snapshot, ready, roundOpen, workspace, selected]);
@@ -276,6 +298,12 @@ export default function Participant({
       (bug) => bug.bounty_id === id,
     );
     if (!target || captureBusy) return;
+    if (!ready && !workspace.question(id)) {
+      setError(
+        "Reconnect to open a question that is not kept in this tab. Your existing edits are retained.",
+      );
+      return;
+    }
     if (captureIntent.current && captureIntent.current.id !== id) {
       setError("Check your pending capture before catching another bug.");
       return;
@@ -601,41 +629,48 @@ export default function Participant({
       data-inspecting={inspectedBug && !selected ? "true" : undefined}
       data-overdrive={shop?.overdrive || undefined}
     >
-      <Suspense fallback={<div className="arena-fallback" />}>
-        <ArenaView
-          region={region}
-          onRegionChange={selected || terminations.length ? undefined : travel}
-          bugs={markedBugs}
-          onOpen={(id) => void open(id)}
-          still={light || !!globalPause || !!selected}
-          suspended={!!selected}
-          pending={terminations.map((award) => award.bountyId)}
-          strike={selected || rewards.length ? undefined : terminations[0]}
-          onTerminated={() => setTerminations((pending) => pending.slice(1))}
-          inspection={inspectedBug && !selected ? inspection : null}
-          onDismissInfo={() => setInspection(null)}
-          infoCard={
-            inspectedBug && !selected ? (
-              <BugInfoCard
-                key={inspectedBug.bounty_id}
-                api={api}
-                roundId={session.round_id}
-                bug={inspectedBug}
-                kernel={kernel}
-                canOpen={
-                  inspectedBug.captured || (ready && roundOpen && !ownPause)
-                }
-                busy={captureBusy}
-                open={() => void open(inspectedBug.bounty_id)}
-                close={() => {
-                  setInspection(null);
-                  requestAnimationFrame(() => returnTarget.current?.focus());
-                }}
-              />
-            ) : null
-          }
-        />
-      </Suspense>
+      {round && (
+        <Suspense fallback={<div className="arena-fallback" />}>
+          <ArenaView
+            region={region}
+            onRegionChange={
+              selected || terminations.length ? undefined : travel
+            }
+            bugs={markedBugs}
+            onOpen={(id) => void open(id)}
+            still={light || !!globalPause || !!selected}
+            suspended={!!selected}
+            pending={terminations.map((award) => award.bountyId)}
+            strike={selected || rewards.length ? undefined : terminations[0]}
+            onTerminated={() => setTerminations((pending) => pending.slice(1))}
+            inspection={inspectedBug && !selected ? inspection : null}
+            onDismissInfo={() => setInspection(null)}
+            infoCard={
+              inspectedBug && !selected ? (
+                <BugInfoCard
+                  key={inspectedBug.bounty_id}
+                  api={api}
+                  roundId={session.round_id}
+                  bug={inspectedBug}
+                  cachedStatement={
+                    workspace.question(inspectedBug.bounty_id)?.statement
+                  }
+                  kernel={kernel}
+                  canOpen={
+                    inspectedBug.captured || (ready && roundOpen && !ownPause)
+                  }
+                  busy={captureBusy}
+                  open={() => void open(inspectedBug.bounty_id)}
+                  close={() => {
+                    setInspection(null);
+                    requestAnimationFrame(() => returnTarget.current?.focus());
+                  }}
+                />
+              ) : null
+            }
+          />
+        </Suspense>
+      )}
       <header className="topbar">
         <Brand />
         <div className="topbar-center">
@@ -655,6 +690,7 @@ export default function Participant({
             <button
               className="shop-launch"
               aria-label="Black Market"
+              disabled={!ready}
               onClick={() => setShopOpen(true)}
             >
               <span className="shop-launch-mark" aria-hidden="true">
@@ -1019,6 +1055,7 @@ export default function Participant({
         )}
         <IconButton
           title="Results and history"
+          disabled={!ready}
           onClick={() => setHistory(true)}
         >
           <History size={19} />
@@ -1048,7 +1085,9 @@ export default function Participant({
       )}
       {!ready && (
         <div className="sync-status" role="status">
-          Restoring verified live state
+          {snapshot
+            ? "Connection interrupted. Keep this tab open: your code stays here while live state reconnects."
+            : "Restoring verified live state"}
         </div>
       )}
       {snapshot && now >= Date.parse(expiry) - 300000 && (

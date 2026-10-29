@@ -110,7 +110,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
   const judgePool = new Pool({ connectionString: ownerUrl.toString(), options: "-c role=ingenium_competition_worker", max: 2 });
   async function published(actor: Person, kind: number, difficulty: number, rewardMultiplier = 1) {
     const version = (await edit("CREATE", null, { round_type: kind, category: "ARRAYS", title: "Synthetic competition bounty", statement: "Synthetic statement", difficulty, checker_mode: "TOKENS", ...(rewardMultiplier===1?{}:{reward_multiplier:rewardMultiplier}) })).version_id!;
-    for (const language of LANGUAGES) await edit("VARIANT", version, { language, starter_code: "synthetic wrong", reference_solution_code: "synthetic reference", defect_description: "Synthetic defect",
+    for (const language of LANGUAGES) await edit("VARIANT", version, { language, starter_code: process.env.INGENIUM_TEST_SUITE==="shop"&&kind===2?"synthetic wrong\nstate = 0\nfor each input\n  state = state - 1\nreturn state\n":"synthetic wrong", reference_solution_code: "synthetic reference", defect_description: "Synthetic defect",
       runtime_key: `competition-${language}`, cpu_time_limit_ms: 1000, wall_time_limit_ms: 5000, memory_limit_kb: 262144 });
     const sample = (await edit("CASE", version, { case_id: null, position: 1, visibility: "SAMPLE", input_data: "7 5\n", expected_output: "12\n" })).case_id!;
     const hidden = (await edit("CASE", version, { case_id: null, position: 2, visibility: "HIDDEN", input_data: "5 7\n", expected_output: "12\n" })).case_id!;
@@ -175,7 +175,10 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     worker = createValidationWorker(api, clock, driver); assert.equal(await worker.claim(), true);
     judge = createParticipantJudgeWorker(judgePool, clock, driver, worker.workerId);
     const boost = process.env.INGENIUM_TEST_SUITE === "reward-boost" ? 5 : 1;
-    const one = await published(actor, 1, 100, boost), two = await published(actor, 1, 80, boost), race = await published(actor, 2, 95), race2 = await published(actor, 2, 80);
+    const one = await published(actor, 1, 100, process.env.INGENIUM_TEST_SUITE==="shop"?5:boost), two = await published(actor, 1, 80, process.env.INGENIUM_TEST_SUITE==="shop"?5:boost), race = await published(actor, 2, 95), race2 = await published(actor, 2, 80);
+    const shopFunding:string[]=[];
+    if(process.env.INGENIUM_TEST_SUITE==='shop')for(let i=0;i<4;i++)shopFunding.push((await published(actor,1,100,5)).snapshot);
+    const shopThird=process.env.INGENIUM_TEST_SUITE==='shop'?await team():null;
     const legacy = boost === 5 ? await published(actor,1,100) : null;
     await budgets();
     const created = await arena.command(actor.sessionCookie, { action: "CREATE", roundId: null, requestKey: randomUUID(), expectedRevision: "0", durationMs: 18000000, teamIds: [a.id, b.id], reason: "Synthetic competition instance" });
@@ -297,7 +300,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       await t.test("Round 2 opens with the exact larger unspent balance, starts at zero points and keeps its original reward and hint prices",async()=>{
         await command(actor,"CLOSE",r1);await command(actor,"FINALISE",r1);await command(actor,"QUALIFY",r1);
         const oldResult=(await owner.query("SELECT * FROM round_results WHERE round_id=$1",[r1])).rows;
-        const r2=(await command(actor,"SETUP_R2",r1,{teams:[a.id,b.id],duration_ms:18000000})).result.round_id as string;
+        const r2=(await command(actor,"SETUP_R2",r1,{teams:[a.id,b.id,...(shopThird?[shopThird.id]:[])],duration_ms:18000000})).result.round_id as string;
         await command(actor,"CONFIGURE",r2,{snapshots:[race.snapshot]});await command(actor,"READY",r2);await judge.claim();
         const revision=(await owner.query("SELECT revision FROM rounds WHERE id=$1",[r2])).rows[0].revision;
         const key=randomUUID(),started=await command(actor,"START",r2,{}, {requestKey:key});
@@ -320,13 +323,14 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     async function pipeline() {
       let current = r1, count = 0;
       const context={ owner, api, clock, delivery, deps, service: baseService, judge, validationWorker:worker, driver, judgePool, answers, sent, trace, lost, held, malformed,
-        staff: actor, organiser, budgets, newStaff:person, newTeam:team, teams:[a,b], assess, raceSnapshots:[race.snapshot,race2.snapshot], async startRace(round:string) {
+        staff: actor, organiser, budgets, newStaff:person, newTeam:team, shopFunding, teams:[a,b,...(shopThird?[shopThird]:[])], assess, raceSnapshots:[race.snapshot,race2.snapshot], async startRace(round:string) {
           await budgets();await command(actor,"CLOSE",round);await command(actor,"FINALISE",round);await command(actor,"QUALIFY",round);
-          const next=(await command(actor,"SETUP_R2",round,{teams:[a.id,b.id],duration_ms:18000000})).result.round_id as string;
+          const next=(await command(actor,"SETUP_R2",round,{teams:[a.id,b.id,...(shopThird?[shopThird.id]:[])],duration_ms:18000000})).result.round_id as string;
           await command(actor,"CONFIGURE",next,{snapshots:[race.snapshot,race2.snapshot]});await command(actor,"READY",next);await judge.claim();await command(actor,"START",next);
-          const aa=await join(a,0),ab=await join(a,1,"python"),ba=await join(b,0,"java"),bb=await join(b,1,"javascript");
+          const aa=await join(a,0),ab=await join(a,1,"python"),ba=await join(b,0,"java"),bb=await join(b,1,"c");
+          const ca=shopThird?(await join(shopThird,0)).sessionCookie:undefined;
           const bugs=(await owner.query("SELECT id FROM bounties WHERE round_id=$1 ORDER BY position",[next])).rows;
-          return {round:next,aa:aa.sessionCookie,ab:ab.sessionCookie,ba:ba.sessionCookie,bb:bb.sessionCookie,x:bugs[0].id as string,y:bugs[1].id as string};
+          return {ca,round:next,aa:aa.sessionCookie,ab:ab.sessionCookie,ba:ba.sessionCookie,bb:bb.sessionCookie,x:bugs[0].id as string,y:bugs[1].id as string};
         }, async newRound(durationMs = 18000000) {
           const row = (await owner.query(`SELECT r.* FROM rounds r JOIN arena_control c ON c.current_instance_id=r.arena_instance_id
             WHERE r.kind=1 OR r.state NOT IN ('DRAFT','READY') ORDER BY r.kind DESC LIMIT 1`)).rows[0];
@@ -339,14 +343,16 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
           }
           await budgets(); await judge.claim();
           const made = await arena.command(actor.sessionCookie, { action: "CREATE", roundId: null, requestKey: randomUUID(), expectedRevision: (await owner.query("SELECT revision FROM arena_control WHERE id=1")).rows[0].revision,
-            durationMs, teamIds: [a.id, b.id], reason: "Synthetic participant pipeline" });
+            durationMs, teamIds: [a.id, b.id,...(shopThird?[shopThird.id]:[])], reason: "Synthetic participant pipeline" });
           current = made.round_id!;
-          await command(actor, "CONFIGURE", current, { snapshots: [one.snapshot, two.snapshot] }); await command(actor, "READY", current); await command(actor, "START", current);
-          const aa = await join(a, 0, count++ % 2 ? "c" : "cpp"), ab = await join(a, 1, "python"), ba = await join(b, 0, "java"), bb = await join(b, 1, "javascript");
+          await command(actor, "CONFIGURE", current, { snapshots: [one.snapshot, two.snapshot,...shopFunding] }); await command(actor, "READY", current); await command(actor, "START", current);
+          const aa = await join(a, 0, count++ % 2 ? "c" : "cpp"), ab = await join(a, 1, "python"), ba = await join(b, 0, "java"), bb = await join(b, 1, "c");
+          const ca=shopThird?(await join(shopThird,0)).sessionCookie:undefined;
           const bugs = (await owner.query("SELECT id FROM bounties WHERE round_id=$1 ORDER BY position", [current])).rows;
-          return { round: current, aa: aa.sessionCookie, ab: ab.sessionCookie, ba: ba.sessionCookie, bb: bb.sessionCookie, x: bugs[0].id as string, y: bugs[1].id as string };
+          return { ca,round: current, aa: aa.sessionCookie, ab: ab.sessionCookie, ba: ba.sessionCookie, bb: bb.sessionCookie, x: bugs[0].id as string, y: bugs[1].id as string };
         } };
       if(["load","load-soak"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {loadChecks}=await import("./load.checks.js");await loadChecks(t,context);return;}
+      if(process.env.INGENIUM_TEST_SUITE==="shop"){const {shopChecks}=await import("./shop.checks.js");await shopChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="race-load"){const {raceLoadChecks}=await import("./race-load.checks.js");await raceLoadChecks(t,context);return;}
       if(["operations","operations-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {operationsChecks}=await import("./operations.checks.js");await operationsChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="restore"){const {restoreChecks}=await import("./restore.checks.js");await restoreChecks(t,context);return;}
@@ -381,7 +387,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {retentionChecks}=await import("./retention.checks.js");await retentionChecks(t,context);}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {reportChecks}=await import("./reports.checks.js");await reportChecks(t,context);}
     }
-    if (["load","load-soak","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","reports","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
+    if (["shop","load","load-soak","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","reports","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
     let emptyWalletKey: string, emptyWalletReceipt: unknown;
     await t.test("an unaffordable hint rejection is durable and malformed or unconfigured submissions allocate no receipt or priority", async () => {
       await budgets(); emptyWalletKey = randomUUID();
@@ -502,7 +508,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       assert.equal((await owner.query("SELECT count(*)::integer n FROM round_carryovers")).rows[0].n, 2);
       await assert.rejects(command(actor, "START", r2));
     });
-    const a2 = await join(a, 0), a22 = await join(a, 1, "javascript"), b2 = await join(b, 0);
+    const a2 = await join(a, 0), a22 = await join(a, 1, "c"), b2 = await join(b, 0);
     const r2b = (await owner.query("SELECT id FROM bounties WHERE round_id=$1 ORDER BY position", [r2!])).rows.map(r => r.id as string);
     await t.test("a later correct R2 receipt waits for an earlier unresolved one, then wins only when that earlier receipt is reliably wrong", async () => {
       await budgets(); await worker.claim();

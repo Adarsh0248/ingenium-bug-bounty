@@ -30,7 +30,8 @@
     "test:judge:workspace": "node --import tsx --test test/integration/workspace-linux.test.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "node --env-file-if-exists=../../.env.migration --import tsx src/db/migrate-cli.ts",
-    "staff:bootstrap": "node --env-file-if-exists=../../.env.staff-maintenance --import tsx src/access/staff-bootstrap-cli.ts"
+    "staff:bootstrap": "node --env-file-if-exists=../../.env.staff-maintenance --import tsx src/access/staff-bootstrap-cli.ts",
+    "content:shop-intel": "node dist/competition/shop-intel-cli.js"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.3",

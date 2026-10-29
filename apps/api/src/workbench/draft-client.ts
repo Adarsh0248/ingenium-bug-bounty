@@ -94,7 +94,7 @@ export function createDraftEditor(initial:DraftView,hooks:Hooks,buffers=new Draf
     try{const view=await hooks.load();if(closed||version!==epoch)return;validateView(view);writable=view.writable;reason=view.reason;
       if(dirty()&&view.revision!==base){conflict=true;reason="REVISION_MISMATCH";}
       else if(!dirty()){base=view.revision;savedSource=view.source;source=view.source;conflict=false;}
-    }catch{writable=false;reason="DRAFT_REFRESH_REQUIRED";}
+    }catch{if(online){writable=false;reason="DRAFT_REFRESH_REQUIRED";}}
     finally{reconciling=false;if(!closed){status();schedule();}}
   }
   notify();

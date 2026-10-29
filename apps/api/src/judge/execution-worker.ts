@@ -30,14 +30,16 @@ export function createJudgeExecutionWorker(store: ReturnType<typeof createJudgeS
     get activeAttempt() { return activeAttempt; },
     run: (signal: AbortSignal) => turn(signal, async () => {
       await executor.assertReady(signal); signal.throwIfAborted();
-      const claim = await claimJudgeDelivery(store, queue, signal);
+      // Other workers must not recover this permit during the claim's commit/response gap.
+      const claim = await claimJudgeDelivery(store, queue, signal, attempt=>{activeAttempt=attempt;});
       if (claim.state !== "CLAIMED") return claim;
       // Revalidate before the only fresh launch call; failed/unknown launches are never retried here.
       authoringRequest(claim.payload, uuid(claim.owner), runtimes);
       signal.throwIfAborted(); return execute(claim, "EXECUTE", signal);
     }),
     recover: (attempt: string, signal: AbortSignal) => turn(signal, async () => {
-      const claim = await store.execution(uuid(attempt));
+      activeAttempt=uuid(attempt);
+      const claim = await store.execution(activeAttempt);
       if (!claim) return { state: "NO_EXECUTION" } as const;
       if (claim.evidence?.metadata.drain) return { state: "SEALED", attemptId: attempt } as const;
       signal.throwIfAborted(); return execute(claim, "RECOVER", signal);

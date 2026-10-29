@@ -102,6 +102,7 @@ export interface ShopIntel {
 }
 export interface ShopView {
   preview: boolean;
+  timers_paused?: boolean;
   server_time: string;
   wallet: number;
   purchases: ShopPurchase[];

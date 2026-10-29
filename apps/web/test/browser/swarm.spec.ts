@@ -27,10 +27,8 @@ test("overview tiles contain scenery only, open across their whole surface and n
   });
   const nav = page.getByRole("navigation", { name: "Arena regions" });
   for (const [id, name] of areas) {
-    await expect(page.locator(".arena-canvas")).toHaveCSS(
-      "visibility",
-      "hidden",
-    );
+    if(await page.locator('.arena-canvas').count())await expect(page.locator(".arena-canvas")).toHaveCSS("visibility","hidden");
+    else expect(id).toBe('neon');
     const tile = page.getByRole("button", {
       name: `Enter ${name}`,
       exact: true,

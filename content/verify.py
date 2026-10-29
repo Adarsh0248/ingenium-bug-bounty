@@ -100,7 +100,9 @@ def check(job):
     return result
 
 results = []
-with concurrent.futures.ThreadPoolExecutor(max_workers=4) as workers:
+worker_count = int(os.environ.get("INGENIUM_CONTENT_WORKERS", "4"))
+assert 1 <= worker_count <= 8, "Content worker count must be between 1 and 8"
+with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as workers:
     for result in workers.map(check, jobs):
         results.append(result)
         print(("PASS" if result["passed"] else "FAIL") + ": " + result["slug"] + "/" + result["language"], flush=True)

@@ -19,7 +19,7 @@ export function createStandingsReader() {
         key,
         value: first<PublicStandings>(
           client,
-          `SELECT competition_display_standings($1) standings,
+          `SELECT shop_standings($1) standings,
           EXISTS(SELECT 1 FROM round_results WHERE round_id=$1) final`,
           [roundId],
         )

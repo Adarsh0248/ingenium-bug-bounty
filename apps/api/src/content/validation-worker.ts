@@ -46,14 +46,16 @@ export function createValidationWorker(pool:Pool,clock:ClockGuard,driver:Trusted
         const dispatch=await transaction(async client=>{
           await client.query("SELECT * FROM lock_validation_judge()");await decisionTime(client,clock);
           await client.query("SELECT sweep_validation_run($1,$2)",[workerId,generation]);
-          const old=await first<{id:string;check_id:string;payload_digest:Buffer}>(client,"SELECT id,check_id,payload_digest FROM authoring_attempts WHERE released_at IS NULL AND host_epoch_id=$1 ORDER BY prepared_at,id LIMIT 1",[driver.hostEpochId]);
+          const old=await first<{id:string;check_id:string;payload_digest:Buffer}>(client,"SELECT id,check_id,payload_digest FROM authoring_attempts WHERE released_at IS NULL AND host_epoch_id=$1 AND next_poll_at<=date_trunc('milliseconds',clock_timestamp()) AND poll_count<10000 ORDER BY next_poll_at,id LIMIT 1",[driver.hostEpochId]);
           if(old){
             const poll=await first<{allowed:boolean}>(client,"SELECT claim_authoring_poll($1,$2,$3) AS allowed",[workerId,generation,old.id]);
             if(!poll?.allowed)return null;
             const p=await payload(client,old.check_id,old.id);if(!authoringPayloadDigest(p.value).equals(old.payload_digest))throw new AccessError("SECURITY_UNAVAILABLE");return {...p,fresh:false};
           }
+          if(!(await first(client,"SELECT id FROM execution_capacity_slots WHERE authoring_attempt_id IS NULL AND participant_attempt_id IS NULL LIMIT 1")))return null;
           const next=await first<{id:string}>(client,`SELECT c.id FROM authoring_checks c JOIN validation_runs r ON r.id=c.run_id JOIN validation_snapshot_checks p ON p.id=c.snapshot_check_id JOIN judge_control g ON g.active_validation_id=r.id
             WHERE c.result IS NULL AND c.available_at<=date_trunc('milliseconds',clock_timestamp()) AND r.status IN ('QUEUED','RUNNING')
+              AND NOT EXISTS(SELECT 1 FROM authoring_attempts a WHERE a.check_id=c.id AND a.released_at IS NULL)
             ORDER BY p.position LIMIT 1`);
           if(!next)return null;
           const p=await payload(client,next.id,randomUUID());

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { RoundOneQuestion, RoundOneLanguage } from "../round-1/load";
+import type { RoundOneQuestion, RoundOneLanguage } from "../round-1/load.js";
 
 export type RoundTwoQuestion = Omit<RoundOneQuestion, "round_type"> & {
   round_type: 2;

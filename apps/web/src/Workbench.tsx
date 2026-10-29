@@ -50,7 +50,7 @@ export default function Workbench({
   close,
   judging,
   purchasesBlocked = false,
-  shopIntel,
+  shopIntel: suppliedShopIntel,
   shop,
   gearCommand,
   shopChanged,
@@ -71,9 +71,20 @@ export default function Workbench({
   gearCommand?: Command;
   shopChanged?: (view: ShopView) => void;
 }) {
+  const [paidIntel,setPaidIntel] = useState<ShopIntel | undefined>(suppliedShopIntel);
+  const shopIntel = suppliedShopIntel ?? paidIntel;
+  const intelVersion = JSON.stringify(shop?.purchases.filter(p=>p.target_id===bug.bounty_id && p.activated_at && (p.item_id==='hex-scanner'||p.item_id==='boundary-probe')).map(p=>p.id) ?? []);
+  useEffect(()=>{
+    if(roundKind!==2 || !shop || shop.preview || !ready || intelVersion==='[]')return;
+    let active=true;
+    void api.request<ShopIntel>(`/api/v1/competition/rounds/${session.round_id}/shop/intel/${bug.bounty_id}`)
+      .then(value=>{if(active)setPaidIntel(value);},()=>{});
+    return()=>{active=false;};
+  },[api,session.round_id,bug.bounty_id,intelVersion,ready,roundKind,shop?.preview]);
+  const [remembered] = useState(() => workspace.question(bug.bounty_id));
   const path = bugPath(session.round_id, bug.bounty_id),
-    [meta, setMeta] = useState<Metadata | null>(null),
-    [statement, setStatement] = useState(""),
+    [meta, setMeta] = useState<Metadata | null>(remembered?.meta ?? null),
+    [statement, setStatement] = useState(remembered?.statement ?? ""),
     [loadVersion, setLoadVersion] = useState(0),
     [loading, setLoading] = useState(true),
     [loadFailed, setLoadFailed] = useState(false),
@@ -84,8 +95,10 @@ export default function Workbench({
     [tab, setTab] = useState<Tab>("PROBLEM"),
     [samples, setSamples] = useState<
       Record<number, { input: string; output: string }>
-    >({}),
-    [hints, setHints] = useState<{ level: number; content: string }[]>([]),
+    >(remembered?.samples ?? {}),
+    [hints, setHints] = useState<{ level: number; content: string }[]>(
+      remembered?.hints ?? [],
+    ),
     [submissions, setSubmissions] = useState<any[]>([]),
     [after, setAfter] = useState<string | null>(null),
     [feedback, setFeedback] = useState<Feedback | null>(null),
@@ -147,20 +160,43 @@ export default function Workbench({
     price = (level: number) =>
       (bug.base_bounty / 10) * [1, 3, roundKind === 1 ? 4 : 8][level - 1];
   useEffect(() => {
+    if (meta && statement)
+      workspace.rememberQuestion(bug.bounty_id, {
+        meta,
+        statement,
+        hints,
+        samples,
+      });
+  }, [meta, statement, hints, samples, workspace, bug.bounty_id]);
+  useEffect(() => {
+    if (!ready) {
+      setLoading(false);
+      return;
+    }
     let gone = false;
     setLoadFailed(false);
     setLoading(true);
     void Promise.all([
-      api.request<Metadata>(path),
-      api.request<{ statement: string }>(`${path}/statement`),
-      api.request<{ level: number; content: string }[]>(`${path}/hints`),
-      workspace.open(bug.bounty_id),
+      api.request<Metadata>(path).then((m) => {
+        if (!gone) setMeta(m);
+      }),
+      (statement
+        ? Promise.resolve({ statement })
+        : api.request<{ statement: string }>(`${path}/statement`)
+      ).then((s) => {
+        if (!gone) setStatement(s.statement);
+      }),
+      api
+        .request<{ level: number; content: string }[]>(`${path}/hints`)
+        .then((h) => {
+          if (!gone) setHints(h);
+        }),
+      item ? Promise.resolve(item) : workspace.open(bug.bounty_id),
     ])
-      .then(([m, s, h]) => {
+      .then(() => {
         if (!gone) {
-          setMeta(m);
-          setStatement(s.statement);
-          setHints(h);
+          setLoadFailed(false);
+          setError("");
         }
       })
       .catch((e) => {
@@ -175,29 +211,14 @@ export default function Workbench({
     return () => {
       gone = true;
     };
-  }, [bug.bounty_id, loadVersion]);
-  useEffect(() => {
-    let gone = false;
-    void Promise.all([
-      api.request<Metadata>(path),
-      api.request<{ level: number; content: string }[]>(`${path}/hints`),
-    ])
-      .then(([m, h]) => {
-        if (!gone) {
-          setMeta(m);
-          setHints(h);
-        }
-      })
-      .catch((e) => {
-        if (!gone) {
-          setError(errorText(e));
-          setLoadFailed(true);
-        }
-      });
-    return () => {
-      gone = true;
-    };
-  }, [judgingVersion, bug.claimed, bug.hint_tier, ready]);
+  }, [
+    bug.bounty_id,
+    loadVersion,
+    judgingVersion,
+    bug.claimed,
+    bug.hint_tier,
+    ready,
+  ]);
   const selectedFeedbackId =
     feedbackId ??
     judging
@@ -385,7 +406,11 @@ export default function Workbench({
               : `Read only: ${label(meta!.reason ?? "unavailable")}.`}
         </div>
       )}
-      <button className="text-button" onClick={() => setReporting(true)}>
+      <button
+        className="text-button"
+        disabled={!ready}
+        onClick={() => setReporting(true)}
+      >
         Report question
       </button>
       {reporting && (
@@ -435,7 +460,14 @@ export default function Workbench({
                   <span>Full program</span>
                 </div>
                 <h3>Mission brief</h3>
-                <ProblemText text={statement || "Loading challenge…"} />
+                <ProblemText
+                  text={
+                    statement ||
+                    (ready
+                      ? "Loading challenge…"
+                      : "Reconnect to load this question's statement.")
+                  }
+                />
                 {shopIntel && (
                   <section
                     className="gear-intel"
@@ -478,25 +510,27 @@ export default function Workbench({
                   <section className="sample" key={s.sample_number}>
                     <button
                       onClick={() =>
-                        void perform(async () => {
-                          const [input, output] = await Promise.all([
-                            api.request<{ content: string }>(
-                              `${path}/samples/${s.sample_number}/input`,
-                            ),
-                            api.request<{ content: string }>(
-                              `${path}/samples/${s.sample_number}/expected_output`,
-                            ),
-                          ]);
-                          setSamples({
-                            ...samples,
-                            [s.sample_number]: {
-                              input: input.content,
-                              output: output.content,
-                            },
-                          });
-                        })
+                        samples[s.sample_number]
+                          ? undefined
+                          : void perform(async () => {
+                              const [input, output] = await Promise.all([
+                                api.request<{ content: string }>(
+                                  `${path}/samples/${s.sample_number}/input`,
+                                ),
+                                api.request<{ content: string }>(
+                                  `${path}/samples/${s.sample_number}/expected_output`,
+                                ),
+                              ]);
+                              setSamples({
+                                ...samples,
+                                [s.sample_number]: {
+                                  input: input.content,
+                                  output: output.content,
+                                },
+                              });
+                            })
                       }
-                      disabled={busy}
+                      disabled={busy || (!ready && !samples[s.sample_number])}
                     >
                       Sample {s.sample_number}
                       <ArrowDownToLine size={15} />
@@ -551,6 +585,7 @@ export default function Workbench({
                         <button
                           disabled={
                             locked ||
+                            !ready ||
                             readOnly ||
                             busy ||
                             unresolved ||
@@ -641,6 +676,7 @@ export default function Workbench({
                 title="Save private draft"
                 disabled={
                   !item ||
+                  !ready ||
                   readOnly ||
                   state?.state === "SAVING" ||
                   state?.state === "UNRESOLVED" ||
@@ -656,6 +692,16 @@ export default function Workbench({
               </IconButton>
             </div>
           </div>
+          {!ready && (
+            <p className="offline-edit-notice" role="status">
+              Connection interrupted.{" "}
+              {item && !readOnly
+                ? "You can keep editing this opened question. "
+                : "Loaded code and question text are retained. "}
+              Keep this tab open. Saving and new submissions wait for
+              reconnection.
+            </p>
+          )}
           {item && (
             <Editor
               source={source}
@@ -893,7 +939,7 @@ export default function Workbench({
           </p>
           <button
             className="primary"
-            disabled={busy || readOnly}
+            disabled={busy || readOnly || !ready}
             onClick={() =>
               void perform(async () => {
                 const result = await command.current.send(`${path}/hints`, {

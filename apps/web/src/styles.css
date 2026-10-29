@@ -1457,6 +1457,16 @@ button.target {
   color: #cedbe4;
   margin-bottom: 28px;
 }
+.offline-edit-notice {
+  margin: 0;
+  padding: 10px 16px;
+  background: #302816;
+  border-bottom: 1px solid #786135;
+  color: #ffe2a3;
+  font-size: 12px;
+  line-height: 1.5;
+  flex: none;
+}
 .statement p {
   margin: 0 0 16px;
 }

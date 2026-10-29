@@ -26,8 +26,19 @@
   "production_judge_validated": false,
   "human_pilot_difficulty_reviewed": false,
   "program_validation_source_pack_sha256": "7719d157ede356b55203e75fab8d60374b383a4a7cc8e8964461c615e6e7a43a",
-  "evidence_note": "Only the fifty bounty amounts changed. All exact starter/reference program bytes and test cases match the completed Linux validation; its 400 program checks, 1,260 reference cases and 200 hidden starter witnesses are reused. Production publication validation remains required.",
+  "evidence_note": "Fresh complete Linux checks on 29 October 2026: every organiser-authored starter/reference variant, every judging case, every hidden starter witness and every separate paid probe rerun. C/C++ undefined-behaviour checks enabled. This is trusted local content evidence, not protected event-host publication approval.",
   "prose_validation_source_pack_sha256": "6ca35a5f5290a076c3f55722323cb7499b78a9972569d3ad17a6accdff2993ae",
   "prose_change_note": "Only participant statement and hint text changed. Exact program bytes, tests, witnesses, paid examples, scanner scopes, metadata and rewards match the preceding validated pack. Existing compiler results are reused; prose/UI checks do not certify human difficulty or production publication.",
-  "plain_english_questions_reviewed": 50
+  "plain_english_questions_reviewed": 50,
+  "c_cpp_undefined_behavior_checks": true,
+  "variant_count": 200,
+  "separate_paid_examples_verified": 0,
+  "unchanged_variants_reused": 0,
+  "database_staging": {
+    "questions": 50,
+    "variants": 200,
+    "paid_clue_bindings": 0,
+    "production_guards_passed": true,
+    "published": false
+  }
 }

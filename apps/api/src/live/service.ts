@@ -1,3 +1,4 @@
+import { shopView } from "../competition/shop.js";
 import type { Pool, PoolClient } from "pg";
 import { parseProof, uuid } from "../access/credentials.js";
 import type { SessionDelivery } from "../access/credentials.js";
@@ -59,9 +60,9 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
     const arena=await first(client,"SELECT c.current_instance_id,a.status,a.revision FROM arena_control c LEFT JOIN arena_instances a ON a.id=c.current_instance_id WHERE c.id=1");
     const bounties=roundId ? (await client.query(`SELECT b.id AS bounty_id,s.title,s.difficulty,s.base_bounty,s.manifest_text::jsonb#>>'{version,category}' AS category,
       EXISTS(SELECT 1 FROM workbench_activities w JOIN member_rounds m ON m.id=w.member_round_id WHERE w.bounty_id=b.id AND m.team_round_id=$2 AND w.request_key IS NOT NULL) AS captured,
-      EXISTS(SELECT 1 FROM bounty_awards a WHERE a.bounty_id=b.id AND (r.kind=2 OR a.team_round_id=$2)) AS claimed,
+      competition_bounty_unavailable(b.id,$2,$3) AS claimed,
       COALESCE((SELECT max(level) FROM hint_purchases WHERE bounty_id=b.id AND team_round_id=$2),0) AS hint_tier
-      FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`,[roundId,team])).rows : [];
+      FROM bounties b JOIN rounds r ON r.id=b.round_id JOIN validation_snapshots s ON s.id=b.snapshot_id WHERE b.round_id=$1 ORDER BY b.position`,[roundId,team,now])).rows : [];
     const pauses=roundId ? (await client.query(`SELECT scope,team_round_id,member_round_id,started_at FROM competition_pauses WHERE round_id=$1 AND ended_at IS NULL
       AND ($2::uuid IS NULL OR scope='GLOBAL' OR team_round_id=$2 OR member_round_id IN(SELECT id FROM member_rounds WHERE team_round_id=$2))`,[roundId,team])).rows : [];
     const rows=roundId ? await readStandings(client,roundId,streams) : null;
@@ -73,7 +74,8 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
     [roundId,team,actor.member_round_id,actor.audience])).rows : [];
     const security=actor.role==="SUPER_ADMIN" ? (await client.query("SELECT id,display_name,role,disabled_at,revision FROM staff_identities ORDER BY id LIMIT 100")).rows : null;
     const drafts=actor.member_round_id?(await client.query("SELECT bounty_id,revision::text,updated_at FROM code_drafts WHERE member_round_id=$1 ORDER BY bounty_id",[actor.member_round_id])).rows:[];
-    const result={schema_version:1,server_time:now.toISOString(),actor,streams,arena,round,bounties,pauses,standings,final:rows?.final??false,
+    const shop=team && roundId ? await shopView(client,roundId,team,now) : null;
+    const result={...(shop?{shop}:{}),schema_version:1,server_time:now.toISOString(),actor,streams,arena,round,bounties,pauses,standings,final:rows?.final??false,
       hud:team ? {wallet:Number(wallet),standing:standings.find(s=>s.team_round_id===team)??null} : null,judging,security,drafts,
       announcement_head:await announcementHead(client,roundId,team,round?.arena_instance_id??arena?.current_instance_id??null)};
     if(Buffer.byteLength(JSON.stringify(result))>1048576) throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");
@@ -99,7 +101,7 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
     if(actor.audience!=="PARTICIPANT") throw new AccessError("ACCESS_UNAVAILABLE");
     const row=await first<{paused:boolean}>(client,`SELECT EXISTS(SELECT 1 FROM competition_pauses p WHERE p.round_id=r.id AND p.ended_at IS NULL AND (p.scope='GLOBAL' OR p.team_round_id=$2 OR p.member_round_id=$3)) AS paused FROM bounties b JOIN rounds r ON r.id=b.round_id
       JOIN arena_instances a ON a.id=r.arena_instance_id CROSS JOIN arena_control c WHERE b.id=$1 AND r.id=$4 AND c.id=1 AND c.current_instance_id=a.id
-      AND a.status='IN_PROGRESS' AND r.state IN ('RUNNING','PAUSED') AND $5<r.closes_at AND NOT EXISTS(SELECT 1 FROM bounty_awards w WHERE w.bounty_id=b.id AND (r.kind=2 OR w.team_round_id=$2))`,
+      AND a.status='IN_PROGRESS' AND r.state IN ('RUNNING','PAUSED') AND $5<r.closes_at AND NOT competition_bounty_unavailable(b.id,$2,$5)`,
     [bounty,actor.team_round_id,actor.member_round_id,actor.round_id,now]);
     return row ? {paused:row.paused} : null;
   }
@@ -108,5 +110,8 @@ export function createLiveService(pool: Pool, clock: ClockGuard, delivery: Sessi
     if(!row || row.member_round_id!==actor.member_round_id || row.round_id!==context.actor.round_id || !await sessionValid(context.client,row,proof!.verifier,context.now,clock))return null;
     return presence({...context,actor},bounty);
   }
-  return {guarded,snapshot,page,presence,intent,async maintain(){await accessTransaction(pool,clock,async client=>{await client.query("SELECT live_maintain()");},"SHARED");}};
+  return {guarded,snapshot,page,presence,intent,async recordPresence(context:LiveContext,connection:string,bounty:string|null){
+    if(context.actor.audience!=="PARTICIPANT")throw new AccessError("ACCESS_UNAVAILABLE");
+    await context.client.query("SELECT shop_record_presence($1,$2,$3,$4,$5)",[context.actor.session_id,context.actor.round_id,connection,bounty,context.now]);
+  },async maintain(){await accessTransaction(pool,clock,async client=>{await client.query("SELECT live_maintain()");},"SHARED");}};
 }

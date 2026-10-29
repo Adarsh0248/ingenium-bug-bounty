@@ -39,7 +39,7 @@ export const validationRuns = pgTable("validation_runs", {
   accountedBytes:bigint("accounted_bytes",{mode:"bigint"}).notNull(),sourceId:uuid("source_id").notNull().references(():AnyPgColumn=>validationRunOutcomes.id,{onDelete:"restrict"}),
 },t=>[unique("validation_run_snapshot_scope").on(t.id,t.snapshotId),unique("validation_run_source_once").on(t.sourceId),
   uniqueIndex("validation_one_active").on(sql`(true)`).where(sql`${t.status} in ('QUEUED','RUNNING')`),
-  check("validation_run_shape",sql`octet_length(${t.configurationFingerprint})=32 and ${t.policyVersion}=1 and ${t.checkCount} between 15 and 115
+  check("validation_run_shape",sql`octet_length(${t.configurationFingerprint})=32 and ${t.policyVersion}=1 and ${t.checkCount} between 12 and 115
     and ${t.deadlineAt}=${t.createdAt}+interval '10 minutes' and (${t.startedAt} is null or ${t.startedAt}>=${t.createdAt})
     and ((${t.status}='QUEUED' and ${t.startedAt} is null and ${t.finishedAt} is null) or (${t.status}='RUNNING' and ${t.startedAt} is not null and ${t.finishedAt} is null)
       or (${t.status} in ('PASSED','FAILED','INFRA_ERROR') and ${t.finishedAt} is not null and ${t.finishedAt}>=${t.createdAt} and (${t.startedAt} is null or ${t.finishedAt}>=${t.startedAt})))

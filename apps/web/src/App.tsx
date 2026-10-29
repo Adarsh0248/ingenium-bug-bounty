@@ -8,7 +8,7 @@ import type { EntryState } from "./Entry";
 const Participant = lazy(() => import("./Participant")),
   StaffConsole = lazy(() => import("./StaffConsole")),
   ClockRecovery = lazy(() => import("./ClockRecovery")),
-  Arena = lazy(() => import("./Arena"));
+  EntryScenery = lazy(() => import("./WorldScenery"));
 const api = createApi();
 const decorative = [0, 1, 2, 3].map((index) => ({
   bounty_id: `entry-${index}`,
@@ -168,9 +168,10 @@ export default function App() {
         <>
           <div className="entry-visual">
             <Suspense fallback={null}>
-              <Arena
+              <EntryScenery
+                region="neon"
                 bugs={decorative}
-                onOpen={() => {}}
+                locked
                 still={matchMedia("(prefers-reduced-motion: reduce)").matches}
               />
             </Suspense>

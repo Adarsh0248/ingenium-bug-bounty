@@ -129,7 +129,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
     peers.set(socket.id,p);
     socket.on("disconnect",()=>{peers.delete(socket.id);dirty(p);if(p.actor.team_round_id&&![...peers.values()].some(x=>x.actor.team_round_id===p.actor.team_round_id))presenceVersions.delete(p.actor.team_round_id);});
     socket.onAny((event,...args)=>{
-      // No durable actions travel over this channel, and every accepted command is bounded.
+      // No economic actions travel over this channel; editor presence has bounded, expiring leases.
       const now=performance.now();p.tokens=Math.min(12,p.tokens+(now-p.commandAt)*0.012);p.commandAt=now;
       if(!["ready","ack","presence","resync"].includes(event) || args.length!==1 || p.tokens<1 || p.queued>=8){socket.emit("resync_required",publicFailure());socket.disconnect(true);return;}
       p.tokens--;p.queued++;
@@ -146,7 +146,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
       if(p.phase!=="READY" || !exactObject(input,["action","bounty_id"]) || !["ENTER","RENEW","LEAVE"].includes(String(input.action)))throw new AccessError("INVALID_CONTEXT");
       await service.guarded(p.auth,async c=>{
         ensure(p,c);
-        if(input.action==="LEAVE"){p.intent=null;dirty(p);return;}
+        if(input.action==="LEAVE"){await service.recordPresence(c,p.socket.id,null);p.intent=null;dirty(p);return;}
         if(typeof input.bounty_id!=="string")throw new AccessError("INVALID_CONTEXT");
         uuid(input.bounty_id);
         // A claim or expiry may have cleared this intent after its last browser renewal was queued.
@@ -154,6 +154,7 @@ export function installLive(app:FastifyInstance,options:EntryHttpOptions,policy:
         if(input.action==="RENEW" && p.intent!.bounty!==input.bounty_id)throw new AccessError("INVALID_CONTEXT");
         const eligible=await service.presence(c,input.bounty_id);
         if(!eligible){p.intent=null;dirty(p);return;}
+        await service.recordPresence(c,p.socket.id,input.bounty_id);
         p.intent={bounty:input.bounty_id,renewed:performance.now()};dirty(p);
       });return;
     }

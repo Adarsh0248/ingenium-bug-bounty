@@ -220,5 +220,5 @@ export async function participantJudgingChecks(t: TestContext, c: Context) {
   assert.ok(polled);
   await assert.rejects(owner.query("UPDATE participant_attempts SET poll_count=0 WHERE id=$1", [polled.id]), { code: "P0001" });
   assert.deepEqual(new Set(trace.filter(p => p.sourceRole === "OFFICIAL").map(p => p.language)), new Set(["c", "cpp", "python", "java"]));
-  assert.deepEqual(new Set(trace.filter(p => ["OFFICIAL", "SAMPLE"].includes(p.sourceRole)).map(p => p.language)), new Set(["c", "cpp", "python", "java", "javascript"]));
+  assert.deepEqual(new Set(trace.filter(p => ["OFFICIAL", "SAMPLE"].includes(p.sourceRole)).map(p => p.language)), new Set(["c", "cpp", "python", "java"]));
 }

@@ -1,5 +1,17 @@
 # Ingenium Bug Bounty Architecture
 
+Current durable shop implementation (28 October 2026): the seven approved Round 2
+items now use permanent shared inventory, exact wallet debits, original receipts,
+single-use activations and submission-bound assistance/protection. Claim Lock
+creates a protected award without consuming the ordinary shared claim. Black ICE
+enforces one incoming/outgoing use per round without blocking coding or owned gear.
+Shop timers and Ghost Scan's cooldown freeze only during global technical pauses;
+team/member pauses do not extend them. The catalogue, private clue installation,
+API routes and verification boundary are in [the item design](docs/round-2-items.md).
+The database changes are tested on disposable databases only; no deployment or
+event-database migration is authorised. Human balance review and existing
+capacity/host launch gates remain separate.
+
 Current Round 2 content decision (28 October 2026): author **100 distinct debugging
 questions**, harder than Round 1, at difficulty **25–100**, in C, C++, Java and
 Python. The private Kernel Breach pack in `content/round-2` now supplies 25 per
@@ -17,15 +29,15 @@ Claim Lock's timer. Round 2 needs one continuous pan-only arena for 100 bugs,
 separate from Round 1's four areas. Requirements and the proposed Kernel Breach
 art direction are in [the arena design](docs/round-2-arena-design.md). These
 changes now exist in the frontend and local preview. The 100 preview targets use
-the authored Round 2 drafts; human content approval, durable item rules and
-multi-team production verification remain pending.
+the authored Round 2 drafts; human content approval and production-host
+publication remain pending. Durable item rules are implemented as described above.
 
 Current shop decision (28 October 2026): seven Round 2 item concepts and prices
 are approved in [the item design](docs/round-2-items.md). Black ICE costs 15,000
 coins, reduced from 20,000. This supersedes the earlier deferred
 shop-item decision below; unrelated bonus/trivia rules remain deferred. Item
-frontend and a loopback-only in-memory Round 2 demonstration now exist. Production
-item enforcement, multi-team integration and balance testing are still pending.
+frontend, a loopback-only in-memory Round 2 demonstration and the durable backend
+now exist. Production-host deployment and participant balance testing remain pending.
 
 Current reward decision (28 October 2026): the Round 1 Protocol Rebellion pack
 uses **B = 50 × difficulty**, five times the original scale, to fund Round 2

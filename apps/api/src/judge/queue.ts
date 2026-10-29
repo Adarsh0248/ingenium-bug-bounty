@@ -148,13 +148,14 @@ export async function publishJudgeTurn(store: Publisher, queue: Queue, signal: A
 }
 
 // A consumed-but-unsealed permit is held, never turned into a replacement launch.
-export async function claimJudgeDelivery(store: Supervisor, queue: Queue, signal: AbortSignal) {
+export async function claimJudgeDelivery(store: Supervisor, queue: Queue, signal: AbortSignal, claiming?: (attempt:string)=>void) {
   binding(store, queue); const entry = await queue.receive(signal);
   if (!entry) return { state: "EMPTY" } as const;
   if (await store.deliveryState(entry) === "CONSUMED") {
     await queue.acknowledge(entry, signal); return { state: "DUPLICATE" } as const;
   }
   signal.throwIfAborted(); const owner = randomUUID();
+  claiming?.(entry.attempt_id);
   const payload = await store.claim(entry.attempt_id, entry.provider_token, owner);
   signal.throwIfAborted();
   if (!payload) return { state: "HELD" } as const;

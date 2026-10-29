@@ -95,7 +95,7 @@ export async function accessChecks(t: TestContext, owner: Pool, api: Pool): Prom
     const team = await fixture(), first = await flow(team), second = await flow(team);
     const results = await Promise.all([
       service.activate(first.proofCookie, { memberId: team.first, language: "c", requestKey: randomUUID() }),
-      service.activate(second.proofCookie, { memberId: team.first, language: "javascript", requestKey: randomUUID() }),
+      service.activate(second.proofCookie, { memberId: team.first, language: "python", requestKey: randomUUID() }),
     ]);
     assert.deepEqual(results.map((result) => result.status).sort(), ["ACTIVATED", "REJECTED"]);
     const winner = results.find((result) => result.status === "ACTIVATED");
@@ -250,10 +250,10 @@ export async function accessChecks(t: TestContext, owner: Pool, api: Pool): Prom
     await owner.query("INSERT INTO member_rounds(id,team_round_id,team_id,member_id,round_id,display_name) VALUES($1,$2,$3,$4,$5,'Synthetic handoff R2 member')", [randomUUID(), heldRoster, heldTeam.id, heldTeam.first, r2]);
     assert.deepEqual(await service.activate(stale.proofCookie, { memberId: team.second, language: "c", requestKey: randomUUID() }), { status: "REJECTED", reason: "ROUND_UNAVAILABLE" });
     const next = await flow(team);
-    const r2Active = await service.activate(next.proofCookie, { memberId: team.first, language: "javascript", requestKey: randomUUID() });
+    const r2Active = await service.activate(next.proofCookie, { memberId: team.first, language: "c", requestKey: randomUUID() });
     assert.equal(r2Active.status, "ACTIVATED");
     if (r2Active.status !== "ACTIVATED") throw new Error("Synthetic R2 session failed.");
-    assert.equal(r2Active.session.language, "javascript");
+    assert.equal(r2Active.session.language, "c");
     assert.equal(r2Active.session.roundId, r2);
     assert.equal((await owner.query("SELECT language FROM member_rounds WHERE member_id=$1 AND round_id=$2", [team.first, roundId])).rows[0].language, "cpp");
     await assert.rejects(service.inspect(active.sessionCookie), denied("INVALID_SESSION"));
@@ -262,7 +262,7 @@ export async function accessChecks(t: TestContext, owner: Pool, api: Pool): Prom
     const delayedLogout = { sessionId: active.session.sessionId, requestKey: randomUUID() };
     await assert.rejects(service.logout(r2Active.sessionCookie, delayedLogout), denied("INVALID_SESSION"));
     await assert.rejects(service.logout(active.sessionCookie, delayedLogout), denied("INVALID_SESSION"));
-    assert.equal((await service.inspect(r2Active.sessionCookie)).language, "javascript");
+    assert.equal((await service.inspect(r2Active.sessionCookie)).language, "c");
     const heldR2Flow = await flow(heldTeam);
     const heldR2 = await service.activate(heldR2Flow.proofCookie, { memberId: heldTeam.first, language: "python", requestKey: randomUUID() });
     assert.equal(heldR2.status, "ACTIVATED");
