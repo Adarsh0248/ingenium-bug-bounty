@@ -76,6 +76,61 @@ export async function adminSetupBrowserChecks(
       1,
     );
 
+    await page
+      .getByRole("button", { name: "Edit team Manual admin team", exact: true })
+      .click();
+    await form().getByLabel("Member 1 name").fill("Updated first member");
+    await c.budgets();
+    await form()
+      .getByRole("button", { name: "Save team details", exact: true })
+      .click();
+    await expect(form()).toHaveCount(0);
+    await expect(
+      page.getByText("Team details saved. Its login code is unchanged.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Add team manually", exact: true })
+      .click();
+    await form()
+      .getByLabel("Team name", { exact: true })
+      .fill("Delete demo team");
+    await form().getByLabel("Member 1 name").fill("Demo one");
+    await form().getByLabel("Member 2 name").fill("Demo two");
+    await c.budgets();
+    await form()
+      .getByRole("button", { name: "Create team", exact: true })
+      .click();
+    await dialog.getByRole("button", { name: "Done", exact: true }).click();
+    await page
+      .getByRole("button", {
+        name: "Delete team Delete demo team",
+        exact: true,
+      })
+      .click();
+    await form()
+      .getByRole("button", { name: "Review deletion", exact: true })
+      .click();
+    await expect(dialog).toContainText("past results will be retained");
+    await c.budgets();
+    await dialog
+      .getByRole("button", { name: "Confirm team change", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", {
+        name: "Delete team Delete demo team",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    assert.ok(
+      (
+        await c.owner.query(
+          "SELECT deleted_at FROM teams WHERE display_name='Delete demo team'",
+        )
+      ).rows[0].deleted_at,
+    );
+
     await openStaffView(page, "Questions");
     await page
       .getByRole("button", { name: "Add question manually", exact: true })
@@ -151,6 +206,33 @@ export async function adminSetupBrowserChecks(
     ).toBeVisible();
     await expect(dialog).toHaveCount(0);
     const id = (await state()).id;
+    const teamId = (
+      await c.owner.query(
+        "SELECT id FROM teams WHERE display_name='Manual admin team'",
+      )
+    ).rows[0].id;
+    const bootstrap = await page.request.get(
+      `${origin}/api/v1/bootstrap?audience=STAFF`,
+    );
+    const csrf = (await bootstrap.json()).data.csrf_token;
+    await c.budgets();
+    const refused = await page.request.post(
+      `${origin}/api/v1/staff/teams/${teamId}/delete`,
+      {
+        data: {
+          request_key: crypto.randomUUID(),
+          expected_revision: (
+            await c.owner.query(
+              "SELECT revision FROM security_control WHERE id=1",
+            )
+          ).rows[0].revision,
+          reason: "Attempt to remove a selected draft team",
+        },
+        headers: { Origin: origin, "x-csrf-token": csrf },
+      },
+    );
+    assert.equal(refused.status(), 200);
+    assert.equal((await refused.json()).data.outcome.reason, "TEAM_IN_USE");
     await page.getByLabel("Duration (minutes)").fill("120");
     await c.budgets();
     await page

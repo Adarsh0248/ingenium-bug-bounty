@@ -127,3 +127,23 @@ The website release receipt remains `/var/lib/ingenium/deployments/current.json`
 A separate private post-import database backup and source-free verification
 receipt retain the question counts and pack hashes. Existing arena/team/staff
 rows are preserved, and importing does not configure or start any arena.
+
+## Team edit/delete release — 29 October 2026
+
+Migration 0089 adds the reviewed team-profile change function, retained deletion
+timestamp and active-team roster guard, bringing the migration count to 90.
+The Teams page exposes Edit and Delete alongside the existing code controls.
+Editing preserves member IDs and credentials. Deletion disables access and
+removes the team from active pickers without removing historical records.
+Selected draft/active round teams cannot be deleted; active round teams cannot
+be edited. Existing CSV registration mappings cannot recreate a deleted team.
+
+Preflight confirmed two teams, three staff accounts, all 150 imported questions,
+no active round and a healthy clock. Preserve those records during deployment.
+When comparing pre/post migration team rows, ignore the newly added null
+`deleted_at` field; all existing values must match. Keep the previous release
+and a private database backup, apply all 90 reviewed hashes, then verify the
+normal clock warm-up and live Teams controls. No production team needs to be
+changed or deleted to verify this deployment.
+
+The current resource estimate is in [cloud running cost](cloud-running-cost.md).

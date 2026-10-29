@@ -5,6 +5,7 @@ import { check, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-
 export const teams = pgTable("teams", {
   id: uuid("id").primaryKey().$defaultFn(randomUUID),
   displayName: text("display_name").notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true, precision: 3 }),
   createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).notNull()
     .default(sql`date_trunc('milliseconds', clock_timestamp())`),
 }, (table) => [

@@ -103,6 +103,33 @@ export async function teamManagementChecks(
     const actor = await person(),
       other = await person("SUPER_ADMIN"),
       organiser = await person("ORGANISER");
+    await t.test("staff edit team/member labels without changing identities or codes, and delete once without erasing history", async () => {
+      const created = await service.command(organiser.sessionCookie, await input(organiser.code));
+      const target = created.outcome.result_team_id!;
+      const members = (await owner.query("SELECT id,position FROM team_members WHERE team_id=$1 ORDER BY position", [target])).rows;
+      const credentials = (await owner.query("SELECT * FROM access_credentials WHERE team_id=$1", [target])).rows;
+      const edit = await input(organiser.code, { action: "EDIT", targetId: target, teamName: "Renamed team", memberOne: "Updated first", memberTwo: "Updated second" });
+      const replies = await Promise.all([service.command(organiser.sessionCookie, edit), service.command(organiser.sessionCookie, edit)]);
+      assert.deepEqual(replies[0], replies[1]); assert.equal(replies[0].outcome.outcome, "APPLIED"); assert.equal(replies[0].issued_code, null);
+      assert.deepEqual((await owner.query("SELECT id,position FROM team_members WHERE team_id=$1 ORDER BY position", [target])).rows, members);
+      assert.deepEqual((await owner.query("SELECT * FROM access_credentials WHERE team_id=$1", [target])).rows, credentials);
+      assert.deepEqual((await owner.query("SELECT display_name FROM team_members WHERE team_id=$1 ORDER BY position", [target])).rows.map(m => m.display_name), ["Updated first", "Updated second"]);
+      const stale = await service.command(actor.sessionCookie, { ...edit, ownCode: actor.code, requestKey: randomUUID(), teamName: "Stale overwrite" });
+      assert.equal(stale.outcome.reason, "STALE_VERSION");
+      const remove = await input(organiser.code, { action: "DELETE", targetId: target, teamName: null, memberOne: null, memberTwo: null });
+      const deleted = await service.command(organiser.sessionCookie, remove);
+      assert.equal(deleted.outcome.outcome, "APPLIED"); assert.equal(deleted.issued_code, null);
+      assert.deepEqual(await service.command(organiser.sessionCookie, remove), deleted);
+      assert.ok((await owner.query("SELECT deleted_at FROM teams WHERE id=$1", [target])).rows[0].deleted_at);
+      assert.equal((await owner.query("SELECT count(*)::integer n FROM team_members WHERE team_id=$1", [target])).rows[0].n, 2);
+      assert.equal((await service.list(organiser.sessionCookie, undefined, "Renamed team")).items.length, 0);
+      assert.equal((await owner.query("SELECT count(*)::integer n FROM access_credentials WHERE team_id=$1 AND revoked_at IS NULL", [target])).rows[0].n, 0);
+      await assert.rejects(entry.begin(created.issued_code!, {ip:"127.0.0.1",browserId:randomUUID()}), denied("INVALID_CODE"));
+      const retry = await service.command(actor.sessionCookie, await input(actor.code, { action: "DELETE", targetId: target, teamName: null, memberOne: null, memberTwo: null }));
+      assert.equal(retry.outcome.reason, "TEAM_DELETED");
+      await assert.rejects(api.query("UPDATE teams SET deleted_at=NULL WHERE id=$1", [target]), {code:"42501"});
+      await assert.rejects(owner.query("DELETE FROM team_management_outcomes WHERE id=$1", [deleted.outcome.outcome_id]), {code:"P0001"});
+    });
     await t.test(
       "team creation is atomic with two stable members, one-time codes and duplicate recovery",
       async () => {
@@ -319,6 +346,12 @@ export async function teamManagementChecks(
           });
           if (f.audience !== "TEAM") throw Error("Synthetic team route");
           return f;
+        }
+        for (const action of ["EDIT", "DELETE"] as const) {
+          const result = await service.command(actor.sessionCookie, await input(actor.code, {
+            action, targetId:id, ...(action === "DELETE" ? {teamName:null,memberOne:null,memberTwo:null} : {}),
+          }));
+          assert.equal(result.outcome.reason, "TEAM_IN_USE");
         }
         const sessions = [];
         for (const [i, member] of members.entries()) {
@@ -544,7 +577,7 @@ export async function teamManagementChecks(
       "registration cap and pagination are bounded, while rotation remains possible at capacity",
       async () => {
         const count = (
-          await owner.query("SELECT count(*)::int AS n FROM teams")
+          await owner.query("SELECT count(*)::int AS n FROM teams WHERE deleted_at IS NULL")
         ).rows[0].n;
         await owner.query(
           "INSERT INTO teams(id,display_name) SELECT gen_random_uuid(),'Synthetic capacity team' FROM generate_series(1,$1::int)",

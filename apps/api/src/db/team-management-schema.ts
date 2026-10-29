@@ -67,9 +67,11 @@ export const teamManagementOutcomes = pgTable(
       "team_management_shape",
       sql`${t.expectedRevision}>=0 and octet_length(${t.fingerprint})=32
     and octet_length(${t.reason}) between 1 and 1024 and btrim(${t.reason})<>''
-    and ((${t.action}='CREATE' and ${t.targetTeamId} is null) or (${t.action} in ('ROTATE','ISSUE','REVOKE') and ${t.targetTeamId} is not null))
-    and ((${t.outcome}='APPLIED' and ${t.denialReason} is null and ${t.resultTeamId} is not null and ${t.resultCredentialId} is not null and ${t.codeVersion}>0)
-      or (${t.outcome}='REJECTED' and ${t.denialReason} is not null and ${t.denialReason} in ('STALE_VERSION','TEAM_CAPACITY','TEAM_INCOMPLETE','CODE_INACTIVE','CODE_ACTIVE')
+    and ((${t.action}='CREATE' and ${t.targetTeamId} is null) or (${t.action} in ('ROTATE','ISSUE','REVOKE','EDIT','DELETE') and ${t.targetTeamId} is not null))
+    and ((${t.outcome}='APPLIED' and ${t.denialReason} is null and ${t.resultTeamId} is not null
+      and ((${t.action} in ('EDIT','DELETE') and ${t.resultCredentialId} is null and ${t.codeVersion} is null)
+        or (${t.action} in ('CREATE','ROTATE','ISSUE','REVOKE') and ${t.resultCredentialId} is not null and ${t.codeVersion}>0)))
+      or (${t.outcome}='REJECTED' and ${t.denialReason} is not null and ${t.denialReason} in ('STALE_VERSION','TEAM_CAPACITY','TEAM_INCOMPLETE','CODE_INACTIVE','CODE_ACTIVE','TEAM_DELETED','TEAM_IN_USE')
         and ${t.resultTeamId} is null and ${t.resultCredentialId} is null and ${t.codeVersion} is null))`,
     ),
   ],

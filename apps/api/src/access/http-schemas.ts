@@ -101,14 +101,14 @@ export const disciplineListData=object({current:{type:"boolean"},security_revisi
   blocks:{type:"array",maxItems:3,items:object({block_id:id,member_id:nullableId,created_at:instant,reason})},
   items:{type:"array",maxItems:50,items:object({...disciplineProperties,audit_reason:reason,actor_id:id,actor_name:name,reversed:{type:"boolean"}})},next_after:nullableId});
 export const teamTargetParams=object({team_id:id});
-export const teamManagementReceipt=object({outcome_id:id,request_key:id,action:{type:"string",enum:["CREATE","ROTATE","ISSUE","REVOKE"]},target_team_id:nullableId,
-  expected_revision:revision,outcome:{type:"string",enum:["APPLIED","REJECTED"]},reason:{anyOf:[{type:"string",enum:["STALE_VERSION","TEAM_CAPACITY","TEAM_INCOMPLETE","CODE_INACTIVE","CODE_ACTIVE"]},{type:"null"}]},
+export const teamManagementReceipt=object({outcome_id:id,request_key:id,action:{type:"string",enum:["CREATE","ROTATE","ISSUE","REVOKE","EDIT","DELETE"]},target_team_id:nullableId,
+  expected_revision:revision,outcome:{type:"string",enum:["APPLIED","REJECTED"]},reason:{anyOf:[{type:"string",enum:["STALE_VERSION","TEAM_CAPACITY","TEAM_INCOMPLETE","CODE_INACTIVE","CODE_ACTIVE","TEAM_IN_USE","TEAM_DELETED"]},{type:"null"}]},
   result_team_id:nullableId,code_version:{anyOf:[revision,{type:"null"}]},recorded_at:instant});
 export const teamManagementData=object({outcome:teamManagementReceipt,issued_code:{anyOf:[{type:"string",pattern:"^(?:[A-Z2-7]{8}|[A-Z2-7]{32})$"},{type:"null"}]}});
 export const teamOutcomeData=object({status:{type:"string",enum:["OBSERVED","NOT_OBSERVED"]},outcome:{anyOf:[teamManagementReceipt,{type:"null"}]}});
 export const teamListQuery=object({after:id,search:{type:"string",maxLength:120}},[]);
 export const teamListData=object({control_revision:revision,total:{type:"integer",minimum:0},matched:{type:"integer",minimum:0},search:{type:"string",maxLength:120},items:{type:"array",maxItems:50,items:object({team_id:id,team_name:name,
-  registration_id:{anyOf:[{type:"string",maxLength:64},{type:"null"}]},members:{type:"array",maxItems:2,items:object({member_id:id,member_name:name,position:{type:"integer",enum:[1,2]}})},code_version:revision,has_active_code:{type:"boolean"}})},next_after:nullableId});
+  registration_id:{anyOf:[{type:"string",maxLength:64},{type:"null"}]},members:{type:"array",maxItems:2,items:object({member_id:id,member_name:name,position:{type:"integer",enum:[1,2]}})},code_version:revision,has_active_code:{type:"boolean"},can_edit:{type:"boolean"},can_delete:{type:"boolean"}})},next_after:nullableId});
 const csvText={type:"string",minLength:1,maxLength:1048576};
 const csvDigest={type:"string",pattern:"^[0-9a-f]{64}$"};
 const registrationId={type:"string",pattern:"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"};

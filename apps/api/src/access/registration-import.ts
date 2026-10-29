@@ -81,7 +81,7 @@ export function createRegistrationImport(
           const parsed = registrationCsv(csv),
             control = await first<{ revision: string; total: number }>(
               client,
-              "SELECT revision,(SELECT count(*)::int FROM teams) AS total FROM security_control WHERE id=1",
+              "SELECT revision,(SELECT count(*)::int FROM teams WHERE deleted_at IS NULL) AS total FROM security_control WHERE id=1",
             );
           if (!control) throw new AccessError("SECURITY_UNAVAILABLE");
           const rows = parsed.issues.length

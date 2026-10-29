@@ -548,10 +548,10 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     wrap(request,await registrations.outcome(request.cookies[policy.names.staff],request.params.request_key)));
 
   type TeamBody={request_key:string;expected_revision:string;own_code?:string;reason:string;team_name?:string;member_one?:string;member_two?:string};
-  for(const action of ["CREATE","ROTATE","ISSUE","REVOKE"] as const) {
-    app.post<{Body:TeamBody;Params:{team_id?:string}}>(action==="CREATE"?"/staff/teams":`/staff/teams/:team_id/${action.toLowerCase()}-code`,{
+  for(const action of ["CREATE","ROTATE","ISSUE","REVOKE","EDIT","DELETE"] as const) {
+    app.post<{Body:TeamBody;Params:{team_id?:string}}>(action==="CREATE"?"/staff/teams":`/staff/teams/:team_id/${action.toLowerCase()}${["EDIT","DELETE"].includes(action)?"":"-code"}`,{
       bodyLimit:16384,onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,...(action==="CREATE"?{}:{params:schema.teamTargetParams}),
-        body:action==="CREATE"?schema.teamCreateBody:schema.staffRotateBody,response:schema.responses(schema.teamManagementData)}},async request=>{
+        body:["CREATE","EDIT"].includes(action)?schema.teamCreateBody:schema.staffRotateBody,response:schema.responses(schema.teamManagementData)}},async request=>{
       const b=request.body;
       return wrap(request,await teamManagement.command(request.cookies[policy.names.staff],{action,targetId:request.params.team_id??null,
         requestKey:b.request_key,expectedRevision:b.expected_revision,ownCode:b.own_code,reason:b.reason,teamName:b.team_name??null,memberOne:b.member_one??null,memberTwo:b.member_two??null}));

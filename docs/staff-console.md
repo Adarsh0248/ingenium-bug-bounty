@@ -149,3 +149,18 @@ counts and independent page navigation. Manual creation defaults to the chosen
 round. The arena picker continues to show only published questions for its own
 round. See [event question library](event-question-library.md) for the 50/100
 private-pack import and its validation/publication boundary.
+
+## Team editing and deletion — 29 October 2026
+
+Teams now has visible Edit and Delete buttons. Edit changes the team name and
+both member labels without replacing their IDs or login code. Active competition
+enrolments block edits. Delete removes an unused team from active registration
+and arena pickers, revokes its access through the existing revocation procedure,
+and retains immutable audit/registration and past competition records. A team
+selected in an unfinished arena must first be removed from that draft; a team
+participating in an active round cannot be deleted. All regular staff have these
+controls through their existing signed-in session.
+
+Migration 0089 adds a deletion timestamp, reviewed profile-change authority and
+receipt guards. Replayed commands return their original receipt; stale changes
+are refused. CSV uploads cannot silently resurrect a deleted registration.

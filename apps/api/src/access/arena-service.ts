@@ -73,7 +73,7 @@ export function createArenaService(pool: Pool, clock: ClockGuard, delivery: Sess
           AND round_id IS NOT DISTINCT FROM $3::uuid AND request_key=$4`, [actor.staff_id, input.action, input.roundId, input.requestKey]);
         if (prior) { if (!sameVerifier(prior.fingerprint, fingerprint)) throw new AccessError("INTENT_CONFLICT"); return receiptView(prior); }
         if (input.roundId && !round) throw new AccessError("ARENA_UNAVAILABLE");
-        const selected = await client.query<Team>(`SELECT ${teamProjection} FROM teams t WHERE t.id=ANY($1::uuid[]) ORDER BY t.id`, [ids]);
+        const selected = await client.query<Team>(`SELECT ${teamProjection} FROM teams t WHERE t.deleted_at IS NULL AND t.id=ANY($1::uuid[]) ORDER BY t.id`, [ids]);
         if (selected.rowCount !== ids.length) throw new AccessError("ARENA_UNAVAILABLE");
         await staffOutcomeCapacity(client);
         let outcome: Receipt["outcome"] = "APPLIED", denial: string | null = null;
@@ -128,7 +128,7 @@ export function createArenaService(pool: Pool, clock: ClockGuard, delivery: Sess
       await readBudget(cookie);
       return accessTransaction(pool, clock, async (client) => {
         await principal(client, cookie, await decisionTime(client, clock));
-        const rows = await client.query<Team>(`SELECT ${teamProjection} FROM teams t WHERE ($1::uuid IS NULL OR t.id>$1) ORDER BY t.id LIMIT 51`, [afterId ?? null]);
+        const rows = await client.query<Team>(`SELECT ${teamProjection} FROM teams t WHERE t.deleted_at IS NULL AND ($1::uuid IS NULL OR t.id>$1) ORDER BY t.id LIMIT 51`, [afterId ?? null]);
         const items = rows.rows.slice(0, 50);
         return { items, next_after: rows.rows.length > 50 ? items.at(-1)!.team_id : null };
       }, "SHARED");

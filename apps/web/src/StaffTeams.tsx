@@ -13,6 +13,8 @@ import {
   Upload,
   Search,
   Ban,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { ApiError, Command, errorText } from "./api";
 import type { Api } from "./api";
@@ -27,6 +29,8 @@ type Team = {
   code_version: string;
   has_active_code: boolean;
   registration_id: string | null;
+  can_edit: boolean;
+  can_delete: boolean;
 };
 type Page = {
   control_revision: string;
@@ -37,7 +41,7 @@ type Page = {
   next_after: string | null;
 };
 type Draft = {
-  action: "CREATE" | "ROTATE" | "ISSUE" | "REVOKE";
+  action: "CREATE" | "ROTATE" | "ISSUE" | "REVOKE" | "EDIT" | "DELETE";
   target: string | null;
   revision: string;
   name: string;
@@ -103,7 +107,7 @@ export default function StaffTeams({
     blocked =
       importing || !!draft || !!issued || busy || command.current.unresolved;
   const observed = draft
-    ? draft.target
+    ? draft.target && !["EDIT", "DELETE"].includes(draft.action)
       ? data?.items.find((t) => t.team_id === draft.target)?.code_version
       : data?.control_revision
     : undefined;
@@ -112,6 +116,7 @@ export default function StaffTeams({
       : undefined,
     accessChanged =
       !!draft?.target &&
+      !["EDIT", "DELETE"].includes(draft.action) &&
       (!target || target.has_active_code !== (draft.action !== "ISSUE")),
     stateChanged =
       accessChanged || (observed !== undefined && observed !== draft?.revision),
@@ -187,6 +192,16 @@ export default function StaffTeams({
       two: "",
     });
   }
+  function profileChange(team: Team, action: "EDIT" | "DELETE") {
+    choose({
+      action,
+      target: team.team_id,
+      revision: data!.control_revision,
+      name: team.team_name,
+      one: team.members.find((m) => m.position === 1)?.member_name ?? "",
+      two: team.members.find((m) => m.position === 2)?.member_name ?? "",
+    });
+  }
   async function acknowledge(
     value: { outcome: Receipt; issued_code?: string | null } | Receipt,
   ) {
@@ -211,7 +226,11 @@ export default function StaffTeams({
         });
         setReveal(false);
         setCopyMessage("");
-      } else if (receipt.action === "REVOKE")
+      } else if (receipt.action === "EDIT")
+        setNotice("Team details saved. Its login code is unchanged.");
+      else if (receipt.action === "DELETE")
+        setNotice("Team deleted from active registrations.");
+      else if (receipt.action === "REVOKE")
         setNotice("Team code revoked. No replacement code was issued.");
       else
         setNotice(
@@ -225,7 +244,9 @@ export default function StaffTeams({
       reason.trim() ||
       (draft?.action === "CREATE"
         ? `Register team ${draft.name}.`
-        : `${draft?.action} team access code.`);
+        : ["EDIT", "DELETE"].includes(draft?.action ?? "")
+          ? `${draft?.action === "EDIT" ? "Edit" : "Delete"} team ${draft?.name}.`
+          : `${draft?.action} team access code.`);
     if (locked || !draft || !data || stateChanged || !valid(note, 1024)) return;
     const d = draft;
     setConfirm(false);
@@ -236,13 +257,13 @@ export default function StaffTeams({
       await acknowledge(
         await command.current!.send(
           d.target
-            ? `${base}/${d.target}/${d.action.toLowerCase()}-code`
+            ? `${base}/${d.target}/${d.action.toLowerCase()}${["EDIT", "DELETE"].includes(d.action) ? "" : "-code"}`
             : base,
           {
             expected_revision: d.revision,
             reason: note,
 
-            ...(!d.target
+            ...(["CREATE", "EDIT"].includes(d.action)
               ? { team_name: d.name, member_one: d.one, member_two: d.two }
               : {}),
           },
@@ -433,14 +454,15 @@ export default function StaffTeams({
               !stateChanged &&
               (!reason || valid(reason, 1024))
             ) {
-              if (draft.action === "CREATE") void send();
+              if (draft.action === "CREATE" || draft.action === "EDIT")
+                void send();
               else setConfirm(true);
             }
           }}
         >
           <h3>
             {draft.target
-              ? `${draft.action === "REVOKE" ? "Revoke code" : draft.action === "ISSUE" ? "Issue new code" : "Rotate code"}: ${draft.name}`
+              ? `${draft.action === "EDIT" ? "Edit team" : draft.action === "DELETE" ? "Delete team" : draft.action === "REVOKE" ? "Revoke code" : draft.action === "ISSUE" ? "Issue new code" : "Rotate code"}: ${draft.name}`
               : "Add a team"}
           </h3>
           {draft.target && (
@@ -449,7 +471,7 @@ export default function StaffTeams({
             </small>
           )}
           <fieldset disabled={locked}>
-            {!draft.target && (
+            {["CREATE", "EDIT"].includes(draft.action) && (
               <>
                 {(["name", "one", "two"] as const).map((field, i) => (
                   <label key={field}>
@@ -521,14 +543,18 @@ export default function StaffTeams({
                   (!!reason && !valid(reason, 1024)) ||
                   !data ||
                   stateChanged ||
-                  (!draft.target &&
+                  (["CREATE", "EDIT"].includes(draft.action) &&
                     ![draft.name, draft.one, draft.two].every((s) => valid(s)))
                 }
               >
                 <Save size={16} />
                 {draft.action === "CREATE"
                   ? "Create team"
-                  : "Review team change"}
+                  : draft.action === "EDIT"
+                    ? "Save team details"
+                    : draft.action === "DELETE"
+                      ? "Review deletion"
+                      : "Review team change"}
               </button>
             </div>
           </fieldset>
@@ -591,6 +617,29 @@ export default function StaffTeams({
                         : "No active code"}
                     </td>
                     <td>
+                      <div className="staff-row-actions">
+                        <button
+                          disabled={locked || !!draft || !team.can_edit}
+                          onClick={() => profileChange(team, "EDIT")}
+                          aria-label={`Edit team ${team.team_name}`}
+                        >
+                          <Pencil size={15} /> Edit
+                        </button>
+                        <button
+                          className="danger"
+                          disabled={locked || !!draft || !team.can_delete}
+                          onClick={() => profileChange(team, "DELETE")}
+                          aria-label={`Delete team ${team.team_name}`}
+                        >
+                          <Trash2 size={15} /> Delete
+                        </button>
+                      </div>
+                      {!team.can_delete && (
+                        <small>
+                          Remove from the arena draft before deleting. Active
+                          rounds must finish first.
+                        </small>
+                      )}
                       <IconButton
                         title={`${team.has_active_code ? "Rotate" : "Issue"} team code for ${team.team_name}`}
                         disabled={
@@ -654,18 +703,26 @@ export default function StaffTeams({
           <p>
             {draft.action === "REVOKE"
               ? "Revoke team code"
-              : draft.action === "ISSUE"
-                ? "Issue a new team code"
-                : draft.action === "ROTATE"
-                  ? "Rotate team code"
-                  : "Register team"}
+              : draft.action === "DELETE"
+                ? "Delete team"
+                : draft.action === "ISSUE"
+                  ? "Issue a new team code"
+                  : draft.action === "ROTATE"
+                    ? "Rotate team code"
+                    : "Register team"}
           </p>
           {draft.target ? (
             <>
               <p className="staff-reference">{draft.target}</p>
               <p className="notice">
-                Both members' current sessions and browser handoffs will be
-                revoked. Languages, scores and history remain unchanged.
+                {draft.action === "DELETE" ? (
+                  "The team will be removed from active lists and its login code disabled. Audit records, submissions and past results will be retained."
+                ) : (
+                  <>
+                    Both members' current sessions and browser handoffs will be
+                    revoked. Languages, scores and history remain unchanged.
+                  </>
+                )}
               </p>
               {draft.action === "REVOKE" && (
                 <p className="notice">
@@ -701,7 +758,11 @@ export default function StaffTeams({
                 Back
               </button>
               <button
-                className={draft.action === "REVOKE" ? "danger" : "primary"}
+                className={
+                  ["REVOKE", "DELETE"].includes(draft.action)
+                    ? "danger"
+                    : "primary"
+                }
                 disabled={locked || !data || stateChanged}
               >
                 Confirm team change

@@ -19,7 +19,7 @@ import {
 import type { ClockGuard } from "./transaction.js";
 
 export interface TeamCommand {
-  action: "CREATE" | "ROTATE" | "ISSUE" | "REVOKE";
+  action: "CREATE" | "ROTATE" | "ISSUE" | "REVOKE" | "EDIT" | "DELETE";
   targetId: string | null;
   requestKey: string;
   expectedRevision: string;
@@ -65,7 +65,7 @@ export function teamSearch(value: unknown = ""): string {
     throw new AccessError("INVALID_CONTEXT");
   return value.trim();
 }
-const searchFilter = `($1::text='' OR strpos(lower(t.display_name),lower($1))>0
+const searchFilter = `t.deleted_at IS NULL AND ($1::text='' OR strpos(lower(t.display_name),lower($1))>0
   OR EXISTS(SELECT 1 FROM team_members m WHERE m.team_id=t.id AND strpos(lower(m.display_name),lower($1))>0)
   OR EXISTS(SELECT 1 FROM registration_sources s WHERE s.team_id=t.id AND strpos(lower(s.registration_id),lower($1))>0))`;
 export function createTeamManagement(
@@ -100,11 +100,12 @@ export function createTeamManagement(
       uuid(input.requestKey);
       staffRevision(input.expectedRevision);
       boundedStaffText(input.reason, 1024);
-      if (input.action === "CREATE") {
-        if (input.targetId !== null) throw new AccessError("INVALID_CONTEXT");
+      if (input.action === "CREATE" || input.action === "EDIT") {
+        if (input.action === "CREATE" ? input.targetId !== null : !input.targetId) throw new AccessError("INVALID_CONTEXT");
+        if (input.targetId) uuid(input.targetId);
         for (const name of [input.teamName, input.memberOne, input.memberTwo])
           boundedStaffText(name, 120);
-      } else if (["ROTATE", "ISSUE", "REVOKE"].includes(input.action)) {
+      } else if (["ROTATE", "ISSUE", "REVOKE", "DELETE"].includes(input.action)) {
         uuid(input.targetId);
         if (
           input.teamName !== null ||
@@ -114,7 +115,7 @@ export function createTeamManagement(
           throw new AccessError("INVALID_CONTEXT");
       } else throw new AccessError("INVALID_CONTEXT");
       await budget(cookie, true, input.ownCode !== undefined);
-      const generated = input.action === "REVOKE" ? null : newAccessCode("TEAM");
+      const generated = ["CREATE", "ROTATE", "ISSUE"].includes(input.action) ? newAccessCode("TEAM") : null;
       return accessTransaction(
         pool,
         clock,
@@ -136,10 +137,10 @@ export function createTeamManagement(
             "SELECT id FROM team_management_outcomes WHERE actor_id=$1 AND request_key=$2",
             [actor.staff_id, input.requestKey],
           );
-          if (!known) await staffOutcomeCapacity(client);
+          if (!known) await staffOutcomeCapacity(client, input.action === "DELETE" ? 2 : 1);
           const row = await first<Receipt>(
             client,
-            "SELECT * FROM manage_team_command($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+            `SELECT * FROM ${["EDIT", "DELETE"].includes(input.action) ? "change_team_profile" : "manage_team_command"}($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
             [
               actor.id,
               input.requestKey,
@@ -204,7 +205,10 @@ export function createTeamManagement(
           (SELECT registration_id FROM registration_sources WHERE team_id=t.id) AS registration_id,
           COALESCE((SELECT jsonb_agg(jsonb_build_object('member_id',m.id,'member_name',m.display_name,'position',m.position) ORDER BY m.position) FROM team_members m WHERE m.team_id=t.id),'[]'::jsonb) AS members,
           (SELECT COALESCE(max(version),0)::text FROM access_credentials WHERE team_id=t.id) AS code_version,
-          EXISTS(SELECT 1 FROM access_credentials WHERE team_id=t.id AND revoked_at IS NULL) AS has_active_code
+          EXISTS(SELECT 1 FROM access_credentials WHERE team_id=t.id AND revoked_at IS NULL) AS has_active_code,
+          NOT EXISTS(SELECT 1 FROM team_rounds tr JOIN rounds r ON r.id=tr.round_id WHERE tr.team_id=t.id AND r.state IN ('RUNNING','PAUSED','CLOSING','CANCELLING')) AS can_edit,
+          NOT EXISTS(SELECT 1 FROM round_draft_teams dt JOIN rounds r ON r.id=dt.round_id JOIN arena_instances a ON a.id=r.arena_instance_id WHERE dt.team_id=t.id AND a.status IN ('SETUP','IN_PROGRESS'))
+          AND NOT EXISTS(SELECT 1 FROM team_rounds tr JOIN rounds r ON r.id=tr.round_id WHERE tr.team_id=t.id AND r.state IN ('RUNNING','PAUSED','CLOSING','CANCELLING')) AS can_delete
           FROM teams t WHERE ${searchFilter} AND ($2::uuid IS NULL OR t.id>$2) ORDER BY t.id LIMIT 51`,
               [term, after ?? null],
             )
@@ -215,7 +219,7 @@ export function createTeamManagement(
             matched: number;
           }>(
             client,
-            `SELECT revision,(SELECT count(*)::integer FROM teams) AS count,(SELECT count(*)::integer FROM teams t WHERE ${searchFilter}) AS matched FROM security_control WHERE id=1`,
+            `SELECT revision,(SELECT count(*)::integer FROM teams WHERE deleted_at IS NULL) AS count,(SELECT count(*)::integer FROM teams t WHERE ${searchFilter}) AS matched FROM security_control WHERE id=1`,
             [term],
           );
           if (!control) throw new AccessError("SECURITY_UNAVAILABLE");
