@@ -1,3 +1,5 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -122,11 +124,11 @@ test(
         await admin.getByRole("button", { name, exact: true }).click();
         const modal = admin.getByRole("dialog");
         await modal
-          .getByLabel("Audit reason")
+          .getByLabel("Change note")
           .fill("Local preview live controls check");
-        await modal.getByLabel("Your staff code").fill(preview.adminCode);
+        await supplyLegacyStaffCode(modal, preview.adminCode);
         await modal
-          .getByRole("button", { name: "Confirm command", exact: true })
+          .getByRole("button", { name: /^(Pause actions|Resume actions|Close round)$/ })
           .click();
         await expect(modal).not.toBeVisible();
         if (name === "Pause round")
@@ -191,7 +193,7 @@ test(
       await reportDialog
         .getByRole("button", { name: "Close dialog", exact: true })
         .click();
-      await admin.getByRole("button", { name: "reports", exact: true }).click();
+      await openStaffView(admin, "Reports");
       await admin
         .getByRole("button", { name: "Open ticket", exact: true })
         .click();
@@ -235,9 +237,7 @@ test(
         .fill(
           "Verified issue; award compensation when final standings are ready.",
         );
-      await decisionDialog
-        .getByLabel("Your staff code")
-        .fill(preview.adminCode);
+      await supplyLegacyStaffCode(decisionDialog, preview.adminCode);
       let decisionPosts = 0;
       await admin.route("**/reports/*/decision", async (route) => {
         decisionPosts++;
@@ -263,17 +263,17 @@ test(
         path: "test-results/question-report-review.png",
         fullPage: true,
       });
-      await admin.getByRole("button", { name: "monitor", exact: true }).click();
+      await openStaffView(admin, "Live overview");
       for (const name of ["Close round", "Finalise results"]) {
         await admin.getByRole("button", { name, exact: true }).click();
         const modal = admin.getByRole("dialog");
         await modal
-          .getByLabel("Audit reason")
+          .getByLabel("Change note")
           .fill("Finish demo round for report compensation");
-        await modal.getByLabel("Your staff code").fill(preview.adminCode);
+        await supplyLegacyStaffCode(modal, preview.adminCode);
         await delay(6500);
         await modal
-          .getByRole("button", { name: "Confirm command", exact: true })
+          .getByRole("button", { name: /^(Pause actions|Resume actions|Close round)$/ })
           .click();
         await expect(modal).not.toBeVisible();
       }
@@ -319,7 +319,7 @@ test(
         .getByLabel("Score adjustment reason")
         .fill("Ticket compensation +175");
       await scoreDialog.getByLabel("Related ticket ID").fill(ticket.id);
-      await scoreDialog.getByLabel("Your staff code").fill(preview.adminCode);
+      await supplyLegacyStaffCode(scoreDialog, preview.adminCode);
       await admin.screenshot({
         path: "test-results/final-score-adjustment.png",
       });
@@ -367,7 +367,7 @@ test(
       await scoreDialog
         .getByLabel("Score adjustment reason")
         .fill("Deduct 1000 after final review");
-      await scoreDialog.getByLabel("Your staff code").fill(preview.adminCode);
+      await supplyLegacyStaffCode(scoreDialog, preview.adminCode);
       await delay(6500);
       await scoreDialog
         .getByRole("button", { name: "Confirm -1000 points", exact: true })

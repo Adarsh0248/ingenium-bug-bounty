@@ -5,10 +5,63 @@ import { fileURLToPath } from "node:url";
 import { createServer as viteServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { chromium } from "@playwright/test";
-import type { Browser } from "@playwright/test";
+import type { Browser, Page, Locator, Route } from "@playwright/test";
 import { buildApp } from "../../src/app.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
 import type { EntryHttpOptions } from "../../src/access/http.js";
+
+export async function openStaffView(page: Page, name: string) {
+  const button = page
+    .getByRole("navigation", { name: "Control room views" })
+    .getByRole("button", { name, exact: true });
+  if (!(await button.isVisible()))
+    await page.locator(".staff-more > summary").click();
+  await button.click();
+}
+
+export async function fillStaffNote(
+  scope: Page | Locator,
+  label: string,
+  value: string,
+) {
+  const field = scope.getByLabel(label, { exact: true });
+  if (!(await field.isVisible())) {
+    const note = scope.locator(".staff-note").filter({ hasText: label });
+    if ((await note.getAttribute("open")) === null)
+      await note.locator("summary").click();
+  }
+  await field.fill(value);
+}
+
+// Older API clients may still supply a code; the production UI never asks for it.
+export async function supplyLegacyStaffCode(
+  scope: Page | Locator,
+  code: string,
+) {
+  const page = "route" in scope ? scope : scope.page();
+  const pattern = "**/api/v1/staff/**";
+  const action =
+    /\/staff\/(?:staff-identities(?:\/[^/]+\/(?:update|rotate-code))?|teams(?:\/[^/]+\/(?:rotate|issue|revoke)-code)?|registrations\/import|discipline|competition\/(?:rounds\/[^/]+\/(?:commands|jobs\/[^/]+\/retry|reports\/[^/]+\/decision|score-adjustments)|publications\/[^/]+))$/;
+  let supplied = false;
+  const handler = async (route: Route) => {
+    if (
+      supplied ||
+      route.request().method() !== "POST" ||
+      !action.test(new URL(route.request().url()).pathname)
+    )
+      return route.fallback();
+    supplied = true;
+    if (route.request().postDataJSON().own_code !== undefined)
+      return route.fallback();
+    await route.fallback({
+      postData: JSON.stringify({
+        ...route.request().postDataJSON(),
+        own_code: code,
+      }),
+    });
+  };
+  await page.route(pattern, handler);
+}
 
 export async function startBrowserApp(
   options: Omit<EntryHttpOptions, "browser">,
@@ -77,7 +130,15 @@ export async function startBrowserApp(
         hmr: { server: bridge },
         fs: {
           allow: [fileURLToPath(new URL("../../../../", import.meta.url))],
-          deny: ["**/.env", "**/.env.*", "**/*.{crt,pem}", "**/.git/**", "**/content/round-1/**", "**/content/round-2/**", "**/test-results/**"],
+          deny: [
+            "**/.env",
+            "**/.env.*",
+            "**/*.{crt,pem}",
+            "**/.git/**",
+            "**/content/round-1/**",
+            "**/content/round-2/**",
+            "**/test-results/**",
+          ],
         },
       },
     });

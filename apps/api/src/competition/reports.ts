@@ -8,7 +8,7 @@ import {
 import type { SessionDelivery } from "../access/credentials.js";
 import { boundedStaffText, staffRevision } from "../access/staff-management.js";
 import {
-  confirmStaffCode,
+  staffActionVerifier,
   createStaffService,
   staffOutcomeCapacity,
 } from "../access/staff-service.js";
@@ -280,7 +280,7 @@ export function createReportService(
       if (!["UPHELD", "DISMISSED"].includes(input.verdict))
         throw new AccessError("INVALID_CONTEXT");
       return staffScope(cookie, round, true, async (client, actor, now) => {
-        await confirmStaffCode(client, actor, input.ownCode);
+        await staffActionVerifier(client, actor, input.ownCode);
         const fingerprint = commandFingerprint([
           "REPORT_DECISION_V1",
           round,
@@ -339,7 +339,7 @@ export function createReportService(
     async adjust(cookie: unknown, round: string, input: ScoreInput) {
       validateScore(input);
       return staffScope(cookie, round, true, async (client, actor, now) => {
-        await confirmStaffCode(client, actor, input.ownCode);
+        await staffActionVerifier(client, actor, input.ownCode);
         const fingerprint = commandFingerprint([
           "SCORE_ADJUSTMENT_V1",
           round,

@@ -1,3 +1,5 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -36,7 +38,7 @@ export async function staffJudgingBrowserChecks(
       page.on("pageerror", (error) => errors.push(error.message));
       await c.budgets();
       await page.goto(origin);
-      await page.getByRole("button", { name: "judging", exact: true }).click();
+      await openStaffView(page, "Submissions");
       const section = page.locator(".staff-judging"),
         inspect = async (id: string) =>
           section
@@ -94,7 +96,7 @@ export async function staffJudgingBrowserChecks(
       await modal
         .getByLabel("Recovery audit reason")
         .fill("Synthetic browser recovery after verified physical drain");
-      await modal.getByLabel("Recovery staff code").fill("WRONG-STAFF-CODE");
+      await supplyLegacyStaffCode(modal, "WRONG-STAFF-CODE");
       const confirm = modal.getByRole("button", {
         name: "Confirm extra dispatch",
         exact: true,
@@ -106,7 +108,7 @@ export async function staffJudgingBrowserChecks(
       await expect(modal.getByRole("alert")).toContainText(
         "Confirmation failed",
       );
-      await expect(modal.getByLabel("Recovery staff code")).toHaveValue("");
+      await expect(modal.getByLabel("Recovery staff code")).toHaveCount(0);
       await expect(modal.getByLabel("Recovery audit reason")).toHaveValue(
         "Synthetic browser recovery after verified physical drain",
       );
@@ -131,11 +133,11 @@ export async function staffJudgingBrowserChecks(
         await route.abort();
       });
       await c.budgets();
-      await modal.getByLabel("Recovery staff code").fill(c.staff.code);
+      await supplyLegacyStaffCode(modal, c.staff.code);
       await confirm.click();
-      await expect(modal.getByLabel("Recovery staff code")).toHaveValue("");
+      await expect(modal.getByLabel("Recovery staff code")).toHaveCount(0);
       await expect(
-        page.getByRole("button", { name: "monitor", exact: true }),
+        page.getByRole("button", { name: "Live overview", exact: true }),
       ).toBeDisabled();
       await expect(confirm).toBeDisabled();
       await expect(
@@ -196,9 +198,7 @@ export async function staffJudgingBrowserChecks(
       const monitoring = await organiser.newPage();
       await c.budgets();
       await monitoring.goto(origin);
-      await monitoring
-        .getByRole("button", { name: "judging", exact: true })
-        .click();
+      await openStaffView(monitoring, "Submissions");
       await monitoring
         .locator(`[data-parent-id="${fixture.parent}"]`)
         .getByRole("button", { name: "Inspect jobs" })

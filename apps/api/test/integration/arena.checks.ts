@@ -53,7 +53,7 @@ export async function arenaChecks(t: TestContext, ownerConnection: string, apiCo
       await assert.rejects(service.command(actor.sessionCookie, await create({ teamIds: [incomplete, incomplete] })), denied("INVALID_CONTEXT"));
       await assert.rejects(service.command(actor.sessionCookie, await create({ teamIds: Array.from({ length: 101 }, () => randomUUID()) })), denied("INVALID_CONTEXT"));
       await assert.rejects(service.command(actor.sessionCookie, await create({ teamIds: [randomUUID()] })), denied("ARENA_UNAVAILABLE"));
-      await assert.rejects(service.command(organiser.sessionCookie, await create()), denied("ACCESS_UNAVAILABLE"));
+      await assert.rejects(service.command(organiser.sessionCookie, await create({ durationMs: 0 })), denied("INVALID_CONTEXT"));
       await assert.rejects(service.command("forged", await create()), denied("INVALID_SESSION"));
       const rejected = await service.command(actor.sessionCookie, await create({ teamIds: [incomplete] }));
       assert.equal(rejected.reason, "TEAM_INCOMPLETE");
@@ -61,7 +61,7 @@ export async function arenaChecks(t: TestContext, ownerConnection: string, apiCo
       assert.equal((await owner.query("SELECT count(*)::integer AS n FROM arena_instances")).rows[0].n, 0);
     });
 
-    const actor = await person(), other = await person("SUPER_ADMIN"), organiser = await person("ORGANISER"), a = await team(), b = await team();
+    const actor = await person("ORGANISER"), other = await person("SUPER_ADMIN"), organiser = await person("ORGANISER"), a = await team(), b = await team();
     let roundId: string, instanceId: string;
     await t.test("concurrent creation reserves one SETUP with only a first-round draft and does not admit selected teams", async () => {
       const command = await create({ teamIds: [a, b] }), competing = { ...command, requestKey: randomUUID() };
@@ -188,7 +188,7 @@ export async function arenaChecks(t: TestContext, ownerConnection: string, apiCo
       assert.equal(creation.statusCode, 409); assert.equal(creation.json().data.reason, "ARENA_RESERVED");
       cookies.set(policy.names.staff, organiser.sessionCookie);
       const org = await send("/api/v1/bootstrap?audience=STAFF");
-      assert.equal((await send(path, body, org.json().data.csrf_token)).statusCode, 403);
+      assert.equal((await send(path, body, org.json().data.csrf_token)).statusCode, 409);
       assert.equal((await send("/api/v1/staff/arena-teams")).statusCode, 200);
       cookies.delete(policy.names.staff); cookies.set(policy.names.participant, actor.sessionCookie);
       assert.equal((await send("/api/v1/staff/arenas/current")).statusCode, 401);
@@ -218,7 +218,7 @@ export async function arenaChecks(t: TestContext, ownerConnection: string, apiCo
       const flow = await entry.begin(actor.code, { ip: "127.0.0.1", browserId: randomUUID() });
       if (flow.audience !== "STAFF") throw new Error("Synthetic role-change entry failed");
       const fresh = await staff.activate(flow.proofCookie, randomUUID());
-      await assert.rejects(service.outcome(fresh.sessionCookie, "CREATE", null, command.requestKey), denied("ACCESS_UNAVAILABLE"));
+      assert.deepEqual((await service.outcome(fresh.sessionCookie, "CREATE", null, command.requestKey)).outcome, saved);
     });
   } finally { await api.end(); await owner.end(); }
 }

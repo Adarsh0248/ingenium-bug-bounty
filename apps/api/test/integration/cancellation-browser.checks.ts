@@ -1,3 +1,5 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
@@ -43,7 +45,7 @@ export async function cancellationBrowserChecks(
     await dialog
       .getByLabel("Cancellation reason")
       .fill("Synthetic browser incident");
-    await dialog.getByLabel("Cancellation staff code").fill(code);
+    await supplyLegacyStaffCode(dialog, code);
     await c.budgets();
     await dialog
       .getByRole("button", { name: "Confirm cancellation", exact: true })
@@ -67,6 +69,7 @@ export async function cancellationBrowserChecks(
       arena.getByText("STATE VERIFIED", { exact: true }),
     ).toBeVisible({ timeout: 15000 });
     await arena.locator(`[data-bounty-id="${a.x}"]`).click();
+    await arena.getByRole("button",{name:"Open question",exact:true}).click();
     await arena
       .getByRole("button", { name: "Plain text", exact: true })
       .click();
@@ -85,7 +88,7 @@ export async function cancellationBrowserChecks(
     ).toHaveAttribute("aria-busy", "true");
     await c.budgets();
     await page.goto(origin);
-    await page.getByRole("button", { name: "incidents", exact: true }).click();
+    await openStaffView(page, "Incident recovery");
     await section
       .getByRole("button", { name: "Cancel whole round", exact: true })
       .click();
@@ -98,13 +101,13 @@ export async function cancellationBrowserChecks(
     await dialog
       .getByLabel("Cancellation reason")
       .fill("Synthetic browser incident");
-    await dialog.getByLabel("Cancellation staff code").fill(c.staff.code);
+    await supplyLegacyStaffCode(dialog, c.staff.code);
     await expect(
       dialog.getByRole("button", { name: "Confirm cancellation", exact: true }),
     ).toBeDisabled();
     await dialog.getByLabel("Cancellation round confirmation").fill(a.round);
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     await confirm("A".repeat(32));
     await expect(dialog.getByRole("alert")).toContainText(
@@ -210,6 +213,7 @@ export async function cancellationBrowserChecks(
       }),
     ).toBeVisible();
     await arena.locator(`[data-bounty-id="${a.x}"]`).click();
+    await arena.getByRole("button",{name:"Open question",exact:true}).click();
     await arena
       .getByRole("button", { name: "Plain text", exact: true })
       .click();
@@ -233,11 +237,12 @@ export async function cancellationBrowserChecks(
       const p = await other.newPage();
       await c.budgets();
       await p.goto(origin);
+      await p.locator(".staff-more > summary").click();
       await expect(
-        p.getByRole("button", { name: "access", exact: true }),
+        p.getByRole("button", { name: "Participant access", exact: true }),
       ).toBeVisible();
       await expect(
-        p.getByRole("button", { name: "incidents", exact: true }),
+        p.getByRole("button", { name: "Incident recovery", exact: true }),
       ).not.toBeVisible();
     } finally {
       await other.close();

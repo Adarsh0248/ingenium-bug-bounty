@@ -1,3 +1,4 @@
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -79,9 +80,7 @@ export async function announcementBrowserChecks(
         await expect(own.locator(".save-status")).toHaveText("saved", {
           timeout: 10000,
         });
-        await operator
-          .getByRole("button", { name: "announcements", exact: true })
-          .click();
+        await openStaffView(operator, "Announcements");
         const panel = operator.getByLabel("Staff announcements"),
           text =
             "<script>window.noticeExecuted=true</script>\n" + "x".repeat(1800);

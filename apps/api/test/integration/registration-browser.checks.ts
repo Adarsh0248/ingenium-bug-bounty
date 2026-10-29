@@ -1,3 +1,6 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { fillStaffNote } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
@@ -78,10 +81,8 @@ export async function registrationBrowserChecks(
       .getByRole("button", { name: "Review import", exact: true })
       .click();
     const d = page.getByRole("dialog");
-    await d
-      .getByLabel("Import audit reason")
-      .fill("Synthetic browser CSV import");
-    await d.getByLabel("Your staff code").fill(code);
+    await fillStaffNote(d, "Import note", "Synthetic browser CSV import");
+    await supplyLegacyStaffCode(d, code);
     await c.budgets();
     await d
       .getByRole("button", { name: "Confirm import", exact: true })
@@ -90,7 +91,7 @@ export async function registrationBrowserChecks(
   try {
     await c.budgets();
     await page.goto(origin);
-    await page.getByRole("button", { name: "teams", exact: true }).click();
+    await openStaffView(page, "Teams");
     await page.getByRole("button", { name: "Import CSV", exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "Import registrations", exact: true }),
@@ -127,7 +128,7 @@ export async function registrationBrowserChecks(
       page.locator('[data-registration-id="BROWSER-REG-1"]'),
     ).toContainText("Browser, Imported Team");
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     await page.screenshot({
       path: "test-results/registration-preview-desktop.png",
@@ -289,7 +290,7 @@ export async function registrationBrowserChecks(
       .getByRole("button", { name: "Back to teams", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeEnabled();
     await page.getByRole("button", { name: "Import CSV", exact: true }).click();
     await upload(csv);
@@ -302,10 +303,10 @@ export async function registrationBrowserChecks(
       .getByRole("button", { name: "Discard import preview", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Team registrations", exact: true }),
+      page.getByRole("heading", { name: "Teams", exact: true }),
     ).toBeVisible();
     await page.reload();
-    await page.getByRole("button", { name: "teams", exact: true }).click();
+    await openStaffView(page, "Teams");
     await expect(page.getByRole("dialog")).not.toBeVisible();
     assert.equal(
       await page.evaluate(
@@ -331,8 +332,8 @@ export async function registrationBrowserChecks(
         p.getByRole("navigation", { name: "Control room views" }),
       ).toBeVisible();
       await expect(
-        p.getByRole("button", { name: "teams", exact: true }),
-      ).toHaveCount(0);
+        p.getByRole("button", { name: "Teams", exact: true }),
+      ).toBeVisible();
       assert.equal(
         (
           await p.request.post(`${origin}/api/v1/staff/registrations/preview`, {

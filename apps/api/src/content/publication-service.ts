@@ -1,11 +1,11 @@
 import type { Pool } from "pg";
 import type { ClockGuard } from "../access/transaction.js";
 import type { SessionDelivery } from "../access/credentials.js";
-import { canonicalCode, sha256, uuid } from "../access/credentials.js";
+import { sha256, uuid } from "../access/credentials.js";
 import { boundedStaffText, staffRevision } from "../access/staff-management.js";
 import {
   createStaffService,
-  confirmStaffCode,
+  staffActionVerifier,
   staffOutcomeCapacity,
 } from "../access/staff-service.js";
 import { staffQuota } from "../access/quotas.js";
@@ -45,16 +45,15 @@ export function createPublicationService(
   delivery: SessionDelivery,
 ) {
   const staff = createStaffService(pool, clock, delivery);
-  async function budget(cookie: unknown, write = false) {
+  async function budget(cookie: unknown, write = false, confirm = false) {
     const actor = await staff.inspect(cookie);
-    if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     await staffQuota(
       pool,
       clock,
       actor.staff_id,
       write ? "STAFF_COMMAND" : "READ_STAFF",
     );
-    if (write) await staffQuota(pool, clock, actor.staff_id, "STAFF_CONFIRM");
+    if (confirm) await staffQuota(pool, clock, actor.staff_id, "STAFF_CONFIRM");
   }
   return {
     async publish(
@@ -65,7 +64,7 @@ export function createPublicationService(
         requestKey: string;
         expectedRevision: string;
         review: string;
-        ownCode: string;
+        ownCode?: string | undefined;
       },
     ) {
       uuid(input.snapshotId);
@@ -75,7 +74,7 @@ export function createPublicationService(
       boundedStaffText(input.review, 1024);
       if (input.expectedRevision === "0")
         throw new AccessError("INVALID_CONTEXT");
-      await budget(cookie, true);
+      await budget(cookie, true, input.ownCode !== undefined);
       return accessTransaction(
         pool,
         clock,
@@ -89,9 +88,7 @@ export function createPublicationService(
           await client.query("SELECT * FROM lock_catalogue()");
           const now = await decisionTime(client, clock, rounds),
             actor = await staff.authorize(client, cookie, now);
-          if (actor.role === "ORGANISER")
-            throw new AccessError("ACCESS_UNAVAILABLE");
-          await confirmStaffCode(client, actor, input.ownCode);
+          const confirmation = await staffActionVerifier(client, actor, input.ownCode);
           if (
             !(await first(
               client,
@@ -110,7 +107,7 @@ export function createPublicationService(
               input.requestKey,
               input.expectedRevision,
               input.review,
-              sha256(canonicalCode(input.ownCode)),
+              confirmation,
             ],
           );
           if (!row) throw new AccessError("SECURITY_UNAVAILABLE");
@@ -146,8 +143,6 @@ export function createPublicationService(
             cookie,
             await decisionTime(client, clock),
           );
-          if (actor.role === "ORGANISER")
-            throw new AccessError("ACCESS_UNAVAILABLE");
           const row = await first<Publication>(
             client,
             "SELECT * FROM content_publication_outcomes WHERE actor_id=$1 AND snapshot_id=$2 AND request_key=$3",

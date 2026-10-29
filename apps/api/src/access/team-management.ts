@@ -1,10 +1,10 @@
 import type { Pool } from "pg";
-import { canonicalCode, newAccessCode, sha256, uuid } from "./credentials.js";
+import { newAccessCode, sha256, uuid } from "./credentials.js";
 import type { SessionDelivery } from "./credentials.js";
 import { boundedStaffText, staffRevision } from "./staff-management.js";
 import {
   createStaffService,
-  confirmStaffCode,
+  staffActionVerifier,
   staffOutcomeCapacity,
 } from "./staff-service.js";
 import { staffQuota } from "./quotas.js";
@@ -27,7 +27,7 @@ export interface TeamCommand {
   memberOne: string | null;
   memberTwo: string | null;
   reason: string;
-  ownCode: unknown;
+  ownCode?: unknown;
 }
 interface Receipt {
   id: string;
@@ -74,16 +74,15 @@ export function createTeamManagement(
   delivery: SessionDelivery,
 ) {
   const staff = createStaffService(pool, clock, delivery);
-  async function budget(cookie: unknown, write = false) {
+  async function budget(cookie: unknown, write = false, confirm = false) {
     const actor = await staff.inspect(cookie);
-    if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     await staffQuota(
       pool,
       clock,
       actor.staff_id,
       write ? "STAFF_COMMAND" : "READ_STAFF",
     );
-    if (write) await staffQuota(pool, clock, actor.session_id, "STAFF_CONFIRM");
+    if (confirm) await staffQuota(pool, clock, actor.session_id, "STAFF_CONFIRM");
   }
   async function principal(
     client: Parameters<typeof staff.authorize>[0],
@@ -94,7 +93,6 @@ export function createTeamManagement(
       cookie,
       await decisionTime(client, clock),
     );
-    if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     return actor;
   }
   return {
@@ -115,7 +113,7 @@ export function createTeamManagement(
         )
           throw new AccessError("INVALID_CONTEXT");
       } else throw new AccessError("INVALID_CONTEXT");
-      await budget(cookie, true);
+      await budget(cookie, true, input.ownCode !== undefined);
       const generated = input.action === "REVOKE" ? null : newAccessCode("TEAM");
       return accessTransaction(
         pool,
@@ -132,7 +130,7 @@ export function createTeamManagement(
           await lockedRounds(client, rounds);
           const now = await decisionTime(client, clock, rounds);
           const actor = await principal(client, cookie);
-          await confirmStaffCode(client, actor, input.ownCode);
+          const confirmation = await staffActionVerifier(client, actor, input.ownCode);
           const known = await first(
             client,
             "SELECT id FROM team_management_outcomes WHERE actor_id=$1 AND request_key=$2",
@@ -152,7 +150,7 @@ export function createTeamManagement(
               input.memberOne,
               input.memberTwo,
               input.reason,
-              sha256(canonicalCode(input.ownCode)),
+              confirmation,
               generated?.verifier ?? null,
             ],
           );

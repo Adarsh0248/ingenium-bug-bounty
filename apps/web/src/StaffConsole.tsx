@@ -12,6 +12,10 @@ import {
   Save,
   ShieldCheck,
   X,
+  Users,
+  BookOpen,
+  Settings2,
+  LayoutDashboard,
 } from "lucide-react";
 import { connectLive } from "../../api/src/live/client";
 import { ApiError, Command, errorText } from "./api";
@@ -40,9 +44,23 @@ import StaffMaintenance from "./StaffMaintenance";
 import StaffOperations from "./StaffOperations";
 import StaffReports from "./StaffReports";
 import ScoreCorrections from "./ScoreCorrections";
+import "./staff-workspace.css";
 
 type Tab =
-  "SETUP" | "BOUNTIES" | "MONITOR" | "JUDGING" | "ACCESS" | "STAFF" | "LIBRARY" | "TEAMS" | "DISCIPLINE" | "INCIDENTS" | "AUDIT" | "ANNOUNCEMENTS" | "MAINTENANCE" | "REPORTS";
+  | "SETUP"
+  | "BOUNTIES"
+  | "MONITOR"
+  | "JUDGING"
+  | "ACCESS"
+  | "STAFF"
+  | "LIBRARY"
+  | "TEAMS"
+  | "DISCIPLINE"
+  | "INCIDENTS"
+  | "AUDIT"
+  | "ANNOUNCEMENTS"
+  | "MAINTENANCE"
+  | "REPORTS";
 type Draft = {
   minutes: string;
   teams: string[];
@@ -61,6 +79,22 @@ type Intent = {
   sensitive: boolean;
 };
 const base = "/api/v1/staff/competition";
+const views: Record<Tab, string> = {
+  SETUP: "Arena setup",
+  TEAMS: "Teams",
+  LIBRARY: "Questions",
+  BOUNTIES: "Round questions",
+  MONITOR: "Live overview",
+  JUDGING: "Submissions",
+  ACCESS: "Participant access",
+  STAFF: "Staff",
+  REPORTS: "Reports",
+  AUDIT: "Activity history",
+  MAINTENANCE: "System health",
+  DISCIPLINE: "Team restrictions",
+  INCIDENTS: "Incident recovery",
+  ANNOUNCEMENTS: "Announcements",
+};
 export default function StaffConsole({
   api,
   session,
@@ -88,7 +122,6 @@ export default function StaffConsole({
     }),
     [intent, setIntent] = useState<Intent | null>(null),
     [reason, setReason] = useState(""),
-    [code, setCode] = useState(""),
     [busy, setBusy] = useState(false),
     [accessBlocked, setAccessBlocked] = useState(false),
     [loading, setLoading] = useState(false),
@@ -118,7 +151,9 @@ export default function StaffConsole({
     ready = phase === "READY",
     superAdmin =
       (view?.actor.role ?? data?.role ?? session.role) === "SUPER_ADMIN",
-    manager = (view?.actor.role ?? data?.role ?? session.role) !== "ORGANISER",
+    manager = session.mode === "NORMAL",
+    moderator =
+      (view?.actor.role ?? data?.role ?? session.role) !== "ORGANISER",
     locked =
       busy ||
       !data ||
@@ -172,7 +207,16 @@ export default function StaffConsole({
       setData(value);
       if (!value.rounds.length)
         setTab((old) =>
-          ["ACCESS", "STAFF", "LIBRARY", "TEAMS", "AUDIT", "MAINTENANCE"].includes(old) ? old : "SETUP",
+          [
+            "ACCESS",
+            "STAFF",
+            "LIBRARY",
+            "TEAMS",
+            "AUDIT",
+            "MAINTENANCE",
+          ].includes(old)
+            ? old
+            : "SETUP",
         );
       setActive((old) =>
         value.rounds.some((r) => r.round_id === old)
@@ -270,7 +314,7 @@ export default function StaffConsole({
       old?.dirty
         ? old
         : {
-            minutes: String(Number(settings?.duration_ms ?? 7200000) / 60000),
+            minutes: String(Number(settings?.duration_ms ?? 10800000) / 60000),
             teams:
               settings?.teams.map((t) => t.team_id) ??
               (raceSetup ? data.qualified_team_ids! : []),
@@ -328,9 +372,13 @@ export default function StaffConsole({
   }
   function prepare(next: Intent) {
     if (locked || !manager) return;
+    if (!next.sensitive) {
+      void commit(next, `${next.title} from the control room.`);
+      return;
+    }
     setIntent(next);
-    setReason("");
-    setCode("");
+    setReason(`${next.title} confirmed by event staff.`);
+
     setError("");
   }
   function competition(
@@ -382,28 +430,25 @@ export default function StaffConsole({
       return;
     }
     setNotice(
-      `${label(receipt.action ?? "command")}: ${label(result.status ?? "acknowledged")}`,
+      receipt.instance_id
+        ? receipt.action === "CREATE"
+          ? "Arena created. You can keep editing its settings before starting."
+          : "Arena settings saved."
+        : receipt.action === "CONFIGURE"
+          ? "Round questions saved."
+          : `${label(receipt.action ?? "command")}: ${label(result.status ?? "acknowledged")}`,
     );
-    setDraft((old) => (old ? { ...old, dirty: false } : old));
+
+    setDraft(null);
     if (receipt.instance_id) remember(receipt.instance_id);
     await refresh.current();
-    if (result.round_id) {
-      setActive(result.round_id);
-      setTab("BOUNTIES");
-    }
+    if (result.round_id ?? receipt.round_id)
+      setActive(result.round_id ?? receipt.round_id);
   }
-  async function confirm(event: React.FormEvent) {
-    event.preventDefault();
-    if (
-      !intent ||
-      locked ||
-      !reason.trim() ||
-      new TextEncoder().encode(reason).length > 1024
-    )
+  async function commit(chosen: Intent, note: string) {
+    if (locked || !note.trim() || new TextEncoder().encode(note).length > 1024)
       return;
-    const chosen = intent,
-      ownCode = code;
-    setCode("");
+
     setIntent(null);
     setBusy(true);
     setError("");
@@ -413,8 +458,7 @@ export default function StaffConsole({
           chosen.path,
           {
             ...chosen.body,
-            reason,
-            ...(chosen.sensitive ? { own_code: ownCode } : {}),
+            reason: note,
           },
           chosen.outcome,
         ),
@@ -585,7 +629,13 @@ export default function StaffConsole({
         <div>
           <span className="eyebrow">CONTROL ROOM</span>
           <strong>{session.display_name}</strong>
-          <small>{label(view?.actor.role ?? session.role)}</small>
+          <small>
+            {superAdmin
+              ? "Super Admin"
+              : moderator
+                ? "Lead admin"
+                : "Event admin"}
+          </small>
         </div>
         <span
           className={`connection ${ready ? "connected" : ""}`}
@@ -610,8 +660,8 @@ export default function StaffConsole({
       <div className="staff-context">
         <span>
           {data?.instance
-            ? `${data.instance.status} / ${data.instance.instance_id}`
-            : "NO ARENA RESERVED"}
+            ? `${data.instance.status === "SETUP" ? "Arena in preparation" : label(data.instance.status)} / Reference ${data.instance.instance_id.slice(0, 8)}`
+            : "No arena yet — begin with Arena setup"}
         </span>
         <span>Session {timeText(Date.parse(expiry) - clockNow)}</span>
         <IconButton
@@ -674,6 +724,85 @@ export default function StaffConsole({
           </button>
         </div>
       )}
+      <nav className="staff-navigation" aria-label="Control room views">
+        {(
+          [
+            "SETUP",
+            "TEAMS",
+            "LIBRARY",
+            ...(round ? ["BOUNTIES"] : []),
+            "MONITOR",
+            ...(round ? ["JUDGING"] : []),
+            ...(superAdmin ? ["STAFF"] : []),
+          ] as Tab[]
+        ).map((name) => (
+          <button
+            key={name}
+            aria-current={tab === name ? "page" : undefined}
+            disabled={busy || command.current!.unresolved || accessBlocked}
+            onClick={() => navigate({ tab: name })}
+          >
+            {name === "SETUP" ? (
+              <Settings2 size={16} />
+            ) : name === "TEAMS" ? (
+              <Users size={16} />
+            ) : name === "LIBRARY" ? (
+              <BookOpen size={16} />
+            ) : name === "MONITOR" ? (
+              <LayoutDashboard size={16} />
+            ) : null}
+            {views[name]}
+          </button>
+        ))}
+        <details
+          className="staff-more"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget))
+              event.currentTarget.open = false;
+          }}
+        >
+          <summary>
+            More controls <ChevronDown size={14} />
+          </summary>
+          <div
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("button"))
+                event.currentTarget.closest("details")!.open = false;
+            }}
+          >
+            {(
+              [
+                "ACCESS",
+                ...(data?.instance ? ["ANNOUNCEMENTS"] : []),
+                ...(moderator
+                  ? [
+                      "AUDIT",
+                      "MAINTENANCE",
+                      ...(round ? ["REPORTS", "DISCIPLINE", "INCIDENTS"] : []),
+                    ]
+                  : []),
+              ] as Tab[]
+            ).map((name) => (
+              <button
+                key={name}
+                aria-current={tab === name ? "page" : undefined}
+                disabled={busy || command.current!.unresolved || accessBlocked}
+                onClick={() => navigate({ tab: name })}
+              >
+                {views[name]}
+              </button>
+            ))}
+          </div>
+        </details>
+        {draft?.dirty && (
+          <>
+            <span role="status">Unsaved selection</span>
+            <button disabled={busy} onClick={() => setDiscard({ tab })}>
+              Discard local changes
+            </button>
+          </>
+        )}
+      </nav>
       <div className="staff-rounds">
         {data?.rounds.map((r) => (
           <button
@@ -724,128 +853,205 @@ export default function StaffConsole({
           <strong>{round?.selected.length ?? 0}</strong>
         </div>
       </section>
-      {manager && !["STAFF", "ACCESS", "LIBRARY", "TEAMS", "AUDIT", "ANNOUNCEMENTS", "MAINTENANCE", "REPORTS"].includes(tab) && (
-        <div className="staff-controls">
-          {round && editable && (
-            <>
-              <button
-                disabled={locked || !!draft?.dirty || !round.selected.length}
-                onClick={() => competition("READY")}
-              >
-                <ShieldCheck size={15} />
-                Prepare configuration
-              </button>
-              <button
-                className="primary"
-                disabled={locked || !!draft?.dirty || round.state !== "READY"}
-                onClick={() => competition("START")}
-              >
-                <Play size={15} />
-                Start round
-              </button>
-            </>
-          )}
-          {running && (
-            <>
-              <button
-                disabled={locked || !!draft?.dirty}
-                onClick={() =>
-                  competition(globalPause ? "RESUME" : "PAUSE", {
-                    scope: "GLOBAL",
-                    target: null,
-                  })
-                }
-              >
-                {globalPause ? <Play size={15} /> : <Pause size={15} />}
-                {globalPause ? "Resume round" : "Pause round"}
-              </button>
-              <button
-                disabled={locked || !!globalPause}
-                onClick={() => competition("CLOSE")}
-              >
-                <X size={15} />
-                Close round
-              </button>
-            </>
-          )}
-          {round?.state === "CLOSING" && current && (
-            <button disabled={locked} onClick={() => competition("FINALISE")}>
-              <Check size={15} />
-              Finalise results
-            </button>
-          )}
-          {round?.kind === 1 &&
-            round.state === "CLOSED" &&
-            current &&
-            !data?.qualified_team_ids && (
-              <button disabled={locked} onClick={() => competition("QUALIFY")}>
+      {manager &&
+        ![
+          "STAFF",
+          "ACCESS",
+          "LIBRARY",
+          "TEAMS",
+          "AUDIT",
+          "ANNOUNCEMENTS",
+          "MAINTENANCE",
+          "REPORTS",
+        ].includes(tab) && (
+          <div className="staff-controls">
+            {round && editable && (
+              <>
+                <button
+                  disabled={locked || !!draft?.dirty || !round.selected.length}
+                  onClick={() => competition("READY")}
+                >
+                  <ShieldCheck size={15} />
+                  Prepare configuration
+                </button>
+                <button
+                  className="primary"
+                  disabled={locked || !!draft?.dirty || round.state !== "READY"}
+                  onClick={() => competition("START")}
+                >
+                  <Play size={15} />
+                  Start round
+                </button>
+              </>
+            )}
+            {running && (
+              <>
+                <button
+                  disabled={locked || !!draft?.dirty}
+                  onClick={() =>
+                    competition(globalPause ? "RESUME" : "PAUSE", {
+                      scope: "GLOBAL",
+                      target: null,
+                    })
+                  }
+                >
+                  {globalPause ? <Play size={15} /> : <Pause size={15} />}
+                  {globalPause ? "Resume round" : "Pause round"}
+                </button>
+                <button
+                  disabled={locked || !!globalPause}
+                  onClick={() => competition("CLOSE")}
+                >
+                  <X size={15} />
+                  Close round
+                </button>
+              </>
+            )}
+            {round?.state === "CLOSING" && current && (
+              <button disabled={locked} onClick={() => competition("FINALISE")}>
                 <Check size={15} />
-                Lock qualification
+                Finalise results
               </button>
             )}
-          {canDiscard && (
-            <button
-              className="danger"
-              disabled={locked || !!draft?.dirty}
-              onClick={() => competition("DISCARD", {}, one)}
-            >
-              <X size={15} />
-              Discard arena
-            </button>
-          )}
-        </div>
-      )}
-      <nav className="tabs staff-tabs" aria-label="Control room views">
-        {(
-          [
-            "SETUP",
-            "BOUNTIES",
-            "MONITOR",
-            ...(round ? ["JUDGING"] : []),
-            ...(manager && round ? ["REPORTS"] : []),
-            "ACCESS",
-            ...(data?.instance ? ["ANNOUNCEMENTS"] : []),
-            ...(manager ? ["LIBRARY", "TEAMS", "AUDIT", "MAINTENANCE", ...(round && data?.instance ? ["DISCIPLINE", "INCIDENTS"] : [])] : []),
-            ...(superAdmin ? ["STAFF"] : []),
-          ] as Tab[]
-        ).map((name) => (
-          <button
-            key={name}
-            aria-current={tab === name ? "page" : undefined}
-            disabled={busy || command.current!.unresolved || accessBlocked}
-            onClick={() => navigate({ tab: name })}
-          >
-            {label(name)}
-          </button>
-        ))}
-        {draft?.dirty && (
-          <>
-            <span role="status">Unsaved selection</span>
-            <button disabled={busy} onClick={() => setDiscard({ tab })}>
-              Discard local changes
-            </button>
-          </>
+            {round?.kind === 1 &&
+              round.state === "CLOSED" &&
+              current &&
+              !data?.qualified_team_ids && (
+                <button
+                  disabled={locked}
+                  onClick={() => competition("QUALIFY")}
+                >
+                  <Check size={15} />
+                  Lock qualification
+                </button>
+              )}
+            {canDiscard && (
+              <button
+                className="danger"
+                disabled={locked || !!draft?.dirty}
+                onClick={() => competition("DISCARD", {}, one)}
+              >
+                <X size={15} />
+                Discard arena
+              </button>
+            )}
+          </div>
         )}
-      </nav>
-      {tab === "JUDGING" && round && <StaffJudging key={round.round_id} api={api} round={round}
-        available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved}
-        version={JSON.stringify([view?.judging,view?.round?.state])} blockNavigation={setAccessBlocked} />}
-      {tab === "AUDIT" && manager && <StaffAudit key={data?.instance?.instance_id??"global"} api={api} arenaId={data?.instance?.instance_id??null}
-        superAdmin={superAdmin} available={ready&&!!data&&!busy&&!sessionUnknown&&!command.current.unresolved}/>}
-      {tab === "ANNOUNCEMENTS" && data?.instance && <StaffAnnouncements key={data.instance.instance_id} api={api} room={data}
-        available={ready&&!busy&&!sessionUnknown&&!command.current.unresolved} version={view?.announcement_head??null} blockNavigation={setAccessBlocked}/>}
-      {tab === "INCIDENTS" && manager && round && data?.instance && (
-        <StaffIncidents key={round.round_id} api={api} roundId={round.round_id}
-          available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved}
-          blockNavigation={setAccessBlocked} changed={() => void refresh.current()} />
+      {tab === "JUDGING" && round && (
+        <StaffJudging
+          key={round.round_id}
+          api={api}
+          round={round}
+          available={
+            ready &&
+            !!data &&
+            !busy &&
+            !sessionUnknown &&
+            !command.current.unresolved
+          }
+          version={JSON.stringify([view?.judging, view?.round?.state])}
+          blockNavigation={setAccessBlocked}
+        />
       )}
-      {tab === "DISCIPLINE" && manager && round && data?.instance && (
-        <StaffDiscipline key={round.round_id} api={api} arenaId={data.instance.instance_id} round={round}
-          liveRevision={view?.round?.revision} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved}
-          blockNavigation={setAccessBlocked} />
+      {tab === "AUDIT" && moderator && (
+        <StaffAudit
+          key={data?.instance?.instance_id ?? "global"}
+          api={api}
+          arenaId={data?.instance?.instance_id ?? null}
+          superAdmin={superAdmin}
+          available={
+            ready &&
+            !!data &&
+            !busy &&
+            !sessionUnknown &&
+            !command.current.unresolved
+          }
+        />
       )}
-      {tab === "REPORTS" && manager && round && <StaffReports key={round.round_id} api={api} round={round.round_id} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} blockNavigation={setAccessBlocked}/>}
-      {tab === "MAINTENANCE" && manager && <><StaffOperations api={api} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} /><StaffMaintenance api={api} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} /></>}
+      {tab === "ANNOUNCEMENTS" && data?.instance && (
+        <StaffAnnouncements
+          key={data.instance.instance_id}
+          api={api}
+          room={data}
+          available={
+            ready && !busy && !sessionUnknown && !command.current.unresolved
+          }
+          version={view?.announcement_head ?? null}
+          blockNavigation={setAccessBlocked}
+        />
+      )}
+      {tab === "INCIDENTS" && moderator && round && data?.instance && (
+        <StaffIncidents
+          key={round.round_id}
+          api={api}
+          roundId={round.round_id}
+          available={
+            ready &&
+            !!data &&
+            !busy &&
+            !sessionUnknown &&
+            !command.current.unresolved
+          }
+          blockNavigation={setAccessBlocked}
+          changed={() => void refresh.current()}
+        />
+      )}
+      {tab === "DISCIPLINE" && moderator && round && data?.instance && (
+        <StaffDiscipline
+          key={round.round_id}
+          api={api}
+          arenaId={data.instance.instance_id}
+          round={round}
+          liveRevision={view?.round?.revision}
+          available={
+            ready &&
+            !!data &&
+            !busy &&
+            !sessionUnknown &&
+            !command.current.unresolved
+          }
+          blockNavigation={setAccessBlocked}
+        />
+      )}
+      {tab === "REPORTS" && moderator && round && (
+        <StaffReports
+          key={round.round_id}
+          api={api}
+          round={round.round_id}
+          available={
+            ready &&
+            !!data &&
+            !busy &&
+            !sessionUnknown &&
+            !command.current.unresolved
+          }
+          blockNavigation={setAccessBlocked}
+        />
+      )}
+      {tab === "MAINTENANCE" && moderator && (
+        <>
+          <StaffOperations
+            api={api}
+            available={
+              ready &&
+              !!data &&
+              !busy &&
+              !sessionUnknown &&
+              !command.current.unresolved
+            }
+          />
+          <StaffMaintenance
+            api={api}
+            available={
+              ready &&
+              !!data &&
+              !busy &&
+              !sessionUnknown &&
+              !command.current.unresolved
+            }
+          />
+        </>
+      )}
       {tab === "TEAMS" && manager && (
         <StaffTeams
           api={api}
@@ -890,6 +1096,82 @@ export default function StaffConsole({
       )}
       {tab === "SETUP" && draft && (
         <section className="staff-section">
+          <div className="setup-intro">
+            <div>
+              <span className="eyebrow">
+                ROUND {raceSetup ? 2 : (round?.kind ?? 1)} / PREPARATION
+              </span>
+              <h2>
+                {!editable && !raceSetup
+                  ? "Settings are locked after the round starts"
+                  : round
+                    ? "Keep editing until the round starts"
+                    : "Build your arena in three steps"}
+              </h2>
+              <p>
+                Add teams, set the round duration, then choose your questions.
+                Creating an arena saves a draft; it does not start the
+                competition.
+              </p>
+            </div>
+            <span className="setup-status">
+              {!editable && !raceSetup
+                ? "View only"
+                : round?.state === "READY"
+                  ? "Ready · still editable"
+                  : round
+                    ? "Editable draft"
+                    : "Draft not created"}
+            </span>
+          </div>
+          {!round && (
+            <div className="setup-steps">
+              <button
+                disabled={locked || !!draft.dirty}
+                onClick={() => navigate({ tab: "TEAMS" })}
+              >
+                <span>01</span>
+                <div>
+                  <strong>Add teams</strong>
+                  <small>Register a team manually or import a CSV.</small>
+                </div>
+                <Users size={21} />
+              </button>
+              <div className="setup-current-step">
+                <span>02</span>
+                <div>
+                  <strong>Arena settings</strong>
+                  <small>
+                    Choose the duration and select your roster below.
+                  </small>
+                </div>
+                <Settings2 size={21} />
+              </div>
+              <button
+                disabled={locked || !!draft.dirty}
+                onClick={() =>
+                  navigate({ tab: round ? "BOUNTIES" : "LIBRARY" })
+                }
+              >
+                <span>03</span>
+                <div>
+                  <strong>Choose questions</strong>
+                  <small>
+                    {round
+                      ? "Select published questions for this round."
+                      : "Write questions in the question library."}
+                  </small>
+                </div>
+                <BookOpen size={21} />
+              </button>
+            </div>
+          )}
+          {draft.dirty && (
+            <p className="notice">
+              You have unsaved settings. Save them below before moving to teams
+              or questions.
+            </p>
+          )}
           <h2>
             Round {raceSetup ? 2 : (round?.kind ?? 1)} roster and duration
           </h2>
@@ -937,7 +1219,7 @@ export default function StaffConsole({
                   }
                 >
                   <Save size={15} />
-                  {round ? "Save roster" : "Create arena"}
+                  {round ? "Save arena settings" : "Create arena"}
                 </button>
               </div>
               <div className="staff-table-wrap">
@@ -950,6 +1232,27 @@ export default function StaffConsole({
                     </tr>
                   </thead>
                   <tbody>
+                    {!teamRows.length && (
+                      <tr>
+                        <td colSpan={3} className="staff-empty">
+                          <Users size={26} />
+                          <strong>No teams registered yet</strong>
+                          <p>
+                            Add a team manually or import your registration
+                            file. You can also create an empty arena draft and
+                            add teams later.
+                          </p>
+                          <button
+                            type="button"
+                            disabled={locked || !!draft.dirty}
+                            onClick={() => navigate({ tab: "TEAMS" })}
+                          >
+                            <Plus size={16} />
+                            Add teams
+                          </button>
+                        </td>
+                      </tr>
+                    )}
                     {teamRows.map((t) => (
                       <tr key={t.team_id}>
                         <td>
@@ -985,6 +1288,20 @@ export default function StaffConsole({
                   </tbody>
                 </table>
               </div>
+              {round && (
+                <div className="setup-next">
+                  <p>
+                    Saved settings stay editable until the round starts. Changes
+                    to a ready round will require a fresh readiness check.
+                  </p>
+                  <button
+                    disabled={locked || !!draft.dirty}
+                    onClick={() => navigate({ tab: "BOUNTIES" })}
+                  >
+                    Next: choose round questions <BookOpen size={16} />
+                  </button>
+                </div>
+              )}
               {teams.next_after && (
                 <button disabled={busy} onClick={() => void more("teams")}>
                   <ChevronDown size={15} />
@@ -1060,8 +1377,11 @@ export default function StaffConsole({
       {tab === "BOUNTIES" && (
         <section className="staff-section">
           <div className="staff-section-heading">
-            <h2>Published bugs / Round {round?.kind ?? 1}</h2>
-            <strong>{draft?.snapshots.length ?? 0} / {round?.kind === 2 ? 100 : 50} selected</strong>
+            <h2>Choose questions for Round {round?.kind ?? 1}</h2>
+            <strong>
+              {draft?.snapshots.length ?? 0} / {round?.kind === 2 ? 100 : 50}{" "}
+              selected
+            </strong>
             <button
               disabled={
                 locked ||
@@ -1080,7 +1400,7 @@ export default function StaffConsole({
               }
             >
               <Save size={15} />
-              Save bug selection
+              Save round questions
             </button>
           </div>
           <div className="staff-table-wrap">
@@ -1114,7 +1434,9 @@ export default function StaffConsole({
                             !manager ||
                             !editable ||
                             family ||
-                            (!chosen && (draft?.snapshots.length ?? 0) >= (round?.kind === 2 ? 100 : 50))
+                            (!chosen &&
+                              (draft?.snapshots.length ?? 0) >=
+                                (round?.kind === 2 ? 100 : 50))
                           }
                           onChange={(e) =>
                             edit({
@@ -1140,7 +1462,22 @@ export default function StaffConsole({
             </table>
           </div>
           {!bugRows.length && (
-            <p className="muted">No published bugs available for this round.</p>
+            <div className="staff-empty">
+              <BookOpen size={30} />
+              <h3>No published questions yet</h3>
+              <p>
+                Create a question manually in Questions. Add its code, test
+                cases and hints, then validate and publish it before selecting
+                it here.
+              </p>
+              <button
+                disabled={locked || !!draft?.dirty}
+                onClick={() => navigate({ tab: "LIBRARY" })}
+              >
+                <Plus size={16} />
+                Create a question
+              </button>
+            </div>
           )}
           {published.next_after && (
             <button disabled={busy} onClick={() => void more("bugs")}>
@@ -1206,9 +1543,24 @@ export default function StaffConsole({
           </section>
           <section className="staff-section">
             <div className="staff-section-heading">
-              <h2>{round?.state.startsWith("CANCEL") ? "Cancelled round history" : view?.final ? "Final standings" : "Live standings"}</h2>
-              {round && data?.instance && <StaffResultsExport api={api} arena={data.instance.instance_id} round={round.round_id} kind={round.kind}
-                available={!locked && !!view?.final && round.state === "CLOSED"} />}
+              <h2>
+                {round?.state.startsWith("CANCEL")
+                  ? "Cancelled round history"
+                  : view?.final
+                    ? "Final standings"
+                    : "Live standings"}
+              </h2>
+              {round && data?.instance && (
+                <StaffResultsExport
+                  api={api}
+                  arena={data.instance.instance_id}
+                  round={round.round_id}
+                  kind={round.kind}
+                  available={
+                    !locked && !!view?.final && round.state === "CLOSED"
+                  }
+                />
+              )}
             </div>
             <div className="staff-table-wrap">
               <table>
@@ -1225,7 +1577,10 @@ export default function StaffConsole({
                     <tr key={s.team_round_id}>
                       <td>{s.rank ?? "--"}</td>
                       <td>
-                        <StandingName name={s.team_name} overdrive={s.overdrive} />
+                        <StandingName
+                          name={s.team_name}
+                          overdrive={s.overdrive}
+                        />
                       </td>
                       <td>{s.points}</td>
                       <td>{timeText(s.effective_time_ms)}</td>
@@ -1234,7 +1589,23 @@ export default function StaffConsole({
                 </tbody>
               </table>
             </div>
-            {round?.state==="CLOSED"&&<ScoreCorrections key={round.round_id} api={api} round={round.round_id} staff controls={manager?round:undefined} available={ready && !!data && !busy && !sessionUnknown && !command.current.unresolved} blockNavigation={setAccessBlocked}/>}
+            {round?.state === "CLOSED" && (
+              <ScoreCorrections
+                key={round.round_id}
+                api={api}
+                round={round.round_id}
+                staff
+                controls={moderator ? round : undefined}
+                available={
+                  ready &&
+                  !!data &&
+                  !busy &&
+                  !sessionUnknown &&
+                  !command.current.unresolved
+                }
+                blockNavigation={setAccessBlocked}
+              />
+            )}
           </section>
           <section className="staff-section">
             <h2>Recent judging</h2>
@@ -1271,38 +1642,30 @@ export default function StaffConsole({
           title={intent.title}
           close={() => {
             setIntent(null);
-            setCode("");
           }}
         >
-          <form onSubmit={(e) => void confirm(e)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void commit(intent, reason);
+            }}
+          >
             <label>
-              Audit reason
+              Change note
               <textarea
+                aria-label="Change note"
                 required
                 maxLength={1024}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
             </label>
-            {intent.sensitive && (
-              <label>
-                Your staff code
-                <input
-                  type="password"
-                  required
-                  autoComplete="off"
-                  maxLength={96}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-              </label>
-            )}
+
             <div className="dialog-actions">
               <button
                 type="button"
                 onClick={() => {
                   setIntent(null);
-                  setCode("");
                 }}
               >
                 Cancel
@@ -1312,11 +1675,10 @@ export default function StaffConsole({
                 disabled={
                   locked ||
                   !reason.trim() ||
-                  new TextEncoder().encode(reason).length > 1024 ||
-                  (intent.sensitive && !code.trim())
+                  new TextEncoder().encode(reason).length > 1024
                 }
               >
-                Confirm command
+                {intent.title}
               </button>
             </div>
           </form>

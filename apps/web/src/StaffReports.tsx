@@ -28,7 +28,6 @@ export default function StaffReports({
     [detail, setDetail] = useState<JudgeDetail | null>(null),
     [decision, setDecision] = useState<"UPHELD" | "DISMISSED" | null>(null),
     [reason, setReason] = useState(""),
-    [code, setCode] = useState(""),
     [busy, setBusy] = useState(false),
     [privateOpen, setPrivateOpen] = useState(false),
     [error, setError] = useState(""),
@@ -94,7 +93,7 @@ export default function StaffReports({
         ? await command.current!.recover()
         : await command.current!.send(
             `${base}/reports/${report!.id}/decision`,
-            { verdict: decision, reason, own_code: code },
+            { verdict: decision, reason },
             `${base}/report-decisions/outcomes`,
           );
       if (value) {
@@ -104,7 +103,6 @@ export default function StaffReports({
     } catch (e) {
       setError(errorText(e));
     } finally {
-      setCode("");
       setBusy(false);
     }
   }
@@ -225,7 +223,6 @@ export default function StaffReports({
                 onClick={() => {
                   setDecision("UPHELD");
                   setReason("");
-                  setCode("");
                 }}
               >
                 Uphold report
@@ -235,7 +232,6 @@ export default function StaffReports({
                 onClick={() => {
                   setDecision("DISMISSED");
                   setReason("");
-                  setCode("");
                 }}
               >
                 Dismiss report
@@ -277,27 +273,14 @@ export default function StaffReports({
                 disabled={busy || command.current.unresolved}
               />
             </label>
-            <label>
-              Your staff code
-              <input
-                aria-label="Your staff code"
-                type="password"
-                autoComplete="off"
-                required
-                maxLength={96}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                disabled={busy || command.current.unresolved}
-              />
-            </label>
+
             <button
               className="primary"
               disabled={
                 !available ||
                 busy ||
                 command.current.unresolved ||
-                !reason.trim() ||
-                !code.trim()
+                !reason.trim()
               }
             >
               Confirm decision

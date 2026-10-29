@@ -53,7 +53,6 @@ export default function StaffAccess({
     [confirm, setConfirm] = useState(false),
     [discard, setDiscard] = useState(false),
     [reason, setReason] = useState(""),
-    [ownCode, setOwnCode] = useState(""),
     [issued, setIssued] = useState<{ code: string; name: string } | null>(null),
     [reveal, setReveal] = useState(false),
     [copyFeedback, setCopyFeedback] = useState(""),
@@ -94,7 +93,7 @@ export default function StaffAccess({
         setData(null);
         setSelection(null);
         setIssued(null);
-        setOwnCode("");
+
         setConfirm(false);
         setDenied(true);
       }
@@ -122,8 +121,8 @@ export default function StaffAccess({
   function choose(next: Selection) {
     if (locked || selection) return;
     setSelection(next);
-    setReason("");
-    setOwnCode("");
+    setReason(`${label(next.action)} staff access from the control room.`);
+
     setError("");
     setNotice("");
   }
@@ -165,18 +164,10 @@ export default function StaffAccess({
     await refresh.current();
   }
   async function send() {
-    if (
-      locked ||
-      !selection ||
-      !reason.trim() ||
-      bytes(reason) > 1024 ||
-      (staffMode && !ownCode.trim())
-    )
-      return;
-    const chosen = selection,
-      code = ownCode;
+    if (locked || !selection || bytes(reason) > 1024) return;
+    const chosen = selection;
     setConfirm(false);
-    setOwnCode("");
+
     setBusy(true);
     setError("");
     try {
@@ -191,10 +182,11 @@ export default function StaffAccess({
           path,
           {
             expected_revision: chosen.revision,
-            reason,
+            reason:
+              reason.trim() ||
+              `${label(chosen.action)} staff access from the control room.`,
             ...(staffMode
               ? {
-                  own_code: code,
                   ...(chosen.action !== "ROTATE"
                     ? {
                         display_name: chosen.name,
@@ -357,8 +349,8 @@ export default function StaffAccess({
                       })
                     }
                   >
-                    <option value="ORGANISER">Organiser</option>
-                    <option value="OWNER">Owner</option>
+                    <option value="ORGANISER">Admin (Organiser)</option>
+                    <option value="OWNER">Lead admin (Owner)</option>
                   </select>
                 </label>
                 {selection.action === "UPDATE" && (
@@ -384,15 +376,21 @@ export default function StaffAccess({
                 )}
               </>
             )}
-            <label>
-              Access audit reason
-              <textarea
-                required
-                maxLength={1024}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </label>
+            <details className="staff-note">
+              <summary>Add a note (optional)</summary>
+              <label>
+                Access note
+                <textarea
+                  aria-label="Access note"
+                  maxLength={1024}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </label>
+              <small className="field-note">
+                The action, staff identity and time are recorded automatically.
+              </small>
+            </details>
             <div className="dialog-actions">
               <button type="button" onClick={() => setDiscard(true)}>
                 <X size={16} />
@@ -400,7 +398,7 @@ export default function StaffAccess({
               </button>
               <button
                 className="primary"
-                disabled={!validName || !reason.trim() || bytes(reason) > 1024}
+                disabled={!validName || bytes(reason) > 1024}
               >
                 <Save size={16} />
                 Review access change
@@ -570,7 +568,6 @@ export default function StaffAccess({
           title="Confirm access change"
           close={() => {
             setConfirm(false);
-            setOwnCode("");
           }}
         >
           <p>
@@ -601,33 +598,16 @@ export default function StaffAccess({
               void send();
             }}
           >
-            {staffMode && (
-              <label>
-                Your staff code
-                <input
-                  type="password"
-                  required
-                  maxLength={96}
-                  autoComplete="off"
-                  value={ownCode}
-                  onChange={(e) => setOwnCode(e.target.value)}
-                />
-              </label>
-            )}
             <div className="dialog-actions">
               <button
                 type="button"
                 onClick={() => {
                   setConfirm(false);
-                  setOwnCode("");
                 }}
               >
                 Back
               </button>
-              <button
-                className="primary"
-                disabled={locked || (staffMode && !ownCode.trim())}
-              >
+              <button className="primary" disabled={locked}>
                 Confirm access change
               </button>
             </div>
@@ -643,7 +623,7 @@ export default function StaffAccess({
               onClick={() => {
                 setSelection(null);
                 setReason("");
-                setOwnCode("");
+
                 setDiscard(false);
               }}
             >

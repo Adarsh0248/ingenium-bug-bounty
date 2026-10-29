@@ -74,8 +74,7 @@ export default function TeamImport({
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [confirm, setConfirm] = useState(false),
-    [reason, setReason] = useState(""),
-    [ownCode, setOwnCode] = useState(""),
+    [reason, setReason] = useState("Import reviewed team registrations."),
     [codes, setCodes] = useState<Code[]>([]),
     [reveal, setReveal] = useState(false),
     [discard, setDiscard] = useState(false),
@@ -110,7 +109,7 @@ export default function TeamImport({
       setPreview(null);
       setResult(null);
       setCodes([]);
-      setOwnCode("");
+
       setConfirm(false);
       setDenied(true);
     }
@@ -184,7 +183,7 @@ export default function TeamImport({
     const issued = "issued_codes" in value ? value.issued_codes : [];
     setCsv("");
     setPreview(null);
-    setReason("");
+    setReason("Import reviewed team registrations.");
     setCodes(issued);
     setReveal(false);
     const created = r.items.filter((i) => i.status === "CREATED").length;
@@ -197,16 +196,8 @@ export default function TeamImport({
     );
   }
   async function save() {
-    if (
-      locked ||
-      !preview?.can_import ||
-      !reason.trim() ||
-      textBytes(reason) > 1024 ||
-      !ownCode.trim()
-    )
-      return;
-    const code = ownCode;
-    setOwnCode("");
+    if (locked || !preview?.can_import || textBytes(reason) > 1024) return;
+
     setConfirm(false);
     setBusy(true);
     setError("");
@@ -218,8 +209,7 @@ export default function TeamImport({
             csv,
             csv_digest: preview.csv_digest,
             expected_revision: preview.control_revision,
-            reason,
-            own_code: code,
+            reason: reason.trim() || "Import reviewed team registrations.",
           },
           "/api/v1/staff/outcomes/registrations",
         ),
@@ -425,7 +415,6 @@ export default function TeamImport({
           title="Confirm registration import"
           close={() => {
             setConfirm(false);
-            setOwnCode("");
           }}
         >
           <p>
@@ -441,44 +430,31 @@ export default function TeamImport({
               void save();
             }}
           >
-            <label>
-              Import audit reason
-              <textarea
-                required
-                maxLength={1024}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </label>
-            <label>
-              Your staff code
-              <input
-                required
-                type="password"
-                autoComplete="off"
-                maxLength={96}
-                value={ownCode}
-                onChange={(e) => setOwnCode(e.target.value)}
-              />
-            </label>
+            <details className="staff-note">
+              <summary>Add a note (optional)</summary>
+              <label>
+                Import note
+                <textarea
+                  aria-label="Import note"
+                  maxLength={1024}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </label>
+            </details>
+
             <div className="dialog-actions">
               <button
                 type="button"
                 onClick={() => {
                   setConfirm(false);
-                  setOwnCode("");
                 }}
               >
                 Back
               </button>
               <button
                 className="primary"
-                disabled={
-                  locked ||
-                  !ownCode.trim() ||
-                  !reason.trim() ||
-                  textBytes(reason) > 1024
-                }
+                disabled={locked || textBytes(reason) > 1024}
               >
                 Confirm import
               </button>

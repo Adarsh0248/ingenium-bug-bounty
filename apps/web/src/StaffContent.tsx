@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUp,
   ClipboardCheck,
+  BookOpen,
   Pencil,
   Plus,
   RefreshCw,
@@ -40,10 +41,13 @@ type Edit = {
   original: string;
 };
 const base = "/api/v1/staff/content";
+const questionLanguages = Object.entries(languages).filter(
+  ([key]) => key !== "javascript",
+);
 const metadata = (v?: ContentDetail) => ({
   title: v?.title ?? "",
   statement: v?.statement ?? "",
-  difficulty: v?.difficulty ?? 50,
+  difficulty: v?.difficulty ?? 10,
   reward_multiplier: v ? v.base_bounty / (v.difficulty * 10) : 5,
   category: v?.category ?? "ARRAYS",
   checker_mode: v?.checker_mode ?? "TOKENS",
@@ -167,7 +171,9 @@ export default function StaffContent({
       payload,
       original: JSON.stringify(payload),
     });
-    setReason("");
+    setReason(
+      `${label(action)} for ${payload.title || detail?.title || "question draft"}.`,
+    );
     setError("");
     setNotice("");
   }
@@ -286,17 +292,15 @@ export default function StaffContent({
       setPreparation(action === "PREPARE" ? receipt : null);
       setPlan(null);
       if (receipt.version_id) await readVersion(receipt.version_id);
+      if (action === "CREATE" || action === "NEW_VERSION")
+        setSection("VARIANT");
       await catalogue();
     }
   }
   async function save() {
-    if (
-      locked ||
-      !edit ||
-      !reason.trim() ||
-      contentTextError(reason, 1024, true)
-    )
-      return;
+    const note =
+      reason.trim() || `${label(edit?.action ?? "edit")} question draft.`;
+    if (locked || !edit || contentTextError(note, 1024, true)) return;
     const chosen = edit;
     sent.current = chosen.action;
     setConfirm(false);
@@ -318,7 +322,7 @@ export default function StaffContent({
           path,
           {
             expected_revision: chosen.revision,
-            reason,
+            reason: note,
             ...(chosen.action === "PREPARE" ? {} : { payload: chosen.payload }),
           },
           outcome,
@@ -427,7 +431,14 @@ export default function StaffContent({
   return (
     <section className="staff-section staff-content">
       <div className="staff-section-heading">
-        <h2>Bug library</h2>
+        <div>
+          <span className="eyebrow">QUESTION BUILDER</span>
+          <h2>Questions</h2>
+          <p className="muted">
+            Write a question, add its buggy code and tests, then validate it for
+            a round.
+          </p>
+        </div>
         <div className="staff-row-actions">
           <IconButton
             title="Refresh bug library"
@@ -442,6 +453,7 @@ export default function StaffContent({
             <RefreshCw size={17} />
           </IconButton>
           <button
+            className="primary"
             disabled={locked || !!edit || validationBlocked || !list}
             onClick={() => {
               setDetail(null);
@@ -454,7 +466,7 @@ export default function StaffContent({
             }}
           >
             <Plus size={16} />
-            New bug
+            Add question manually
           </button>
         </div>
       </div>
@@ -511,7 +523,16 @@ export default function StaffContent({
               </tbody>
             </table>
           </div>
-          {list?.items.length === 0 && <p className="muted">No bugs yet.</p>}
+          {list?.items.length === 0 && (
+            <div className="staff-empty">
+              <BookOpen size={28} />
+              <h3>Your question library is empty</h3>
+              <p>
+                Use Add question manually to write the statement and buggy code.
+                Questions remain drafts until you validate and publish them.
+              </p>
+            </div>
+          )}
           <div className="staff-pagination">
             <IconButton
               title="Previous bug page"
@@ -552,7 +573,7 @@ export default function StaffContent({
                 }}
               >
                 <ArrowLeft size={16} />
-                Library
+                All questions
               </button>
               <button
                 disabled={locked || !!edit || validationBlocked}
@@ -570,6 +591,47 @@ export default function StaffContent({
               </button>
             </div>
           </div>
+          {!readOnly && !edit && (
+            <div
+              className="question-progress"
+              aria-label="Question preparation progress"
+            >
+              <span>
+                <strong>
+                  {
+                    questionLanguages.filter(([key]) =>
+                      detail.variants.some(
+                        (v) =>
+                          v.language === key &&
+                          v.starter_bytes > 0 &&
+                          v.reference_bytes > 0,
+                      ),
+                    ).length
+                  }
+                  /4
+                </strong>
+                Languages with code
+              </span>
+              <span>
+                <strong>
+                  {detail.cases.filter((c) => c.visibility === "SAMPLE").length}
+                </strong>
+                Sample tests
+              </span>
+              <span>
+                <strong>
+                  {detail.cases.filter((c) => c.visibility === "HIDDEN").length}
+                </strong>
+                Hidden tests
+              </span>
+              <span>
+                <strong>
+                  {detail.hints.filter((h) => h.content_bytes > 0).length}/3
+                </strong>
+                Hints
+              </span>
+            </div>
+          )}
           <nav className="tabs content-tabs" aria-label="Bug sections">
             {(
               [
@@ -593,8 +655,8 @@ export default function StaffContent({
                     VARIANT: "Languages",
                     CASE: "Test cases",
                     HINT: "Hints",
-                    WITNESSES: "Starter failures",
-                    REVIEW: "Validation",
+                    WITNESSES: "Bug checks",
+                    REVIEW: "Validate & publish",
                   }[s]
                 }
               </button>
@@ -639,7 +701,7 @@ export default function StaffContent({
                   value={language}
                   onChange={(e) => setLanguage(e.target.value as Language)}
                 >
-                  {Object.entries(languages).map(([key, name]) => (
+                  {questionLanguages.map(([key, name]) => (
                     <option key={key} value={key}>
                       {name}
                     </option>
@@ -810,7 +872,13 @@ export default function StaffContent({
             <div className="content-preview">
               <dl>
                 <dt>Language variants</dt>
-                <dd>{detail.variants.length} / 5</dd>
+                <dd>
+                  {
+                    detail.variants.filter((v) => v.language !== "javascript")
+                      .length
+                  }{" "}
+                  / 4
+                </dd>
                 <dt>Sample / hidden cases</dt>
                 <dd>
                   {detail.cases.filter((c) => c.visibility === "SAMPLE").length}{" "}
@@ -952,12 +1020,22 @@ export default function StaffContent({
           className="staff-access-form content-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!locked && !invalid) setConfirm(true);
+            if (!locked && !invalid) {
+              if (
+                ["DELETE_CASE", "NEW_VERSION", "PREPARE"].includes(edit.action)
+              )
+                setConfirm(true);
+              else void save();
+            }
           }}
         >
           <div className="staff-section-heading">
             <h3>
-              {label(edit.action)}
+              {edit.action === "CREATE"
+                ? "Create a question"
+                : edit.action === "VARIANT"
+                  ? "Buggy code and solution"
+                  : label(edit.action)}
               {p?.language ? ` / ${languages[p.language as Language]}` : ""}
               {p?.level ? ` ${p.level}` : ""}
             </h3>
@@ -1002,6 +1080,10 @@ export default function StaffContent({
                   />
                 </label>
                 {field("Statement", "statement", 65536, true)}
+                <p className="field-note">
+                  Explain what the program should do, what is going wrong, and
+                  the input/output format. Keep the language simple.
+                </p>
                 <label>
                   Difficulty
                   <input
@@ -1046,14 +1128,21 @@ export default function StaffContent({
                     value={p!.checker_mode}
                     onChange={(e) => update({ checker_mode: e.target.value })}
                   >
-                    <option value="TOKENS">Tokens</option>
-                    <option value="EXACT_TEXT">Exact text</option>
+                    <option value="TOKENS">
+                      Compare answers (ignore extra spaces)
+                    </option>
+                    <option value="EXACT_TEXT">Match output exactly</option>
                   </select>
                 </label>
               </>
             )}
             {edit.action === "VARIANT" && (
               <>
+                <p className="notice">
+                  Starter code is given to participants to fix. The reference
+                  solution is private and is used to check your test cases. Add
+                  versions in C, C++, Java and Python.
+                </p>
                 {field("Starter code", "starter_code", 131072, false, true)}
                 {field(
                   "Reference solution",
@@ -1318,6 +1407,21 @@ export default function StaffContent({
               </p>
             )}
           </fieldset>
+          <details className="staff-note">
+            <summary>Add a note (optional)</summary>
+            <label>
+              Question change note
+              <textarea
+                aria-label="Question change note"
+                maxLength={1024}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </label>
+            <small className="field-note">
+              Your changes are recorded automatically.
+            </small>
+          </details>
           <div className="dialog-actions">
             <button
               type="button"
@@ -1335,7 +1439,11 @@ export default function StaffContent({
               }
             >
               <Save size={16} />
-              {edit.action === "PREPARE" ? "Prepare snapshot" : "Review save"}
+              {edit.action === "PREPARE"
+                ? "Prepare snapshot"
+                : edit.action === "CREATE"
+                  ? "Save question & add code"
+                  : "Save changes"}
             </button>
           </div>
         </form>
@@ -1361,8 +1469,9 @@ export default function StaffContent({
               {edit.revision}
             </p>
             <label>
-              Audit reason
+              Change note
               <textarea
+                aria-label="Change note"
                 required
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}

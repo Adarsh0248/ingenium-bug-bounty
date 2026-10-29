@@ -1,3 +1,5 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
 import type { Browser } from "@playwright/test";
@@ -37,9 +39,7 @@ export async function disciplineBrowserChecks(
     await dialog
       .getByLabel("Discipline reason", { exact: true })
       .fill("Synthetic browser discipline");
-    await dialog
-      .getByLabel("Discipline staff code", { exact: true })
-      .fill(code);
+    await supplyLegacyStaffCode(dialog, code);
     await c.budgets();
     await dialog
       .getByRole("button", { name: "Confirm discipline", exact: true })
@@ -49,7 +49,7 @@ export async function disciplineBrowserChecks(
     await c.newRound();
     await c.budgets();
     await page.goto(origin);
-    await page.getByRole("button", { name: "discipline", exact: true }).click();
+    await openStaffView(page, "Team restrictions");
     await section.getByLabel("Discipline team").selectOption(c.teams[0]!.id);
     await expect(
       section.getByRole("button", { name: "Add time penalty", exact: true }),
@@ -59,7 +59,7 @@ export async function disciplineBrowserChecks(
       .click();
     await dialog.getByLabel("Penalty minutes").fill("11");
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     await confirm("A".repeat(32));
     await expect(dialog.getByRole("alert")).toContainText(
@@ -83,7 +83,7 @@ export async function disciplineBrowserChecks(
       await expect.poll(()=>refreshing,{timeout:5000}).toBe(true);
       await section.getByRole("button",{name:"Reverse 11 minute penalty",exact:true}).click();
       await dialog.getByLabel("Discipline reason",{exact:true}).fill("Synthetic browser discipline");
-      await dialog.getByLabel("Discipline staff code",{exact:true}).fill(c.staff.code);
+      await supplyLegacyStaffCode(dialog, c.staff.code);
       await expect(dialog.getByRole("button",{name:"Confirm discipline",exact:true})).toBeEnabled();
       await confirm();await expect(dialog).not.toBeVisible();
     }finally{release();await page.unrouteAll({behavior:"wait"});}
@@ -133,7 +133,7 @@ export async function disciplineBrowserChecks(
       dialog.getByRole("button", { name: "Check outcome", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     await c.budgets();
     await dialog
@@ -177,11 +177,12 @@ export async function disciplineBrowserChecks(
       const p = await other.newPage();
       await c.budgets();
       await p.goto(origin);
+      await p.locator(".staff-more > summary").click();
       await expect(
-        p.getByRole("button", { name: "access", exact: true }),
+        p.getByRole("button", { name: "Participant access", exact: true }),
       ).toBeVisible();
       await expect(
-        p.getByRole("button", { name: "discipline", exact: true }),
+        p.getByRole("button", { name: "Team restrictions", exact: true }),
       ).not.toBeVisible();
     } finally {
       await other.close();

@@ -100,3 +100,46 @@ Production runtime/maintenance, real
 judge installation, retention/resource guards, HTTPS deployment, backup recovery
 and realistic event-capacity tests remain required. No development migration,
 cloud operation, architecture edit or assistant Git mutation is part of this batch.
+
+
+## Admin setup usability update — 29 October 2026
+
+All normal Organiser, Owner and Super Admin sessions can manage teams, question
+authoring/validation/publication and normal arena setup/lifecycle. Migration
+0088 updates the matching named database guards without changing session,
+clock, receipt or launch-readiness checks. Super Admin staff
+management and separate incident/discipline/recovery powers remain restricted.
+
+The main navigation now exposes Arena setup, Teams and Questions directly.
+Secondary monitoring/support tools sit under More controls. Teams has a visible
+Add team manually form with two member names;
+CSV import remains available. Questions has a visible manual builder, direct
+draft saves, four event languages, progress counts and explanations for starter
+code, private solutions, tests and publication.
+
+Creating an arena saves a draft. Its duration and roster remain editable in
+DRAFT/READY before launch; a changed ready setup returns to DRAFT for a fresh
+check. Save actions reload the authoritative revisions and keep the setup view
+open. No arena, enrolment, score or source history is reset.
+
+Routine setup/question saves automatically record a contextual reason. Optional
+notes remain available on team/question forms; sensitive lifecycle and credential
+operations retain confirmation. This removes repeated typing, not the audit
+history or unknown-outcome recovery.
+
+The organiser also approved session-based action authorization. After signing in,
+normal staff actions use the active authenticated session and current credential
+binding; no raw access code is cached or resent by the browser. Existing session
+expiry, role/revocation checks, CSRF, audit records, request keys and database
+authority checks remain enforced. Legacy clients may still send a code, which
+must be correct if supplied. Exceptional clock recovery keeps explicit code
+verification. Routine saves need no confirmation; destructive or sensitive actions
+retain a clear confirmation step without another code field.
+
+Verification: 367 API and 92 web unit checks, type checks and production builds
+passed. Disposable PostgreSQL suites passed 145 foundation checks, 29 validation
+and diagnostic checks, eight team checks and nine import checks. Real Chromium
+covered the new regular-admin setup workflow, Super Admin staff creation without
+code re-entry, desktop/mobile layout, and the complete existing two-round browser
+flow including registration, discipline and cancellation recovery. Synthetic judge
+fixtures in these checks do not qualify a production judge or real event capacity.

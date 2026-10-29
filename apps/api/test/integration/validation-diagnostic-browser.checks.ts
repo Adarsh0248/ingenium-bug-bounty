@@ -1,3 +1,4 @@
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
@@ -35,9 +36,7 @@ export async function validationDiagnosticBrowserChecks(
       try {
         await c.budgets();
         await page.goto(origin);
-        await page
-          .getByRole("button", { name: "library", exact: true })
-          .click();
+        await openStaffView(page, "Questions");
         await page
           .locator(`[data-version-id="${c.version}"]`)
           .getByRole("button")

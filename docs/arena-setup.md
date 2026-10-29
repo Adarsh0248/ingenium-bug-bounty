@@ -5,9 +5,8 @@ configuration. It does not start a competition or certify its readiness.
 
 ## Flow
 
-1. A current normal Owner or Super Admin reads the current arena-control revision.
-   Organisers may monitor the safe setup view and registration-name picker but
-   cannot create or configure an arena. Restricted clock-recovery sessions and
+1. Any current normal staff member (Organiser, Owner or Super Admin) reads the
+   current arena-control revision and can create or configure an arena. Restricted clock-recovery sessions and
    participant grants have no configuration authority.
 2. Creation reserves the singleton immediately, with one `SETUP` instance and one
    Round 1 `DRAFT`. Supply a positive whole-millisecond duration no greater than

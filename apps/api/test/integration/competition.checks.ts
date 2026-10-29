@@ -181,6 +181,16 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     const shopThird=process.env.INGENIUM_TEST_SUITE==='shop'?await team():null;
     const legacy = boost === 5 ? await published(actor,1,100) : null;
     await budgets();
+    if (process.env.INGENIUM_TEST_SUITE === "admin-browser") {
+      const {withBrowserApp}=await import("./browser-app.js");
+      const {adminSetupBrowserChecks}=await import("./admin-setup-browser.checks.js");
+      await t.test("regular admins manually add teams/questions and edit a ready arena before start without audit prompts",async()=>{
+        await withBrowserApp({pool:api,clock,delivery,competition:deps},async(browser,origin,policy)=>{
+          await adminSetupBrowserChecks(browser,origin,policy.names.staff,{owner,organiser,root:await person("SUPER_ADMIN"),budgets});
+        });
+      });
+      return;
+    }
     const created = await arena.command(actor.sessionCookie, { action: "CREATE", roundId: null, requestKey: randomUUID(), expectedRevision: "0", durationMs: 18000000, teamIds: [a.id, b.id], reason: "Synthetic competition instance" });
     const r1 = created.round_id!;
     if (process.env.INGENIUM_TEST_SUITE === "hundred-bounties") {
@@ -244,7 +254,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     }
     await t.test("competition selection requires matching reviewed publications; starts need current readiness and sensitive owner confirmation", async () => {
       await assert.rejects(command(actor, "CONFIGURE", r1, { snapshots: [race.snapshot] }));
-      await assert.rejects(command(organiser, "CONFIGURE", r1, { snapshots: [one.snapshot] }));
+      assert.equal((await command(organiser, "CONFIGURE", r1, { snapshots: [one.snapshot] })).result.status,"APPLIED");
       assert.equal((await command(actor, "CONFIGURE", r1, { snapshots: [one.snapshot, two.snapshot,...(legacy?[legacy.snapshot]:[])] })).result.status, "APPLIED");
       assert.equal((await command(actor, "READY", r1)).result.status, "APPLIED");
       await assert.rejects(command(actor, "START", r1, {}, { ownCode: newAccessCode().code }));

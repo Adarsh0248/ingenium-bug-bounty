@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
-import { canonicalCode, parseProof, sha256, uuid } from "../access/credentials.js";
+import { parseProof, sha256, uuid } from "../access/credentials.js";
 import type { SessionDelivery } from "../access/credentials.js";
-import { createStaffService, confirmStaffCode, staffOutcomeCapacity } from "../access/staff-service.js";
+import { createStaffService, staffActionVerifier, staffOutcomeCapacity } from "../access/staff-service.js";
 import { sessionRow, sessionValid, lockedRounds } from "../access/entry-service.js";
 import { memberCommandQuota, memberReadQuota, staffQuota } from "../access/quotas.js";
 import { AccessError, accessTransaction, decisionTime, first } from "../access/transaction.js";
@@ -157,11 +157,12 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
       uuid(input.roundId); uuid(input.requestKey); staffRevision(input.expectedRevision); boundedStaffText(input.reason, 1024);
       if (!(STAFF_ACTIONS as readonly string[]).includes(input.action)) throw new AccessError("INVALID_CONTEXT");
       let p: Record<string, unknown>; try { p = staffPayload(input); } catch { throw new AccessError("INVALID_CONTEXT"); }
-      const initial = await staff.inspect(cookie); if (initial.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
+      const initial = await staff.inspect(cookie);
       await staffQuota(pool, clock, initial.staff_id, "STAFF_COMMAND");
       const cancelling = ["CANCEL_ROUND", "FINISH_CANCEL"].includes(input.action);
+      if (cancelling && initial.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
       const sensitive = ["START", "PAUSE", "RESUME", "CLOSE", "FINALISE", "QUALIFY", "DISCARD", "CANCEL_ROUND", "FINISH_CANCEL"].includes(input.action);
-      if (sensitive) await staffQuota(pool, clock, initial.staff_id, "STAFF_CONFIRM");
+      if (sensitive && input.ownCode !== undefined) await staffQuota(pool, clock, initial.staff_id, "STAFF_CONFIRM");
       const known = await accessTransaction(pool, clock, async client => {
         await staff.authorize(client, cookie, await decisionTime(client, clock));
         return first(client, "SELECT id FROM competition_outcomes WHERE round_id=$1 AND actor_id=$2 AND request_key=$3", [input.roundId, initial.staff_id, input.requestKey]);
@@ -173,8 +174,8 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
       return accessTransaction(pool, clock, async client => {
         await client.query("SELECT * FROM lock_arena_control(true)"); await lockedRounds(client, [input.roundId]);
         const now = await decisionTime(client, clock, [input.roundId]), actor = await staff.authorize(client, cookie, now);
-        if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
-        if (sensitive) await confirmStaffCode(client, actor, input.ownCode);
+        if (cancelling && actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
+        const confirmation = sensitive ? await staffActionVerifier(client, actor, input.ownCode) : null;
         if (input.action === "CONFIGURE") {
           const round = await first<{ kind: number }>(client, "SELECT kind FROM rounds WHERE id=$1", [input.roundId]);
           if ((p.snapshots as string[]).length > (round?.kind === 2 ? 100 : 50)) throw new AccessError("INVALID_CONTEXT");
@@ -201,7 +202,7 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
           p = { reveal: dependencies.drawCipher.open(config.draw_ciphertext, input.roundId, roster, config.draw_commitment) };
         }
         const row = await first<{ value: Receipt }>(client, cancelling ? "SELECT competition_cancel_command($1,$2,$3,$4,$5,$6::jsonb,$7,$8) AS value" : "SELECT competition_staff_command($1,$2,$3,$4,$5,$6::jsonb,$7,$8) AS value",
-          [actor.id, input.roundId, input.requestKey, input.expectedRevision, input.action, JSON.stringify(p), input.reason, sensitive ? sha256(canonicalCode(input.ownCode)) : null]);
+          [actor.id, input.roundId, input.requestKey, input.expectedRevision, input.action, JSON.stringify(p), input.reason, confirmation]);
         if (!row) throw new AccessError("SECURITY_UNAVAILABLE"); return receiptView(row.value);
       }, "EXCLUSIVE");
     },
@@ -232,17 +233,17 @@ export function createCompetitionService(pool: Pool, clock: ClockGuard, delivery
       if (!Number.isInteger(level) || level < 1 || level > 3) throw new AccessError("INVALID_CONTEXT");
       return memberWrite(cookie, roundId, requestKey, "HINT", { bounty_id: uuid(bountyId), level });
     },
-    async retryJob(cookie: unknown, roundId: string, jobId: string, requestKey: string, reason: string, ownCode: string) {
+    async retryJob(cookie: unknown, roundId: string, jobId: string, requestKey: string, reason: string, ownCode?: string) {
       uuid(roundId); uuid(jobId); uuid(requestKey); boundedStaffText(reason, 1024);
       const initial = await staff.inspect(cookie); if (initial.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
-      await staffQuota(pool, clock, initial.staff_id, "STAFF_COMMAND"); await staffQuota(pool, clock, initial.staff_id, "STAFF_CONFIRM");
+      await staffQuota(pool, clock, initial.staff_id, "STAFF_COMMAND"); if (ownCode !== undefined) await staffQuota(pool, clock, initial.staff_id, "STAFF_CONFIRM");
       return accessTransaction(pool, clock, async client => {
         await lockedRounds(client, [roundId]);
         const actor = await staff.authorize(client, cookie, await decisionTime(client, clock, [roundId]));
         if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
-        await confirmStaffCode(client, actor, ownCode);
+        const confirmation = await staffActionVerifier(client, actor, ownCode);
         if (!await first(client, "SELECT j.id FROM participant_jobs j JOIN participant_judging p ON p.id=j.parent_id WHERE j.id=$1 AND p.round_id=$2", [jobId, roundId])) throw new AccessError("ACCESS_UNAVAILABLE");
-        const row = await first<{ value: Receipt }>(client, "SELECT participant_retry($1,$2,$3,$4,$5) value", [actor.id, jobId, requestKey, reason, sha256(canonicalCode(ownCode))]);
+        const row = await first<{ value: Receipt }>(client, "SELECT participant_retry($1,$2,$3,$4,$5) value", [actor.id, jobId, requestKey, reason, confirmation]);
         if (!row) throw new AccessError("SECURITY_UNAVAILABLE"); return receiptView(row.value);
       }, "EXCLUSIVE");
     },

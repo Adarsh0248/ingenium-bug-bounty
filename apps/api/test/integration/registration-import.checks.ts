@@ -351,13 +351,10 @@ export async function registrationImportChecks(
       "all import boundaries enforce role, confirmation, immutable mappings and current authority",
       async () => {
         const input = await intent(actor, file("REG-5,Fifth team,One,Two"));
-        await assert.rejects(
-          service.preview(organiser.sessionCookie, input.csv),
-          denied("ACCESS_UNAVAILABLE"),
-        );
+        assert.ok(await service.preview(organiser.sessionCookie, input.csv));
         await assert.rejects(
           service.commit(organiser.sessionCookie, input),
-          denied("ACCESS_UNAVAILABLE"),
+          denied("STAFF_CONFIRMATION_REQUIRED"),
         );
         await budgets();
         await assert.rejects(
@@ -616,7 +613,7 @@ export async function registrationImportChecks(
                 `/api/v1/staff/outcomes/registrations/${b.request_key}`,
               )
             ).statusCode,
-            403,
+            200,
           );
         } finally {
           await app.close();

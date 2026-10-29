@@ -1,10 +1,10 @@
 import type { Pool } from "pg";
-import { canonicalCode, sha256, uuid } from "./credentials.js";
+import { sha256, uuid } from "./credentials.js";
 import type { SessionDelivery } from "./credentials.js";
 import { boundedStaffText, staffRevision } from "./staff-management.js";
 import {
   createStaffService,
-  confirmStaffCode,
+  staffActionVerifier,
   staffOutcomeCapacity,
 } from "./staff-service.js";
 import { staffQuota } from "./quotas.js";
@@ -30,7 +30,7 @@ export interface DisciplineCommand {
   expectedRevision: string;
   requestKey: string;
   reason: string;
-  ownCode: unknown;
+  ownCode?: unknown;
 }
 interface Receipt {
   id: string;
@@ -81,7 +81,7 @@ export function createDisciplineService(
     if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     return actor;
   }
-  async function budget(cookie: unknown, write = false) {
+  async function budget(cookie: unknown, write = false, confirm = false) {
     const actor = await staff.inspect(cookie);
     if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     await staffQuota(
@@ -90,7 +90,7 @@ export function createDisciplineService(
       actor.staff_id,
       write ? "STAFF_COMMAND" : "READ_STAFF",
     );
-    if (write) await staffQuota(pool, clock, actor.staff_id, "STAFF_CONFIRM");
+    if (confirm) await staffQuota(pool, clock, actor.staff_id, "STAFF_CONFIRM");
   }
   return {
     async command(cookie: unknown, input: DisciplineCommand) {
@@ -126,7 +126,7 @@ export function createDisciplineService(
               : input.originalId === null || input.minutes !== null)))
       )
         throw new AccessError("INVALID_CONTEXT");
-      await budget(cookie, true);
+      await budget(cookie, true, input.ownCode !== undefined);
       return accessTransaction(
         pool,
         clock,
@@ -141,7 +141,7 @@ export function createDisciplineService(
           await lockedRounds(client, rounds);
           const now = await decisionTime(client, clock, rounds),
             actor = await principal(client, cookie, now);
-          await confirmStaffCode(client, actor, input.ownCode);
+          const confirmation = await staffActionVerifier(client, actor, input.ownCode);
           if (
             !(await first(
               client,
@@ -166,7 +166,7 @@ export function createDisciplineService(
               input.minutes,
               input.expectedRevision,
               input.reason,
-              sha256(canonicalCode(input.ownCode)),
+              confirmation,
             ],
           );
           if (!r) throw new AccessError("SECURITY_UNAVAILABLE");

@@ -52,15 +52,14 @@ export async function contentChecks(t: TestContext, ownerConnection: string, api
   }
   try {
     await t.test("content roles and structural validation cannot create a public/ready version or accept browser-owned rewards", async () => {
-      const actor = await person(), organiser = await person("ORGANISER"), create = await command("CREATE", null, { round_type: 1, ...metadata });
-      await assert.rejects(service.command(organiser.sessionCookie, create), denied("ACCESS_UNAVAILABLE"));
+      const actor = await person("ORGANISER"), organiser = await person("ORGANISER"), create = await command("CREATE", null, { round_type: 1, ...metadata });
       await assert.rejects(service.command(actor.sessionCookie, { ...create, payload: { round_type: 1, ...metadata, publication_status: "PUBLISHED" } }), denied("INVALID_CONTEXT"));
       await assert.rejects(service.command(actor.sessionCookie, { ...create, payload: { round_type: 1, ...metadata, base_bounty: 99999 } }), denied("INVALID_CONTEXT"));
       const saved = await service.command(actor.sessionCookie, create);
       const view = await service.describe(actor.sessionCookie, saved.version_id!);
       assert.equal(view.base_bounty, 950); assert.equal(view.publication_status, "DRAFT"); assert.equal(view.can_publish, false);
       assert.equal((await owner.query("SELECT count(*)::integer AS n FROM participant_sessions")).rows[0].n, 0);
-      await assert.rejects(service.describe(organiser.sessionCookie, saved.version_id!), denied("ACCESS_UNAVAILABLE"));
+      assert.equal((await service.describe(organiser.sessionCookie, saved.version_id!)).version_id, saved.version_id);
       await assert.rejects(service.describe("invalid", saved.version_id!), denied("INVALID_SESSION"));
     });
     await t.test("concurrent creation and replay commit one source; changed intents cannot reuse a key after restart", async () => {
@@ -225,9 +224,9 @@ export async function contentChecks(t: TestContext, ownerConnection: string, api
         const receipt = await client.send(`/api/v1/staff/outcomes/content/VARIANT/${id}/${change.request_key}`); assert.deepEqual(receipt.json().data.outcome, written.json().data);
         assert.equal((await client.send(`/api/v1/staff/content/versions/${id}/publish`, {}, client.token)).statusCode, 400);
         const organiser = await browser(await person("ORGANISER"));
-        assert.equal((await organiser.send(`/api/v1/staff/content/versions/${id}/variants/cpp`)).statusCode, 403);
-        assert.equal((await organiser.send("/api/v1/staff/content/definitions", " ".repeat(524289), organiser.token)).statusCode, 403);
-        assert.equal((await owner.query("SELECT count(*)::integer AS n FROM content_read_audits WHERE version_id=$1", [id])).rows[0].n, 1);
+        assert.equal((await organiser.send(`/api/v1/staff/content/versions/${id}/variants/cpp`)).statusCode, 200);
+        assert.equal((await organiser.send("/api/v1/staff/content/definitions", " ".repeat(524289), organiser.token)).statusCode, 413);
+        assert.equal((await owner.query("SELECT count(*)::integer AS n FROM content_read_audits WHERE version_id=$1", [id])).rows[0].n, 2);
       });
       await t.test("a third large content request is refused before parsing and capacity returns after the first two finish", async () => {
         const actor = await person(), client = await browser(actor), revision = (await service.list(actor.sessionCookie)).control_revision;

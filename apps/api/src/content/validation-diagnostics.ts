@@ -63,8 +63,6 @@ export function createValidationDiagnosticService(
   ) {
     uuid(run);
     const initial = await staff.inspect(cookie);
-    if (initial.role === "ORGANISER")
-      throw new AccessError("ACCESS_UNAVAILABLE");
     await staffQuota(
       pool,
       clock,
@@ -77,8 +75,6 @@ export function createValidationDiagnosticService(
       async (client) => {
         const now = await decisionTime(client, clock),
           actor = await staff.authorize(client, cookie, now);
-        if (actor.role === "ORGANISER")
-          throw new AccessError("ACCESS_UNAVAILABLE");
         if (
           !(await first(client, "SELECT id FROM validation_runs WHERE id=$1", [
             run,

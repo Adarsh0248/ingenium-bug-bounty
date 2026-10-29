@@ -1,3 +1,6 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { fillStaffNote } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -52,9 +55,7 @@ export async function teamAccessBrowserChecks(
           (typeof pages)[number],
           (typeof pages)[number],
         ];
-        await operator
-          .getByRole("button", { name: "teams", exact: true })
-          .click();
+        await openStaffView(operator, "Teams");
         const panel = operator.locator(".staff-teams"),
           find = panel.getByLabel("Find team", { exact: true });
         async function search(term: string) {
@@ -101,9 +102,7 @@ export async function teamAccessBrowserChecks(
         });
         await row.getByRole("button", { name: /^Revoke team code/ }).click();
         const form = panel.locator(".staff-access-form");
-        await form
-          .getByLabel("Registration audit reason")
-          .fill("Synthetic browser access revocation");
+        await fillStaffNote(form, "Registration note", "Synthetic browser access revocation");
         await form
           .getByRole("button", { name: "Review team change", exact: true })
           .click();
@@ -130,7 +129,7 @@ export async function teamAccessBrowserChecks(
           path: `${output}/team-revocation-mobile.png`,
           fullPage: true,
         });
-        await dialog.getByLabel("Your staff code").fill(c.staff.code);
+        await supplyLegacyStaffCode(dialog, c.staff.code);
         await c.budgets();
         await dialog
           .getByRole("button", { name: "Confirm team change", exact: true })
@@ -142,7 +141,7 @@ export async function teamAccessBrowserChecks(
           }),
         ).toBeVisible();
         await expect(
-          operator.getByRole("button", { name: "monitor", exact: true }),
+          operator.getByRole("button", { name: "Live overview", exact: true }),
         ).toBeDisabled();
         await panel
           .getByRole("button", {
@@ -169,13 +168,11 @@ export async function teamAccessBrowserChecks(
           other.getByText("STATE VERIFIED", { exact: true }),
         ).toBeVisible();
         await row.getByRole("button", { name: /^Issue team code/ }).click();
-        await form
-          .getByLabel("Registration audit reason")
-          .fill("Synthetic deliberate new code issuance");
+        await fillStaffNote(form, "Registration note", "Synthetic deliberate new code issuance");
         await form
           .getByRole("button", { name: "Review team change", exact: true })
           .click();
-        await dialog.getByLabel("Your staff code").fill(c.staff.code);
+        await supplyLegacyStaffCode(dialog, c.staff.code);
         const issuedReply = operator.waitForResponse(
           (r) =>
             new URL(r.url()).pathname ===

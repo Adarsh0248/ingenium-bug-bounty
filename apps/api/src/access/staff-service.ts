@@ -41,6 +41,15 @@ export async function confirmStaffCode(client:PoolClient,s:StaffSession,value:un
   let code:string;try{code=canonicalCode(value);}catch{throw new AccessError("STAFF_CONFIRMATION_REQUIRED");}
   const own=await first<{verifier:Buffer}>(client,"SELECT verifier FROM access_credentials WHERE id=$1 AND version=$2 AND staff_id=$3 AND revoked_at IS NULL",[s.credential_id,s.credential_version,s.staff_id]);
   if(!own || !sameVerifier(own.verifier,sha256(code)))throw new AccessError("STAFF_CONFIRMATION_REQUIRED");
+  return own.verifier;
+}
+export async function staffActionVerifier(client:PoolClient,s:StaffSession,value?:unknown) {
+  if (s.mode !== "NORMAL") throw new AccessError("INVALID_SESSION");
+  if (value !== undefined) return confirmStaffCode(client,s,value);
+  // The caller has authorised the current session inside the guarded transaction.
+  const own=await first<{verifier:Buffer}>(client,"SELECT verifier FROM access_credentials WHERE id=$1 AND version=$2 AND staff_id=$3 AND revoked_at IS NULL",[s.credential_id,s.credential_version,s.staff_id]);
+  if (!own) throw new AccessError("INVALID_SESSION");
+  return own.verifier;
 }
 export function staffTimeValid(row: { created_at: Date; absolute_expires_at: Date; last_activity_at: Date }, now: Date) {
   if (now<row.created_at || now<row.last_activity_at) throw new AccessError("CLOCK_UNTRUSTED");

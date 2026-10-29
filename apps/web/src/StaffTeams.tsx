@@ -71,7 +71,6 @@ export default function StaffTeams({
     [cursors, setCursors] = useState<(string | undefined)[]>([undefined]),
     [draft, setDraft] = useState<Draft | null>(null),
     [reason, setReason] = useState(""),
-    [ownCode, setOwnCode] = useState(""),
     [confirm, setConfirm] = useState(false),
     [discard, setDiscard] = useState(false),
     [issued, setIssued] = useState<{
@@ -136,7 +135,7 @@ export default function StaffTeams({
       if (e instanceof ApiError && [401, 403].includes(e.status)) {
         setDraft(null);
         setIssued(null);
-        setOwnCode("");
+
         setConfirm(false);
         setDenied(true);
       }
@@ -174,7 +173,7 @@ export default function StaffTeams({
     if (locked || draft) return;
     setDraft(value);
     setReason("");
-    setOwnCode("");
+
     setError("");
     setNotice("");
   }
@@ -222,19 +221,15 @@ export default function StaffTeams({
     await refresh.current(true);
   }
   async function send() {
-    if (
-      locked ||
-      !draft ||
-      !data ||
-      stateChanged ||
-      !valid(reason, 1024) ||
-      !ownCode.trim()
-    )
-      return;
-    const d = draft,
-      code = ownCode;
+    const note =
+      reason.trim() ||
+      (draft?.action === "CREATE"
+        ? `Register team ${draft.name}.`
+        : `${draft?.action} team access code.`);
+    if (locked || !draft || !data || stateChanged || !valid(note, 1024)) return;
+    const d = draft;
     setConfirm(false);
-    setOwnCode("");
+
     setBusy(true);
     setError("");
     try {
@@ -245,8 +240,8 @@ export default function StaffTeams({
             : base,
           {
             expected_revision: d.revision,
-            reason,
-            own_code: code,
+            reason: note,
+
             ...(!d.target
               ? { team_name: d.name, member_one: d.one, member_two: d.two }
               : {}),
@@ -302,7 +297,14 @@ export default function StaffTeams({
   return (
     <section className="staff-section staff-access staff-teams">
       <div className="staff-section-heading">
-        <h2>Team registrations</h2>
+        <div>
+          <span className="eyebrow">PARTICIPANTS</span>
+          <h2>Teams</h2>
+          <p className="muted">
+            Add two members manually, or import your registration CSV. Each team
+            receives one private 8-character code.
+          </p>
+        </div>
         <span>
           {data
             ? search
@@ -321,6 +323,7 @@ export default function StaffTeams({
           <RefreshCw size={17} />
         </IconButton>
         <button
+          className="primary"
           disabled={locked || !!draft || !data || data.total >= 1000}
           onClick={() =>
             choose({
@@ -334,7 +337,7 @@ export default function StaffTeams({
           }
         >
           <Plus size={16} />
-          Register team
+          Add team manually
         </button>
         <button
           disabled={locked || !!draft || !data}
@@ -424,14 +427,21 @@ export default function StaffTeams({
           className="staff-access-form"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!locked && data && !stateChanged && valid(reason, 1024))
-              setConfirm(true);
+            if (
+              !locked &&
+              data &&
+              !stateChanged &&
+              (!reason || valid(reason, 1024))
+            ) {
+              if (draft.action === "CREATE") void send();
+              else setConfirm(true);
+            }
           }}
         >
           <h3>
             {draft.target
               ? `${draft.action === "REVOKE" ? "Revoke code" : draft.action === "ISSUE" ? "Issue new code" : "Rotate code"}: ${draft.name}`
-              : "Register team"}
+              : "Add a team"}
           </h3>
           {draft.target && (
             <small className="staff-reference">
@@ -464,15 +474,22 @@ export default function StaffTeams({
                 )}
               </>
             )}
-            <label>
-              Registration audit reason
-              <textarea
-                required
-                maxLength={1024}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </label>
+
+            <details className="staff-note">
+              <summary>Add a note (optional)</summary>
+              <label>
+                Registration note
+                <textarea
+                  aria-label="Registration note"
+                  maxLength={1024}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </label>
+              <small className="field-note">
+                Who made the change and when are recorded automatically.
+              </small>
+            </details>
             {stateChanged && (
               <div className="staff-message warning">
                 The registration state changed.
@@ -501,7 +518,7 @@ export default function StaffTeams({
               <button
                 className="primary"
                 disabled={
-                  !valid(reason, 1024) ||
+                  (!!reason && !valid(reason, 1024)) ||
                   !data ||
                   stateChanged ||
                   (!draft.target &&
@@ -509,7 +526,9 @@ export default function StaffTeams({
                 }
               >
                 <Save size={16} />
-                Review team change
+                {draft.action === "CREATE"
+                  ? "Create team"
+                  : "Review team change"}
               </button>
             </div>
           </fieldset>
@@ -533,6 +552,20 @@ export default function StaffTeams({
                 </tr>
               </thead>
               <tbody>
+                {!data.items.length && (
+                  <tr>
+                    <td colSpan={4} className="staff-empty">
+                      <strong>
+                        {search ? "No matching teams" : "Add your first team"}
+                      </strong>
+                      <p>
+                        {search
+                          ? "Try a team name, member name or registration reference."
+                          : "Use Add team manually above. You can select registered teams in Arena setup."}
+                      </p>
+                    </td>
+                  </tr>
+                )}
                 {data.items.map((team) => (
                   <tr key={team.team_id} data-team-id={team.team_id}>
                     <td>
@@ -540,7 +573,9 @@ export default function StaffTeams({
                       {team.registration_id && (
                         <small>{team.registration_id}</small>
                       )}
-                      <small>{team.team_id}</small>
+                      <small title={team.team_id}>
+                        Reference {team.team_id.slice(0, 8)}
+                      </small>
                     </td>
                     <td>
                       {team.members.map((m) => (
@@ -611,7 +646,6 @@ export default function StaffTeams({
           title="Confirm team change"
           close={() => {
             setConfirm(false);
-            setOwnCode("");
           }}
         >
           <p>
@@ -657,30 +691,18 @@ export default function StaffTeams({
               void send();
             }}
           >
-            <label>
-              Your staff code
-              <input
-                type="password"
-                autoComplete="off"
-                required
-                maxLength={96}
-                value={ownCode}
-                onChange={(e) => setOwnCode(e.target.value)}
-              />
-            </label>
             <div className="dialog-actions">
               <button
                 type="button"
                 onClick={() => {
                   setConfirm(false);
-                  setOwnCode("");
                 }}
               >
                 Back
               </button>
               <button
                 className={draft.action === "REVOKE" ? "danger" : "primary"}
-                disabled={locked || !data || stateChanged || !ownCode.trim()}
+                disabled={locked || !data || stateChanged}
               >
                 Confirm team change
               </button>
@@ -700,7 +722,7 @@ export default function StaffTeams({
               onClick={() => {
                 setDraft(null);
                 setReason("");
-                setOwnCode("");
+
                 setDiscard(false);
               }}
             >

@@ -74,7 +74,6 @@ export default function StaffDiscipline({
     [intent, setIntent] = useState<Intent | null>(null),
     [minutes, setMinutes] = useState("5"),
     [reason, setReason] = useState(""),
-    [code, setCode] = useState(""),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
     [denied, setDenied] = useState(false),
@@ -90,7 +89,11 @@ export default function StaffDiscipline({
   const team = round.teams.find((t) => t.team_id === teamId),
     cursor = cursors.at(-1),
     locked =
-      !available || denied || busy || command.current.unresolved || (loading && !data),
+      !available ||
+      denied ||
+      busy ||
+      command.current.unresolved ||
+      (loading && !data),
     active = !!data?.current,
     canPenalise =
       active &&
@@ -117,7 +120,7 @@ export default function StaffDiscipline({
       if (e instanceof ApiError && [401, 403].includes(e.status)) {
         setData(null);
         setIntent(null);
-        setCode("");
+
         setReason("");
         setDenied(true);
       }
@@ -167,7 +170,7 @@ export default function StaffDiscipline({
       title: `${label(action)}: ${member ? team?.members.find((m) => m.member_id === member)?.member_name : team?.team_name}`,
     });
     setReason("");
-    setCode("");
+
     setError("");
     setNotice("");
   }
@@ -189,8 +192,7 @@ export default function StaffDiscipline({
       locked ||
       !intent ||
       !reason.trim() ||
-      new TextEncoder().encode(reason).length > 1024 ||
-      !code.trim()
+      new TextEncoder().encode(reason).length > 1024
     )
       return;
     const amount = Number(minutes);
@@ -199,8 +201,7 @@ export default function StaffDiscipline({
       (!Number.isInteger(amount) || amount < 1 || amount > 300)
     )
       return;
-    const saved = code;
-    setCode("");
+
     setBusy(true);
     setError("");
     try {
@@ -220,7 +221,6 @@ export default function StaffDiscipline({
             minutes: intent.action === "PENALISE" ? amount : null,
             expected_revision: intent.revision,
             reason,
-            own_code: saved,
           },
           "/api/v1/staff/outcomes/discipline",
         ),
@@ -443,7 +443,7 @@ export default function StaffDiscipline({
           close={() => {
             if (!busy && !command.current!.unresolved) {
               setIntent(null);
-              setCode("");
+
               setReason("");
             }
           }}
@@ -496,18 +496,7 @@ export default function StaffDiscipline({
                 required
               />
             </label>
-            <label>
-              Your staff code
-              <input
-                aria-label="Discipline staff code"
-                type="password"
-                autoComplete="off"
-                value={code}
-                disabled={busy || command.current!.unresolved}
-                onChange={(e) => setCode(e.target.value)}
-                required
-              />
-            </label>
+
             {stale && (
               <p role="alert">
                 State changed. Close this confirmation and review the latest
@@ -532,7 +521,7 @@ export default function StaffDiscipline({
               <div className="actions">
                 <button
                   type="submit"
-                  disabled={locked || !!stale || !reason.trim() || !code.trim()}
+                  disabled={locked || !!stale || !reason.trim()}
                 >
                   <ShieldCheck size={16} />
                   Confirm discipline
@@ -542,7 +531,7 @@ export default function StaffDiscipline({
                   disabled={busy}
                   onClick={() => {
                     setIntent(null);
-                    setCode("");
+
                     setReason("");
                   }}
                 >

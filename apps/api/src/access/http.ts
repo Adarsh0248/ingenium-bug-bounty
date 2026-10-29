@@ -142,8 +142,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     finally { if (request.raw.aborted) release(request); }
     waitingBody.add(request);
     if (request.routeOptions.config.largeContent) {
-      const actor = await staff.inspect(request.cookies[policy.names.staff]);
-      if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
+      await staff.inspect(request.cookies[policy.names.staff]);
       if (largeContent.size >= 2) throw new AccessError("REQUEST_CAPACITY_UNAVAILABLE");
       largeContent.add(request);
       reply.raw.once("close", () => { if (!pending.has(request)) largeContent.delete(request); });
@@ -254,14 +253,14 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     async r=>wrap(r,await reports.reportOutcome(r.cookies[policy.names.participant],r.params.round_id,r.params.bounty_id,r.params.request_key)));
   app.get<{Params:{round_id:string};Querystring:{after?:string}}>("/staff/competition/rounds/:round_id/reports",{exposeHeadRoute:false,schema:{querystring:reportSchema.pageQuery,params:competitionSchema.roundParams,response:schema.responses(reportSchema.reportPage)}},
     async r=>wrap(r,await reports.list(r.cookies[policy.names.staff],r.params.round_id,r.query.after)));
-  app.post<{Params:{round_id:string;report_id:string};Body:{request_key:string;verdict:string;reason:string;own_code:string}}>("/staff/competition/rounds/:round_id/reports/:report_id/decision",{onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:reportSchema.reportParams,body:reportSchema.decisionBody,response:schema.responses(reportSchema.decision)}},
+  app.post<{Params:{round_id:string;report_id:string};Body:{request_key:string;verdict:string;reason:string;own_code?:string}}>("/staff/competition/rounds/:round_id/reports/:report_id/decision",{onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:reportSchema.reportParams,body:reportSchema.decisionBody,response:schema.responses(reportSchema.decision)}},
     async r=>wrap(r,await reports.decide(r.cookies[policy.names.staff],r.params.round_id,r.params.report_id,{requestKey:r.body.request_key,verdict:r.body.verdict,reason:r.body.reason,ownCode:r.body.own_code})));
   for(const audience of ["STAFF","PARTICIPANT"] as const){
     const route=`/${audience==="STAFF"?"staff/":""}competition/rounds/:round_id/score-adjustments`;
     app.get<{Params:{round_id:string};Querystring:{after?:string}}>(route,{exposeHeadRoute:false,schema:{querystring:reportSchema.pageQuery,params:competitionSchema.roundParams,response:schema.responses(reportSchema.adjustmentPage)}},
       async r=>wrap(r,await reports.adjustments(r.cookies[policy.names[audience==="STAFF"?"staff":"participant"]],r.params.round_id,audience,r.query.after)));
   }
-  app.post<{Params:{round_id:string};Body:{request_key:string;team_round_id:string;report_id:string|null;delta:number;reason:string;expected_revision:string;own_code:string}}>("/staff/competition/rounds/:round_id/score-adjustments",{onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:competitionSchema.roundParams,body:reportSchema.scoreBody,response:schema.responses(reportSchema.scoreReceipt)}},
+  app.post<{Params:{round_id:string};Body:{request_key:string;team_round_id:string;report_id:string|null;delta:number;reason:string;expected_revision:string;own_code?:string}}>("/staff/competition/rounds/:round_id/score-adjustments",{onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,params:competitionSchema.roundParams,body:reportSchema.scoreBody,response:schema.responses(reportSchema.scoreReceipt)}},
     async r=>wrap(r,await reports.adjust(r.cookies[policy.names.staff],r.params.round_id,{requestKey:r.body.request_key,teamRoundId:r.body.team_round_id,reportId:r.body.report_id,delta:r.body.delta,reason:r.body.reason,expectedRevision:r.body.expected_revision,ownCode:r.body.own_code})));
   for(const [name,kind,receipt] of [["report-decisions","decision",reportSchema.decision],["score-adjustments","score",reportSchema.scoreReceipt]] as const)
     app.get<{Params:{round_id:string;request_key:string}}>(`/staff/competition/rounds/:round_id/${name}/outcomes/:request_key`,{exposeHeadRoute:false,schema:{querystring:schema.empty,params:competitionSchema.outcomeParams,response:schema.responses(reportSchema.outcome(receipt))}},
@@ -317,7 +316,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     bodyLimit: 16384, onRequest: writeHooks("STAFF"), schema: { querystring: schema.empty, params: competitionSchema.roundParams, body: competitionSchema.commandBody, response: schema.responses(competitionSchema.receipt) },
   }, async request => wrap(request, await competition.command(request.cookies[policy.names.staff], { action: request.body.action, roundId: request.params.round_id, requestKey: request.body.request_key,
     expectedRevision: request.body.expected_revision, reason: request.body.reason, payload: request.body.payload, ...(request.body.own_code === undefined ? {} : { ownCode: request.body.own_code }) })));
-  app.post<{ Params: { snapshot_id: string }; Body: { run_id: string; review: string;request_key:string;expected_revision:string;own_code:string } }>("/staff/competition/publications/:snapshot_id", {
+  app.post<{ Params: { snapshot_id: string }; Body: { run_id: string; review: string;request_key:string;expected_revision:string;own_code?:string } }>("/staff/competition/publications/:snapshot_id", {
     bodyLimit:16384,onRequest: writeHooks("STAFF"), schema: { querystring: schema.empty, params: schema.validationSnapshotParams, body: competitionSchema.publishBody,
       response:{...schema.responses(competitionSchema.publication),409:{anyOf:[schema.envelope(competitionSchema.publication),schema.responses(competitionSchema.publication).default]}} },
   }, async (request,reply) => {
@@ -371,7 +370,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   app.get<{ Params: { round_id: string; parent_id: string } }>("/competition/rounds/:round_id/judging/:parent_id", { exposeHeadRoute: false,
     schema: { querystring: schema.empty, params: competitionSchema.judgingParams, response: schema.responses(competitionSchema.judging) } },
   async request => wrap(request, await competition.judging(request.cookies[policy.names.participant], request.params.round_id, request.params.parent_id)));
-  app.post<{ Params: { round_id: string; job_id: string }; Body: { request_key: string; reason: string; own_code: string } }>("/staff/competition/rounds/:round_id/jobs/:job_id/retry", {
+  app.post<{ Params: { round_id: string; job_id: string }; Body: { request_key: string; reason: string; own_code?: string } }>("/staff/competition/rounds/:round_id/jobs/:job_id/retry", {
     bodyLimit: 16384, onRequest: writeHooks("STAFF"), schema: { querystring: schema.empty, params: competitionSchema.retryParams, body: competitionSchema.retryBody, response: schema.responses(competitionSchema.receipt) },
   }, async request => wrap(request, await competition.retryJob(request.cookies[policy.names.staff], request.params.round_id, request.params.job_id, request.body.request_key, request.body.reason, request.body.own_code)));
   app.get<{ Params: { round_id: string }; Querystring: JudgingFilters & { after?: string } }>("/staff/competition/rounds/:round_id/judging", { exposeHeadRoute: false,preSerialization:boundedResponse(1048576),
@@ -522,7 +521,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
       runtimeId:request.body.runtime_id,generation:request.body.generation,reason:request.body.reason})));
 
   app.post<{Body:{action:"BLOCK"|"UNBLOCK"|"PENALISE"|"REVERSE";arena_id:string;team_id:string;member_id:string|null;round_id:string|null;
-    block_id:string|null;original_id:string|null;minutes:number|null;expected_revision:string;request_key:string;reason:string;own_code:string}}>("/staff/discipline",{
+    block_id:string|null;original_id:string|null;minutes:number|null;expected_revision:string;request_key:string;reason:string;own_code?:string}}>("/staff/discipline",{
     onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,body:schema.disciplineBody,response:schema.responses(schema.disciplineData)}},async request=>{
       const b=request.body;return wrap(request,await discipline.command(request.cookies[policy.names.staff],{action:b.action,arenaId:b.arena_id,teamId:b.team_id,
         memberId:b.member_id,roundId:b.round_id,blockId:b.block_id,originalId:b.original_id,minutes:b.minutes,expectedRevision:b.expected_revision,
@@ -539,7 +538,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
   app.post<{Body:{csv:string}}>("/staff/registrations/preview",{bodyLimit:2097152,config:{largeContent:true},onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,
     body:schema.registrationPreviewBody,response:schema.responses(schema.registrationPreviewData)}},async request=>
     wrap(request,await registrations.preview(request.cookies[policy.names.staff],request.body.csv)));
-  app.post<{Body:{csv:string;csv_digest:string;expected_revision:string;request_key:string;own_code:string;reason:string}}>("/staff/registrations/import",{
+  app.post<{Body:{csv:string;csv_digest:string;expected_revision:string;request_key:string;own_code?:string;reason:string}}>("/staff/registrations/import",{
     bodyLimit:2097152,config:{largeContent:true},onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,body:schema.registrationImportBody,response:schema.responses(schema.registrationImportData)}},async request=>{
       const b=request.body;return wrap(request,await registrations.commit(request.cookies[policy.names.staff],{csv:b.csv,csvDigest:b.csv_digest,expectedRevision:b.expected_revision,
         requestKey:b.request_key,ownCode:b.own_code,reason:b.reason}));
@@ -548,7 +547,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     schema:{querystring:schema.empty,params:schema.replacementOutcomeParams,response:schema.responses(schema.registrationOutcomeData)}},async request=>
     wrap(request,await registrations.outcome(request.cookies[policy.names.staff],request.params.request_key)));
 
-  type TeamBody={request_key:string;expected_revision:string;own_code:string;reason:string;team_name?:string;member_one?:string;member_two?:string};
+  type TeamBody={request_key:string;expected_revision:string;own_code?:string;reason:string;team_name?:string;member_one?:string;member_two?:string};
   for(const action of ["CREATE","ROTATE","ISSUE","REVOKE"] as const) {
     app.post<{Body:TeamBody;Params:{team_id?:string}}>(action==="CREATE"?"/staff/teams":`/staff/teams/:team_id/${action.toLowerCase()}-code`,{
       bodyLimit:16384,onRequest:writeHooks("STAFF"),schema:{querystring:schema.empty,...(action==="CREATE"?{}:{params:schema.teamTargetParams}),
@@ -564,7 +563,7 @@ export const entryHttp: FastifyPluginAsync<EntryHttpOptions> = async (app, optio
     schema:{querystring:schema.empty,params:schema.replacementOutcomeParams,response:schema.responses(schema.teamOutcomeData)}},async request=>
     wrap(request,await teamManagement.outcome(request.cookies[policy.names.staff],request.params.request_key)));
 
-  type StaffBody={request_key:string;expected_revision:string;own_code:string;reason:string;display_name?:string;role?:"OWNER"|"ORGANISER";enabled?:boolean};
+  type StaffBody={request_key:string;expected_revision:string;own_code?:string;reason:string;display_name?:string;role?:"OWNER"|"ORGANISER";enabled?:boolean};
   const managedResponses={...schema.responses(schema.staffManagementData),409:{anyOf:[schema.envelope(schema.staffManagementData),schema.responses(schema.staffManagementData).default]}};
   for(const action of ["CREATE","UPDATE","ROTATE"] as const){
     const path=action==="CREATE"?"/staff/staff-identities":`/staff/staff-identities/:staff_id/${action==="UPDATE"?"update":"rotate-code"}`;

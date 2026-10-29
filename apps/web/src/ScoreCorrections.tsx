@@ -37,7 +37,6 @@ export default function ScoreCorrections({
     [team, setTeam] = useState(""),
     [delta, setDelta] = useState(""),
     [reason, setReason] = useState(""),
-    [code, setCode] = useState(""),
     [report, setReport] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -93,7 +92,7 @@ export default function ScoreCorrections({
       );
       setDelta("");
       setReason("");
-      setCode("");
+
       setReport("");
       setDialog(true);
     } catch (e) {
@@ -116,7 +115,7 @@ export default function ScoreCorrections({
               report_id: report.trim() || null,
               delta: Number(delta),
               reason,
-              own_code: code,
+
               expected_revision: revision.current,
             },
             `${path}/outcomes`,
@@ -134,7 +133,6 @@ export default function ScoreCorrections({
     } catch (e) {
       setError(errorText(e));
     } finally {
-      setCode("");
       setBusy(false);
     }
   }
@@ -142,7 +140,6 @@ export default function ScoreCorrections({
     invalid =
       !team ||
       !reason.trim() ||
-      !code.trim() ||
       !Number.isInteger(number) ||
       !number ||
       Math.abs(number) > 1000000;
@@ -279,19 +276,7 @@ export default function ScoreCorrections({
                 disabled={busy || command.current.unresolved}
               />
             </label>
-            <label>
-              Your staff code
-              <input
-                aria-label="Your staff code"
-                type="password"
-                autoComplete="off"
-                maxLength={96}
-                required
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                disabled={busy || command.current.unresolved}
-              />
-            </label>
+
             <button
               className="primary"
               disabled={

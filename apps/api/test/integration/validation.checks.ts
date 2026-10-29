@@ -46,7 +46,7 @@ export async function validationChecks(t:TestContext,ownerConnection:string,apiC
   try {
     await t.test("incomplete drafts get durable field-only preparation receipts, with role checks and actor-owned recovery",async()=>{
       const actor=await person(),organiser=await person("ORGANISER"),d=await command(actor,"CREATE",null,{round_type:1,...metadata}),input=await intent(d.version_id!);
-      await assert.rejects(service.prepare(organiser.sessionCookie,input),denied("ACCESS_UNAVAILABLE"));
+      assert.equal((await service.prepare(organiser.sessionCookie,input)).reason,"CONTENT_INCOMPLETE");
       await assert.rejects(service.prepare(actor.sessionCookie,{...input,versionId:"invalid"}),denied("INVALID_CONTEXT"));
       const before=(await owner.query("SELECT last_activity_at FROM staff_sessions WHERE id=$1",[actor.session.session_id])).rows;
       const result=await service.prepare(actor.sessionCookie,input);assert.equal(result.reason,"CONTENT_INCOMPLETE");assert.equal(result.snapshot_id,null);
@@ -168,8 +168,8 @@ export async function validationChecks(t:TestContext,ownerConnection:string,apiC
         assert.doesNotMatch(summary.body,/private source|private expected|private hint|private defect|manifest_text|credential/);
         const recovery=await client.send(`/api/v1/staff/outcomes/validation-preparation/${version}/${body.request_key}`);assert.deepEqual(recovery.json().data.outcome,data);
         const stale=await client.send(url,{...body,request_key:randomUUID(),expected_revision:"0"},client.token);assert.equal(stale.statusCode,409);assert.equal(stale.json().data.reason,"STALE_VERSION");
-        const organiser=await browser(await person("ORGANISER"));assert.equal((await organiser.send(url,body,organiser.token)).statusCode,403);
-        assert.equal((await organiser.send(`/api/v1/staff/content/validation-snapshots/${data.snapshot_id}/summary`)).statusCode,403);
+        const organiser=await browser(await person("ORGANISER"));assert.equal((await organiser.send(url,body,organiser.token)).statusCode,200);
+        assert.equal((await organiser.send(`/api/v1/staff/content/validation-snapshots/${data.snapshot_id}/summary`)).statusCode,200);
       });
     } finally {await app.close();}
     const runnable=(await owner.query("SELECT id FROM validation_snapshots WHERE version_id=$1 ORDER BY content_revision DESC LIMIT 1",[version])).rows[0].id;

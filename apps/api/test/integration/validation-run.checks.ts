@@ -86,7 +86,7 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
     assert.equal((await service.outcome(actor.sessionCookie,snapshotId,command.requestKey)).status,"NOT_OBSERVED");
     assert.equal((await owner.query("SELECT count(*)::integer AS n FROM validation_runs")).rows[0].n,0);
     assert.equal((await owner.query("SELECT count(*)::integer AS n FROM authoring_checks")).rows[0].n,0);
-    await assert.rejects(service.admit((await person("ORGANISER")).sessionCookie,command),denied("ACCESS_UNAVAILABLE"));
+    await assert.rejects(service.admit((await person("ORGANISER")).sessionCookie,command),denied("REQUEST_CAPACITY_UNAVAILABLE"));
   });
   await t.test("a compatible trusted driver acquires one worker lease; readiness/profile mismatches cannot create a runnable binding",async()=>{
     await owner.query("INSERT INTO judge_host_epochs(id,state,endpoint_ref,created_at) VALUES($1,'ACTIVE',$2,date_trunc('milliseconds',clock_timestamp()))",[hostEpochId,driver.endpointRef]);
@@ -243,9 +243,9 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
     assert.equal(await finish(run),"PASSED");
     const report=await client.send(`/api/v1/staff/content/validation-runs/${run}`);assert.equal(report.statusCode,200,report.body);assert.equal(report.json().data.checks.length,15);assert.equal(report.headers["cache-control"],"no-store");
     assert.doesNotMatch(report.body,/private expected|private source|endpoint_ref|compiler_output|stdout_prefix|credential_id/);
-    const organiser=await browser(await person("ORGANISER"));assert.equal((await organiser.send(`/api/v1/staff/content/validation-runs/${run}`)).statusCode,403);
-    assert.equal((await organiser.send(url,body,organiser.token)).statusCode,403);
-    assert.equal((await owner.query("SELECT count(*)::integer AS n FROM validation_run_audits WHERE run_id=$1",[run])).rows[0].n,1);
+    const organiser=await browser(await person("ORGANISER"));assert.equal((await organiser.send(`/api/v1/staff/content/validation-runs/${run}`)).statusCode,200);
+    assert.equal((await organiser.send(url,{...body,expected_revision:"999999"},organiser.token)).statusCode,409);
+    assert.equal((await owner.query("SELECT count(*)::integer AS n FROM validation_run_audits WHERE run_id=$1",[run])).rows[0].n,2);
   });}finally{await app.close();}
   await t.test("separate restricted automatic worker completes all five-language validation checks without manual ticks",async()=>{
     mode="NORMAL";ready=true;sendHook=undefined;

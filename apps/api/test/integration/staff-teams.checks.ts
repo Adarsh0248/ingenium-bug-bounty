@@ -1,3 +1,5 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
@@ -42,21 +44,19 @@ export async function staffTeamsChecks(
     dialog = () => page.getByRole("dialog"),
     title = "Synthetic browser registered team";
   async function review(code = c.staff.code) {
-    await form()
-      .getByLabel("Registration audit reason")
-      .fill("Synthetic browser registration approval");
-    await form()
-      .getByRole("button", { name: "Review team change", exact: true })
-      .click();
-    await dialog().getByLabel("Your staff code").fill(code);
     await c.budgets();
-    await dialog()
-      .getByRole("button", { name: "Confirm team change", exact: true })
-      .click();
+    if (await form().getByRole("button", {name:"Create team",exact:true}).count()) {
+      await supplyLegacyStaffCode(form(), code);
+      await form().getByRole("button", {name:"Create team",exact:true}).click();
+    } else {
+      await form().getByRole("button", {name:"Review team change",exact:true}).click();
+      await supplyLegacyStaffCode(dialog(), code);
+      await dialog().getByRole("button", {name:"Confirm team change",exact:true}).click();
+    }
   }
   async function create(name = title) {
     await page
-      .getByRole("button", { name: "Register team", exact: true })
+      .getByRole("button", { name: "Add team manually", exact: true })
       .click();
     await form().getByLabel("Team name", { exact: true }).fill(name);
     await form().getByLabel("Member 1 name").fill("Synthetic member one");
@@ -87,13 +87,13 @@ export async function staffTeamsChecks(
   try {
     await c.budgets();
     await page.goto(origin);
-    await page.getByRole("button", { name: "teams", exact: true }).click();
+    await openStaffView(page, "Teams");
     await expect(
-      page.getByRole("heading", { name: "Team registrations", exact: true }),
+      page.getByRole("heading", { name: "Teams", exact: true }),
     ).toBeVisible();
     await create();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     await review("A".repeat(32));
     await expect(page.getByRole("alert")).toContainText("Confirmation failed");
@@ -206,7 +206,7 @@ export async function staffTeamsChecks(
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     await c.budgets();
     await page
@@ -218,7 +218,7 @@ export async function staffTeamsChecks(
     assert.equal(posts, 1);
     await expect(dialog()).not.toBeVisible();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeEnabled();
     assert.equal(
       (
@@ -241,13 +241,13 @@ export async function staffTeamsChecks(
       .click();
     await expect(form()).toHaveCount(0);
     await c.budgets();
-    await page.getByRole("button", { name: "setup", exact: true }).click();
+    await openStaffView(page, "Arena setup");
     await expect(page.getByText(title, { exact: true })).toBeVisible();
     await page.reload();
     await c.budgets();
-    await page.getByRole("button", { name: "teams", exact: true }).click();
+    await openStaffView(page, "Teams");
     await expect(
-      page.getByRole("heading", { name: "Team registrations", exact: true }),
+      page.getByRole("heading", { name: "Teams", exact: true }),
     ).toBeVisible();
     await expect(dialog()).not.toBeVisible();
     assert.equal(
@@ -274,11 +274,11 @@ export async function staffTeamsChecks(
         p.getByRole("navigation", { name: "Control room views" }),
       ).toBeVisible();
       await expect(
-        p.getByRole("button", { name: "teams", exact: true }),
-      ).toHaveCount(0);
+        p.getByRole("button", { name: "Teams", exact: true }),
+      ).toBeVisible();
       assert.equal(
         (await p.request.get(`${origin}/api/v1/staff/teams`)).status(),
-        403,
+        200,
       );
     } finally {
       await organiser.close();

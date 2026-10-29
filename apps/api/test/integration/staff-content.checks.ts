@@ -1,3 +1,5 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
@@ -85,17 +87,16 @@ export async function staffContentChecks(
       .getByRole("button", { name, exact: true })
       .click();
   }
-  async function save(action = "Review save") {
-    await editor().getByRole("button", { name: action, exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog
-      .getByLabel("Audit reason", { exact: true })
-      .fill("Synthetic browser content edit");
+  async function save(action?: string) {
     await c.budgets();
-    await dialog
-      .getByRole("button", { name: "Confirm change", exact: true })
-      .click();
-    await expect(dialog).not.toBeVisible();
+    await editor().getByRole("button", {name:action ?? /^(Save changes|Save question & add code)$/,exact:true}).click();
+    const dialog = page.getByRole("dialog");
+    if (await dialog.isVisible()) {
+      await dialog.getByLabel("Change note",{exact:true}).fill("Synthetic browser content edit");
+      await c.budgets();
+      await dialog.getByRole("button", {name:"Confirm change",exact:true}).click();
+      await expect(dialog).not.toBeVisible();
+    }
   }
   async function done() {
     await expect(editor()).toHaveCount(0);
@@ -118,7 +119,7 @@ export async function staffContentChecks(
       buffer: Buffer.from(text),
     });
     await expect(
-      editor().getByRole("button", { name: "Review save", exact: true }),
+      editor().getByRole("button", { name: /^(Save changes|Save question & add code)$/, exact: true }),
     ).toBeEnabled();
   }
   async function inspectBytes(section: "VARIANTS" | "CASES", target: string) {
@@ -129,16 +130,16 @@ export async function staffContentChecks(
   try {
     await c.budgets();
     await page.goto(origin);
-    await page.getByRole("button", { name: "library", exact: true }).click();
-    await page.getByRole("button", { name: "New bug", exact: true }).click();
+    await openStaffView(page, "Questions");
+    await page.getByRole("button", { name: "Add question manually", exact: true }).click();
     await page.getByLabel("Title", { exact: true }).fill(title);
     await page
       .getByLabel("Statement", { exact: true })
       .fill("Synthetic full-program input/output statement.");
     await page.getByLabel("Difficulty", { exact: true }).fill("95");
-    await expect(page.getByText("Bounty: 950", { exact: true })).toBeVisible();
+    await expect(page.getByText("Bounty: 4750", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     let posts = 0,
       drop = true;
@@ -163,7 +164,7 @@ export async function staffContentChecks(
       page.getByText("Save outcome unknown", { exact: true }),
     ).toBeVisible();
     await expect(
-      editor().getByRole("button", { name: "Review save", exact: true }),
+      editor().getByRole("button", { name: /^(Save changes|Save question & add code)$/, exact: true }),
     ).toBeDisabled();
     await page
       .getByRole("button", { name: "Check original receipt", exact: true })
@@ -177,10 +178,10 @@ export async function staffContentChecks(
       )
     ).rows;
     assert.equal(stored.length, 1);
-    assert.equal(stored[0].base_bounty, 950);
+    assert.equal(stored[0].base_bounty, 4750);
     id = stored[0].id;
 
-    await tab("Validation");
+    await tab("Validate & publish");
     await page
       .getByRole("button", { name: "Prepare validation", exact: true })
       .click();
@@ -232,7 +233,7 @@ export async function staffContentChecks(
       "Local conflicting title",
     );
     await cancel(true);
-    await page.getByRole("button", { name: "Library", exact: true }).click();
+    await page.getByRole("button", { name: "All questions", exact: true }).click();
     await page
       .getByRole("button", { name: `Open ${title} version 1`, exact: true })
       .click();
@@ -243,7 +244,7 @@ export async function staffContentChecks(
     await tab("Languages");
     const exact = "\ufeff// synthetic\r\n\0",
       reference = "// synthetic reference\r\n";
-    for (const language of ["c", "cpp", "java", "python", "javascript"]) {
+    for (const language of ["c", "cpp", "java", "python"]) {
       await c.budgets();
       await page.getByLabel("Language", { exact: true }).selectOption(language);
       await page
@@ -329,8 +330,8 @@ export async function staffContentChecks(
       hidden.case_id,
     );
 
-    await tab("Starter failures");
-    for (const language of ["c", "cpp", "java", "python", "javascript"]) {
+    await tab("Bug checks");
+    for (const language of ["c", "cpp", "java", "python"]) {
       await c.budgets();
       await page.getByLabel("Language", { exact: true }).selectOption(language);
       await page
@@ -347,7 +348,7 @@ export async function staffContentChecks(
           .getByRole("button", { name: "Add starter failure", exact: true })
           .click();
         await expect(
-          editor().getByRole("button", { name: "Review save", exact: true }),
+          editor().getByRole("button", { name: /^(Save changes|Save question & add code)$/, exact: true }),
         ).toBeDisabled();
         await page
           .getByRole("button", { name: "Remove failure 2", exact: true })
@@ -396,7 +397,7 @@ export async function staffContentChecks(
       await save();
       await done();
     }
-    await tab("Validation");
+    await tab("Validate & publish");
     await page
       .getByRole("button", { name: "Prepare validation", exact: true })
       .click();
@@ -409,7 +410,7 @@ export async function staffContentChecks(
       .getByRole("button", { name: "Inspect frozen check plan", exact: true })
       .click();
     await expect(page.locator(".staff-reference").last()).toContainText(
-      "15 checks",
+      "12 checks",
     );
     assert.equal(
       (
@@ -493,13 +494,13 @@ export async function staffContentChecks(
         )
       ).rows[0].n as number;
     }
-    for (let i = 0; i < 80 && (await completed()) < 14; i++)
+    for (let i = 0; i < 80 && (await completed()) < 11; i++)
       await c.validationWorker.tick();
-    assert.equal(await completed(), 14);
+    assert.equal(await completed(), 11);
     c.held.add(runId);
-    for (let i = 0; i < 10 && (await completed()) < 15; i++)
+    for (let i = 0; i < 10 && (await completed()) < 12; i++)
       await c.validationWorker.tick();
-    assert.equal(await completed(), 15);
+    assert.equal(await completed(), 12);
     await page
       .getByRole("button", { name: "Refresh validation report", exact: true })
       .click();
@@ -530,7 +531,7 @@ export async function staffContentChecks(
     await c.budgets();
     await assert.rejects(
       publications.publish(c.organiser.sessionCookie, heldIntent),
-      { code: "ACCESS_UNAVAILABLE" },
+      { code: "STAFF_CONFIRMATION_REQUIRED" },
     );
     await assert.rejects(
       publications.publish(c.staff.sessionCookie, {
@@ -623,9 +624,7 @@ export async function staffContentChecks(
     ).toBeDisabled();
     for (const check of await review.getByRole("checkbox").all())
       await check.check();
-    await review
-      .getByLabel("Your staff code", { exact: true })
-      .fill("A".repeat(32));
+    await supplyLegacyStaffCode(review, "A".repeat(32));
     await c.budgets();
     await review
       .getByRole("button", { name: "Confirm publication", exact: true })
@@ -633,9 +632,7 @@ export async function staffContentChecks(
     await expect(review.getByRole("alert")).toContainText(
       "Confirmation failed",
     );
-    await review
-      .getByLabel("Your staff code", { exact: true })
-      .fill(c.staff.code);
+    await supplyLegacyStaffCode(review, c.staff.code);
     let publicationPosts = 0;
     await page.route(
       `**/api/v1/staff/competition/publications/${snapshotId}`,
@@ -715,9 +712,9 @@ export async function staffContentChecks(
       null,
     );
     await page.reload();
-    await page.getByRole("button", { name: "library", exact: true }).click();
+    await openStaffView(page, "Questions");
     await page.locator(`[data-version-id="${id}"]`).getByRole("button").click();
-    await tab("Validation");
+    await tab("Validate & publish");
     await expect(page.locator(`[data-run-id="${runId}"]`)).toBeVisible();
     await expect(page.locator(".content-validation")).toContainText(
       `Run ${runId}`,
@@ -740,7 +737,7 @@ export async function staffContentChecks(
     const blank = await content.describe(c.staff.sessionCookie, second);
     assert.deepEqual(blank.variants, []);
     assert.deepEqual(blank.cases, []);
-    await page.getByRole("button", { name: "Library", exact: true }).click();
+    await page.getByRole("button", { name: "All questions", exact: true }).click();
     const published = (
       await c.owner.query(
         "SELECT id,title,version_number FROM bug_versions WHERE publication_status='PUBLISHED' LIMIT 1",
@@ -781,7 +778,7 @@ export async function staffContentChecks(
         reason: "Synthetic publication-to-selection verification",
       },
     );
-    await page.getByRole("button", { name: "bounties", exact: true }).click();
+    await openStaffView(page, "Round questions");
     await expect(
       page.getByRole("checkbox", { name: `Select bug ${title}`, exact: true }),
     ).toBeVisible();
@@ -798,13 +795,13 @@ export async function staffContentChecks(
     await page.reload();
     await expect(page.getByText("CONTROL ROOM", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "library", exact: true }),
-    ).toHaveCount(0);
+      page.getByRole("button", { name: "Questions", exact: true }),
+    ).toBeVisible();
     assert.equal(
       (
         await page.request.get(`${origin}/api/v1/staff/content/versions`)
       ).status(),
-      403,
+      200,
     );
     for (const path of [
       `/staff/content/versions/${id}/validation-snapshots`,
@@ -814,7 +811,7 @@ export async function staffContentChecks(
     ])
       assert.equal(
         (await page.request.get(`${origin}/api/v1${path}`)).status(),
-        403,
+        200,
       );
     assert.deepEqual(errors, []);
     for (const storage of ["localStorage", "sessionStorage"] as const)

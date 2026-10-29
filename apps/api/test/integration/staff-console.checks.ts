@@ -1,3 +1,5 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
@@ -43,15 +45,16 @@ export async function staffConsoleChecks(
     JOIN arena_control a ON a.current_instance_id=r.arena_instance_id ORDER BY r.kind DESC LIMIT 1`)
     ).rows[0];
   async function confirm(sensitive = true) {
+    if (!sensitive) return;
     const modal = page.getByRole("dialog");
     await modal
-      .getByLabel("Audit reason")
+      .getByLabel("Change note")
       .fill("Disposable browser control-room check");
-    if (sensitive) await modal.getByLabel("Your staff code").fill(c.staff.code);
+    if (sensitive) await supplyLegacyStaffCode(modal, c.staff.code);
     else await expect(modal.getByLabel("Your staff code")).toHaveCount(0);
     await c.budgets();
     await modal
-      .getByRole("button", { name: "Confirm command", exact: true })
+      .getByRole("button", { name: /^(Start round|Pause actions|Resume actions|Close round|Finalise results|Lock qualification|Discard arena)$/ })
       .click();
     await expect(modal).not.toBeVisible();
   }
@@ -64,7 +67,7 @@ export async function staffConsoleChecks(
     await expect.poll(async () => (await state())?.state).toBe(wanted);
   }
   async function monitor() {
-    await page.getByRole("button", { name: "monitor", exact: true }).click();
+    await openStaffView(page, "Live overview");
   }
   try {
     await c.budgets();
@@ -227,10 +230,10 @@ export async function staffConsoleChecks(
     );
     await expect(
       observer.getByRole("button", { name: "Pause round", exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
     await expect(
       observer.getByRole("button", { name: /^Pause member/ }),
-    ).toHaveCount(0);
+    ).toHaveCount(4);
     await readOnly.close();
 
     await command("Close round");
@@ -249,7 +252,7 @@ export async function staffConsoleChecks(
         ),
       )
       .toBeGreaterThan(0);
-    await page.getByRole("button", { name: "setup", exact: true }).click();
+    await openStaffView(page, "Arena setup");
     await expect(page.getByLabel("Round 2 duration (minutes)")).toBeVisible();
     await page.getByLabel("Round 2 duration (minutes)").fill("90");
     await command("Save Round 2 setup", false);
@@ -259,12 +262,12 @@ export async function staffConsoleChecks(
     ).toHaveAttribute("aria-pressed", "true");
     const second = await state();
     assert.equal(second.arena_instance_id, original.arena_instance_id);
-    await page.getByRole("button", { name: "bounties", exact: true }).click();
+    await openStaffView(page, "Round questions");
     const picks = page.getByRole("checkbox", { name: /^Select bug/ });
     await expect(picks).toHaveCount(2);
     await picks.nth(0).check();
     await picks.nth(1).check();
-    await command("Save bug selection", false);
+    await command("Save round questions", false);
     await command("Prepare configuration", false);
     await expectState("READY");
     await c.judge.claim();
@@ -331,7 +334,7 @@ export async function staffConsoleChecks(
       (await state()).arena_instance_id,
       original.arena_instance_id,
     );
-    await page.getByRole("button", { name: "bounties", exact: true }).click();
+    await openStaffView(page, "Round questions");
     await page
       .getByRole("checkbox", { name: /^Select bug/ })
       .first()
@@ -351,7 +354,7 @@ export async function staffConsoleChecks(
       reason: "Concurrent synthetic admin edit",
       payload: { snapshots: [snapshot] },
     });
-    await command("Save bug selection", false);
+    await command("Save round questions", false);
     await expect(page.getByRole("alert")).toContainText("stale version");
     await expect(
       page.getByText("Unsaved selection", { exact: true }),

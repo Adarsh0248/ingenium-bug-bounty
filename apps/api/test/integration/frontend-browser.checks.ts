@@ -77,6 +77,7 @@ export async function participantBrowserChecks(t: TestContext, c: Context) {
         ).toBeVisible({ timeout: 15000 });
         await expect(page.locator(".preview-label")).toHaveCount(0);
         await page.locator(`[data-bounty-id="${arena.x}"]`).click();
+        await page.getByRole("button",{name:"Open question",exact:true}).click();
         await page
           .getByRole("button", { name: "Plain text", exact: true })
           .click();
@@ -128,6 +129,7 @@ export async function participantBrowserChecks(t: TestContext, c: Context) {
           page.getByText("STATE VERIFIED", { exact: true }),
         ).toBeVisible({ timeout: 15000 });
         await page.locator(`[data-bounty-id="${arena.x}"]`).click();
+        await page.getByRole("button",{name:"Open question",exact:true}).click();
         await page
           .getByRole("button", { name: "Plain text", exact: true })
           .click();

@@ -1,3 +1,6 @@
+import { supplyLegacyStaffCode } from "./browser-app.js";
+import { fillStaffNote } from "./browser-app.js";
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { expect } from "@playwright/test";
@@ -73,7 +76,7 @@ export async function staffAccessChecks(
       name: "Confirm access change",
       exact: true,
     });
-    if (sensitive) await dialog.getByLabel("Your staff code").fill(code);
+    if (sensitive) await supplyLegacyStaffCode(dialog, code);
     await c.budgets();
     await dialog
       .getByRole("button", { name: "Confirm access change", exact: true })
@@ -81,7 +84,7 @@ export async function staffAccessChecks(
     await expect(dialog).not.toBeVisible();
   }
   async function review(name = "Synthetic access administration") {
-    await page.getByLabel("Access audit reason").fill(name);
+    await fillStaffNote(page, "Access note", name);
     await page
       .getByRole("button", { name: "Review access change", exact: true })
       .click();
@@ -164,7 +167,7 @@ export async function staffAccessChecks(
     await expect(page.locator(".staff-header .connection")).toHaveText("Live", {
       timeout: 20000,
     });
-    await page.getByRole("button", { name: "staff", exact: true }).click();
+    await openStaffView(page, "Staff");
     await expect(
       page.getByRole("heading", { name: "Staff access", exact: true }),
     ).toBeVisible();
@@ -173,7 +176,7 @@ export async function staffAccessChecks(
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Add staff", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     await page.getByLabel("Staff name", { exact: true }).fill("Support Delta");
     await review();
@@ -181,7 +184,7 @@ export async function staffAccessChecks(
       page
         .getByRole("dialog")
         .getByRole("button", { name: "Confirm access change", exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     await finish(true, "A".repeat(32));
     await expect(page.locator(".staff-access [role=alert]")).toContainText(
       "Confirmation failed",
@@ -220,7 +223,7 @@ export async function staffAccessChecks(
       { timeout: 15000 },
     );
     await expect(
-      support.getByRole("button", { name: "staff", exact: true }),
+      support.getByRole("button", { name: "Staff", exact: true }),
     ).toHaveCount(0);
     assert.equal(
       (await support.request.get("/api/v1/staff/staff-identities")).status(),
@@ -313,7 +316,7 @@ export async function staffAccessChecks(
       page.getByText("Access command outcome unconfirmed.", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "monitor", exact: true }),
+      page.getByRole("button", { name: "Live overview", exact: true }),
     ).toBeDisabled();
     drop = false;
     await c.budgets();
@@ -362,7 +365,7 @@ export async function staffAccessChecks(
     await expect(org.locator(".staff-header .connection")).toHaveText("Live", {
       timeout: 15000,
     });
-    await org.getByRole("button", { name: "access", exact: true }).click();
+    await openStaffView(org, "Participant access");
     await expect(
       org.getByRole("heading", { name: "Browser replacements", exact: true }),
     ).toBeVisible();
@@ -397,9 +400,7 @@ export async function staffAccessChecks(
         exact: true,
       })
       .click();
-    await org
-      .getByLabel("Access audit reason")
-      .fill("Verified member and browser in person");
+    await fillStaffNote(org, "Access note", "Verified member and browser in person");
     await org
       .getByRole("button", { name: "Review access change", exact: true })
       .click();
@@ -485,9 +486,7 @@ export async function staffAccessChecks(
       )
     ).rows.map((row) => row.id);
     assert.equal(activeBefore.length, 1);
-    await org
-      .getByLabel("Access audit reason")
-      .fill("Synthetic rejection after identity review");
+    await fillStaffNote(org, "Access note", "Synthetic rejection after identity review");
     await org
       .getByRole("button", { name: "Review access change", exact: true })
       .click();

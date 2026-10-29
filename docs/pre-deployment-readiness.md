@@ -1,9 +1,15 @@
 # Pre-deployment readiness
 
 Updated 29 October 2026. Overall completion is roughly **96%**, an engineering
-estimate rather than a launch certificate. The event remains undeployed. The
-current work uses disposable application databases and the approved private
-verification VM; it does not migrate the development or event database.
+estimate rather than a launch certificate. The competition remains closed. The
+public website, application database, entry API and first Super Admin are now
+installed and verified on the app VM; see [production deployment](production-deployment.md).
+The admin usability update adds direct manual teams/questions, editable draft
+arenas, normal staff setup authority and signed-in session authorization without
+repeated codes. The initial inspection for that update found three draft arenas;
+the update must preserve them and cannot start a round.
+The earlier rehearsal evidence below used disposable databases and the private
+verification VM. It does not certify the remaining production judging work.
 
 | Check | Current evidence |
 | --- | --- |
@@ -19,7 +25,7 @@ verification VM; it does not migrate the development or event database.
 | Slow-device/network emulation | At 1280×720 with 4× CPU throttling, warmed Round 1 districts measured about 21–30 FPS and Round 2 about 58 FPS. Tested a 150-ms/128-KB/s connection plus complete disconnection, local draft editing and reconnect without repeated submissions/purchases. No older laptop or campus LAN was available. These measurements do not certify physical-device smoothness. |
 | Registration and pacing | Actual registration remains deferred until the organiser export is available. No student pilot has verified the difficulty ratings or 30-solves-in-three-hours goal. |
 | Five-hour endurance | The earlier run ended after 82.6 minutes with 312 jobs, following the user's decision to prioritise other tests. Five uninterrupted hours remain unverified. |
-| Deployment operations | Public DNS/TLS, installed primary-host clock/service checks, off-host backup, alert delivery, final registration/content publication and operator sign-off remain deployment work. No launch is authorised by a local or private test. |
+| Deployment operations | Public DNS/TLS, app-host database/entry API, actual clock qualification and first Super Admin browser access passed on 29 October. The real judge connection, protected content publication, off-host backup, alert delivery, registration and operator sign-off remain open. No round was created or started. See [production deployment](production-deployment.md). |
 | Verification VM | Stopped deliberately and independently confirmed TERMINATED (`readiness-vm-state-20261029.log`). Both failed burst databases have private, root-only, hash-verified disk backups. The old records, checkpoints, eight held permits and exited execution containers are retained. A future boot requires fresh host qualification. |
 
 Evidence from this batch is under `apps/api/test-results/readiness-*20261029*`.

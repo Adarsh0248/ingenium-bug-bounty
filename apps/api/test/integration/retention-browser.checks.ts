@@ -1,3 +1,4 @@
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -36,9 +37,7 @@ export async function retentionBrowserChecks(
             writes.push(r.url());
         });
         await page.goto(origin);
-        await page
-          .getByRole("button", { name: "maintenance", exact: true })
-          .click();
+        await openStaffView(page, "System health");
         const panel = page.getByLabel("Data maintenance"),
           refresh = panel.getByRole("button", {
             name: "Refresh maintenance status",

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { commandFingerprint, newAccessCode, sameVerifier, uuid } from "./credentials.js";
-import { createStaffService, confirmStaffCode, staffOutcomeCapacity } from "./staff-service.js";
+import { createStaffService, staffActionVerifier, staffOutcomeCapacity } from "./staff-service.js";
 import type { SessionDelivery } from "./credentials.js";
 import { AccessError, accessTransaction, decisionTime, first } from "./transaction.js";
 import type { ClockGuard } from "./transaction.js";
@@ -15,7 +15,7 @@ interface Receipt {
   result_staff_id:string|null;result_credential_id:string|null;before_state:StaffState|null;after_state:StaffState|null;
 }
 export interface StaffCommand {
-  action:StaffAction;targetId:string|null;requestKey:string;expectedRevision:string;ownCode:unknown;reason:string;
+  action:StaffAction;targetId:string|null;requestKey:string;expectedRevision:string;ownCode?:unknown;reason:string;
   displayName:string|null;role:"OWNER"|"ORGANISER"|null;enabled:boolean|null;
 }
 export function boundedStaffText(value:unknown,max:number):string {
@@ -66,7 +66,7 @@ export function createStaffManagement(pool:Pool,clock:ClockGuard,delivery:Sessio
       validate(input);
       const initial=await sessions.inspect(cookie);if(initial.role!=="SUPER_ADMIN")throw new AccessError("ACCESS_UNAVAILABLE");
       await staffQuota(pool,clock,initial.staff_id,"STAFF_COMMAND");
-      await staffQuota(pool,clock,initial.session_id,"STAFF_CONFIRM");
+      if(input.ownCode!==undefined)await staffQuota(pool,clock,initial.session_id,"STAFF_CONFIRM");
       const fingerprint=commandFingerprint([input.action,input.targetId,input.expectedRevision,input.displayName,input.role,input.enabled,input.reason]);
       const generated=newAccessCode();
       return accessTransaction(pool,clock,async(client)=>{
@@ -75,7 +75,7 @@ export function createStaffManagement(pool:Pool,clock:ClockGuard,delivery:Sessio
         if(input.targetId)allowedTarget(before);
         const prior=await first<Receipt>(client,`SELECT * FROM staff_management_outcomes WHERE actor_id=$1 AND action=$2 AND target_staff_id IS NOT DISTINCT FROM $3::uuid AND request_key=$4`,[actor.staff_id,input.action,input.targetId,input.requestKey]);
         if(prior){if(!sameVerifier(prior.fingerprint,fingerprint))throw new AccessError("INTENT_CONFLICT");return{outcome:receiptView(prior),issued_code:null};}
-        await confirmStaffCode(client,actor,input.ownCode);
+        await staffActionVerifier(client,actor,input.ownCode);
         await staffOutcomeCapacity(client);
         const control=await first<{revision:string}>(client,"SELECT revision FROM security_control WHERE id=1");
         if(!control)throw new AccessError("SECURITY_UNAVAILABLE");

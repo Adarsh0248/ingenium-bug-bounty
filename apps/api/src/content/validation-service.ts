@@ -26,12 +26,10 @@ export function createValidationService(pool: Pool, clock: ClockGuard, delivery:
   const staff = createStaffService(pool, clock, delivery);
   async function principal(client: PoolClient, cookie: unknown, now: Date) {
     const actor = await staff.authorize(client, cookie, now);
-    if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     return actor;
   }
   async function budget(cookie: unknown, command = false) {
     const actor = await staff.inspect(cookie);
-    if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     await staffQuota(pool, clock, actor.staff_id, command ? "STAFF_COMMAND" : "READ_STAFF");
   }
   async function coordinated(client: PoolClient, cookie: unknown, versionId: string) {

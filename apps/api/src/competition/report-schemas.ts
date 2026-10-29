@@ -7,7 +7,7 @@ const text = { type: "string", maxLength: 1024 },
   time = { type: "string", format: "date-time", maxLength: 40 };
 const object = (
   properties: Record<string, unknown>,
-  required = Object.keys(properties),
+  required = Object.keys(properties).filter(key => key !== "own_code"),
 ) => ({ type: "object", additionalProperties: false, required, properties });
 const nullable = (value: unknown) => ({ anyOf: [value, { type: "null" }] });
 const list = (items: unknown) =>

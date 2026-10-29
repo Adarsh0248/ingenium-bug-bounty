@@ -1,3 +1,4 @@
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
@@ -39,7 +40,7 @@ export async function staffAuditBrowserChecks(
       });
       try {
         await page.goto(`${origin}/?arena=${fixture.arena}`);
-        await page.getByRole("button", { name: "audit", exact: true }).click();
+        await openStaffView(page, "Activity history");
         const panel = page.getByLabel("Staff audit history"),
           category = panel.getByLabel("Audit category"),
           scope = panel.getByLabel("Audit arena scope");
@@ -250,9 +251,7 @@ export async function staffAuditBrowserChecks(
           ]);
           const superPage = await superContext.newPage();
           await superPage.goto(origin);
-          await superPage
-            .getByRole("button", { name: "audit", exact: true })
-            .click();
+          await openStaffView(superPage, "Activity history");
           await superPage.getByLabel("Audit category").selectOption("STAFF");
           await expect(
             superPage.locator(".staff-audit tbody tr").first(),
@@ -274,11 +273,11 @@ export async function staffAuditBrowserChecks(
           const orgPage = await org.newPage();
           await orgPage.goto(origin);
           await expect(
-            orgPage.getByRole("button", { name: "monitor", exact: true }),
+            orgPage.getByRole("button", { name: "Live overview", exact: true }),
           ).toBeVisible();
           assert.equal(
             await orgPage
-              .getByRole("button", { name: "audit", exact: true })
+              .getByRole("button", { name: "Activity history", exact: true })
               .count(),
             0,
           );

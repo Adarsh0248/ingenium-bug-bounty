@@ -1,12 +1,12 @@
 import type { Pool, PoolClient } from "pg";
-import { canonicalCode, newAccessCode, sha256, uuid } from "./credentials.js";
+import { newAccessCode, sha256, uuid } from "./credentials.js";
 import type { SessionDelivery } from "./credentials.js";
 import { registrationCsv } from "./registration-csv.js";
 import type { RegistrationRow } from "./registration-csv.js";
 import { boundedStaffText, staffRevision } from "./staff-management.js";
 import {
   createStaffService,
-  confirmStaffCode,
+  staffActionVerifier,
   staffOutcomeCapacity,
 } from "./staff-service.js";
 import { staffQuota } from "./quotas.js";
@@ -52,16 +52,15 @@ export function createRegistrationImport(
   delivery: SessionDelivery,
 ) {
   const staff = createStaffService(pool, clock, delivery);
-  async function budget(cookie: unknown, write = false) {
+  async function budget(cookie: unknown, write = false, confirm = false) {
     const actor = await staff.inspect(cookie);
-    if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     await staffQuota(
       pool,
       clock,
       actor.staff_id,
       write ? "STAFF_COMMAND" : "READ_STAFF",
     );
-    if (write) await staffQuota(pool, clock, actor.session_id, "STAFF_CONFIRM");
+    if (confirm) await staffQuota(pool, clock, actor.session_id, "STAFF_CONFIRM");
   }
   async function principal(client: PoolClient, cookie: unknown) {
     const actor = await staff.authorize(
@@ -69,7 +68,6 @@ export function createRegistrationImport(
       cookie,
       await decisionTime(client, clock),
     );
-    if (actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     return actor;
   }
   return {
@@ -124,14 +122,14 @@ export function createRegistrationImport(
         csvDigest: string;
         expectedRevision: string;
         requestKey: string;
-        ownCode: unknown;
+        ownCode?: unknown;
         reason: string;
       },
     ) {
       uuid(input.requestKey);
       staffRevision(input.expectedRevision);
       boundedStaffText(input.reason, 1024);
-      await budget(cookie, true);
+      await budget(cookie, true, input.ownCode !== undefined);
       const parsed = registrationCsv(input.csv);
       if (parsed.issues.length || parsed.digest !== input.csvDigest)
         throw new AccessError("INVALID_CONTEXT");
@@ -143,7 +141,7 @@ export function createRegistrationImport(
         clock,
         async (client) => {
           const actor = await principal(client, cookie);
-          await confirmStaffCode(client, actor, input.ownCode);
+          const confirmation = await staffActionVerifier(client, actor, input.ownCode);
           const prior = await first(
             client,
             "SELECT id FROM registration_import_outcomes WHERE actor_id=$1 AND request_key=$2",
@@ -160,7 +158,7 @@ export function createRegistrationImport(
               Buffer.from(parsed.digest, "hex"),
               JSON.stringify(parsed.rows),
               input.reason,
-              sha256(canonicalCode(input.ownCode)),
+              confirmation,
               JSON.stringify(
                 [...generated].map(([registration_id, c]) => ({
                   registration_id,

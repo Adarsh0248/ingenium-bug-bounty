@@ -6,7 +6,7 @@ const instant = { type: "string", format: "date-time", maxLength: 24 };
 const token = { type: "string", minLength: 16, maxLength: 512 };
 const name = { type: "string", minLength: 1, maxLength: 120 };
 const audience = { type: "string", enum: ["ANONYMOUS", "ENTRY", "REPLACEMENT", "PARTICIPANT", "STAFF_ENTRY", "STAFF", "STAFF_RECOVERY_ENTRY", "STAFF_RECOVERY"] };
-const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", additionalProperties: false, required, properties });
+const object = (properties: Record<string, unknown>, required = Object.keys(properties).filter(key => key !== "own_code")) => ({ type: "object", additionalProperties: false, required, properties });
 const nullableId = { anyOf: [id, { type: "null" }] };
 
 export const empty = object({});
@@ -28,7 +28,7 @@ export const replacementRequestData = { oneOf: [object({ status: { const: "RESUM
   object({ status: { const: "REQUESTED", type: "string" }, request: replacementView, csrf_token: token })] };
 export const staffActivationBody = object({ request_key: id });
 export const clockClearBody = object({ own_code: verifyBody.properties.code, request_key: id, runtime_id: id,
-  generation: { type: "string", pattern: "^[1-9][0-9]{0,18}$" }, reason: { type: "string", minLength: 1, maxLength: 1024 } });
+  generation: { type: "string", pattern: "^[1-9][0-9]{0,18}$" }, reason: { type: "string", minLength: 1, maxLength: 1024 } }, ["own_code", "request_key", "runtime_id", "generation", "reason"]);
 export const clockStatus = object({ runtime_id: id, fault_generation: { type: "string", maxLength: 19 }, fault_latched: { type: "boolean" },
   state: { type: "string", enum: ["FAULT","HEALTHY","WARNING"] }, healthy_count: { type: "integer", const: 7 },expires_at:instant,warning_at:instant });
 export const clockClearData = object({ clearance_id: id, generation: { type: "string", maxLength: 19 }, cleared: { type: "boolean", const: true } });

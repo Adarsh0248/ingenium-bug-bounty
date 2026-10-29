@@ -1,3 +1,4 @@
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -35,9 +36,7 @@ export async function submissionReviewBrowserChecks(
       async function inspect() {
         await c.budgets();
         await page.goto(origin);
-        await page
-          .getByRole("button", { name: "judging", exact: true })
-          .click();
+        await openStaffView(page, "Submissions");
         const section = page.locator(".staff-judging");
         await section.getByLabel("Judging view").selectOption("ALL");
         await section
@@ -263,9 +262,7 @@ export async function submissionReviewBrowserChecks(
       const support = await organiser.newPage();
       await c.budgets();
       await support.goto(origin);
-      await support
-        .getByRole("button", { name: "judging", exact: true })
-        .click();
+      await openStaffView(support, "Submissions");
       await support.getByLabel("Judging view").selectOption("ALL");
       await support
         .locator(`[data-parent-id="${fixture.parent}"]`)

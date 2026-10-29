@@ -66,7 +66,6 @@ export default function StaffJudging({
     [intent, setIntent] = useState<string | null>(null),
     [confirmation, setConfirmation] = useState(""),
     [reason, setReason] = useState(""),
-    [code, setCode] = useState(""),
     [reviewBlocked, setReviewBlocked] = useState(false),
     [, render] = useState(0);
   const mounted = useRef(true),
@@ -132,7 +131,6 @@ export default function StaffJudging({
           if (e instanceof ApiError && [401, 403].includes(e.status)) {
             setQueue(null);
             setDetail(null);
-            setCode("");
           }
         }
       } finally {
@@ -166,7 +164,7 @@ export default function StaffJudging({
     setIntent(job.id);
     setConfirmation("");
     setReason("");
-    setCode("");
+
     setError("");
     setNotice("");
   }
@@ -197,18 +195,16 @@ export default function StaffJudging({
       !detail?.jobs.find((j) => j.id === intent)?.retry_allowed ||
       confirmation !== intent ||
       !reason.trim() ||
-      new TextEncoder().encode(reason).length > 1024 ||
-      !code.trim()
+      new TextEncoder().encode(reason).length > 1024
     )
       return;
-    const own = code;
-    setCode("");
+
     setBusy(true);
     setError("");
     try {
       const receipt = await command.current!.send(
         `${base}/jobs/${intent}/retry`,
-        { reason, own_code: own },
+        { reason },
       );
       if (mounted.current) acknowledge(receipt);
     } catch (e) {
@@ -445,8 +441,16 @@ export default function StaffJudging({
                   </>
                 )}
               </dl>
-              {manager && <StaffSubmissionReview key={detail.parent.id} api={api} base={base} detail={detail}
-                available={available && fresh && !busy && !unresolved} blockNavigation={setReviewBlocked} />}
+              {manager && (
+                <StaffSubmissionReview
+                  key={detail.parent.id}
+                  api={api}
+                  base={base}
+                  detail={detail}
+                  available={available && fresh && !busy && !unresolved}
+                  blockNavigation={setReviewBlocked}
+                />
+              )}
               <div className="staff-table-wrap">
                 <table>
                   <thead>
@@ -579,7 +583,7 @@ export default function StaffJudging({
           close={() => {
             if (!busy && !unresolved) {
               setIntent(null);
-              setCode("");
+
               setReason("");
             }
           }}
@@ -619,19 +623,7 @@ export default function StaffJudging({
                 required
               />
             </label>
-            <label>
-              Your staff code
-              <input
-                aria-label="Recovery staff code"
-                type="password"
-                autoComplete="off"
-                value={code}
-                maxLength={96}
-                disabled={busy || unresolved}
-                onChange={(e) => setCode(e.target.value)}
-                required
-              />
-            </label>
+
             <div className="dialog-actions">
               <button
                 type="submit"
@@ -641,7 +633,6 @@ export default function StaffJudging({
                   confirmation !== intent ||
                   !reason.trim() ||
                   new TextEncoder().encode(reason).length > 1024 ||
-                  !code.trim() ||
                   !detail?.jobs.find((j) => j.id === intent)?.retry_allowed
                 }
               >

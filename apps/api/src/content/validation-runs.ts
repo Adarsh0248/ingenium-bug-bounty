@@ -16,8 +16,8 @@ function receipt(o:Outcome){return {outcome_id:o.id,snapshot_id:o.snapshot_id,re
   reason:o.denial_reason,recorded_at:o.recorded_at.toISOString(),run_id:o.result_run_id};}
 export function createValidationRunService(pool:Pool,clock:ClockGuard,delivery:SessionDelivery){
   const staff=createStaffService(pool,clock,delivery);
-  async function principal(client:PoolClient,cookie:unknown,now:Date){const actor=await staff.authorize(client,cookie,now);if(actor.role==="ORGANISER")throw new AccessError("ACCESS_UNAVAILABLE");return actor;}
-  async function budget(cookie:unknown,write=false){const actor=await staff.inspect(cookie);if(actor.role==="ORGANISER")throw new AccessError("ACCESS_UNAVAILABLE");await staffQuota(pool,clock,actor.staff_id,write?"STAFF_COMMAND":"READ_STAFF");}
+  async function principal(client:PoolClient,cookie:unknown,now:Date){const actor=await staff.authorize(client,cookie,now);return actor;}
+  async function budget(cookie:unknown,write=false){const actor=await staff.inspect(cookie);await staffQuota(pool,clock,actor.staff_id,write?"STAFF_COMMAND":"READ_STAFF");}
   return {
     async admit(cookie:unknown,input:ValidationRunCommand){
       identifier(input.snapshotId);identifier(input.requestKey);staffRevision(input.expectedRevision);boundedStaffText(input.reason,1024);

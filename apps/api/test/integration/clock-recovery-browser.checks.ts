@@ -114,7 +114,7 @@ export async function clockRecoveryBrowserChecks({
           panel.getByText("Awaiting clearance", { exact: true }),
         ).toBeVisible();
         await expect(
-          page.getByRole("button", { name: "monitor", exact: true }),
+          page.getByRole("button", { name: "Live overview", exact: true }),
         ).toHaveCount(0);
         await page.route("**/api/v1/staff/recovery/clock", (route) =>
           route.abort("failed"),
@@ -251,7 +251,7 @@ export async function clockRecoveryBrowserChecks({
           panel.getByText(/Timing fault cleared\. Sign out/),
         ).toBeVisible();
         await expect(
-          page.getByRole("button", { name: "monitor", exact: true }),
+          page.getByRole("button", { name: "Live overview", exact: true }),
         ).toHaveCount(0);
         let signouts = 0;
         await page.route("**/api/v1/staff/recovery/logout", async (route) => {
@@ -285,7 +285,7 @@ export async function clockRecoveryBrowserChecks({
         await expect(page.getByLabel("Team or staff code")).toBeVisible();
         await enter();
         await expect(
-          page.getByRole("button", { name: "monitor", exact: true }),
+          page.getByRole("button", { name: "Live overview", exact: true }),
         ).toBeVisible();
         const active = (
           await owner.query(

@@ -617,6 +617,13 @@
       "when": 1793635200000,
       "tag": "0087_four_language_validation_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1793721600000,
+      "tag": "0088_staff_setup_permissions",
+      "breakpoints": true
     }
   ]
 }

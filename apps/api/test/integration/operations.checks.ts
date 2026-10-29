@@ -1,3 +1,4 @@
+import { openStaffView } from "./browser-app.js";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
@@ -235,9 +236,7 @@ export async function operationsChecks(
                   writes.push(r.url());
               });
               await page.goto(origin);
-              await page
-                .getByRole("button", { name: "maintenance", exact: true })
-                .click();
+              await openStaffView(page, "System health");
               const panel = page.getByLabel("Event operations"),
                 refresh = panel.getByRole("button", {
                   name: "Refresh operations status",

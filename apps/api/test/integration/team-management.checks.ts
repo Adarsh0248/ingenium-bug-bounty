@@ -170,14 +170,8 @@ export async function teamManagementChecks(
     await t.test(
       "registration permissions, own-code, UTF-8 validation and immutable history are enforced",
       async () => {
-        await assert.rejects(
-          service.list(organiser.sessionCookie),
-          denied("ACCESS_UNAVAILABLE"),
-        );
-        await assert.rejects(
-          service.command(organiser.sessionCookie, await input(organiser.code)),
-          denied("ACCESS_UNAVAILABLE"),
-        );
+        assert.ok((await service.list(organiser.sessionCookie)).total > 0);
+        assert.equal((await service.command(organiser.sessionCookie, await input(organiser.code))).outcome.outcome,"APPLIED");
         await assert.rejects(
           service.command(actor.sessionCookie, await input(other.code)),
           denied("STAFF_CONFIRMATION_REQUIRED"),
@@ -540,7 +534,7 @@ export async function teamManagementChecks(
             /verifier|credential_id|ciphertext|issued_code/,
           );
           cookies.set(policy.names.staff, organiser.sessionCookie);
-          assert.equal((await send("/api/v1/staff/teams")).statusCode, 403);
+          assert.equal((await send("/api/v1/staff/teams")).statusCode, 200);
         } finally {
           await app.close();
         }

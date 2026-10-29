@@ -136,17 +136,14 @@ export async function validationDiagnosticChecks(
     },
   );
   await t.test(
-    "diagnostic reviews reject organisers, foreign/unresolved attempts, wrong confirmation and expired sessions",
+    "diagnostic reviews allow normal staff and reject foreign/unresolved attempts, wrong confirmation and expired sessions",
     async () => {
       const organiser = await c.person("ORGANISER"),
         other = await c.person(),
         command = input();
-      for (const fn of [
-        () => service.open(organiser.sessionCookie, run, command),
-        () => service.outcome(organiser.sessionCookie, run, key),
-        () => service.history(organiser.sessionCookie, run),
-      ])
-        await assert.rejects(fn(), denied("ACCESS_UNAVAILABLE"));
+      assert.ok(await service.open(organiser.sessionCookie, run, command));
+      assert.equal((await service.outcome(organiser.sessionCookie, run, key)).status,"NOT_OBSERVED");
+      assert.ok(await service.history(organiser.sessionCookie, run));
       assert.equal(
         (await service.outcome(other.sessionCookie, run, key)).status,
         "NOT_OBSERVED",
@@ -224,7 +221,7 @@ export async function validationDiagnosticChecks(
     },
   );
   await t.test(
-    "private diagnostic history is immutable and database triggers refuse forged scope, digest or organiser authority",
+    "private diagnostic history is immutable and database triggers refuse forged scope, digest or actor binding",
     async () => {
       const organiser = await c.person("ORGANISER");
       const auth = (
@@ -243,9 +240,6 @@ export async function validationDiagnosticChecks(
         { result_digest: Buffer.alloc(32) },
         {
           actor_id: auth.staff_id,
-          session_id: auth.id,
-          credential_id: auth.credential_id,
-          credential_version: auth.credential_version,
         },
       ]) {
         const r = { ...row, ...patch };
@@ -329,10 +323,10 @@ export async function validationDiagnosticChecks(
         run,
         first.next_after!,
       );
-      assert.equal(second.items.length, 4);
+      assert.equal(second.items.length, 5);
       assert.equal(
         new Set([...first.items, ...second.items].map((r) => r.id)).size,
-        44,
+        45,
       );
       assert.doesNotMatch(
         JSON.stringify(first),
@@ -452,7 +446,7 @@ export async function validationDiagnosticChecks(
         cookies.set(policy.names.staff, org.sessionCookie);
         assert.equal(
           (await send(`${url}/${body.request_key}`)).statusCode,
-          403,
+          200,
         );
         cookies.set(policy.names.staff, actor.sessionCookie);
         const admin = await c.person("SUPER_ADMIN"),

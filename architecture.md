@@ -3795,3 +3795,27 @@ Visual revision (26 October 2026): replace painted terrain and flat creature spr
 
 
 Visual rollback (26 October 2026): restore the earlier four separate areas—Neon District, Ember Foundry, Verdant Circuit and Cryo Vault—with their original SVG scenes, pixel creatures and region navigation. This supersedes the connected-map and isometric-city visual directions above. Retain local admin access, reports, score corrections, shared category metadata, capture receipts and all existing competition rules. The rejected renderer is backed up locally outside the active app.
+
+
+## Approved staff setup access update (29 October 2026)
+
+The organiser explicitly approved allowing all regular staff to manage teams,
+questions and arenas. Normal ORGANISER, OWNER and SUPER_ADMIN sessions therefore
+share registration, question authoring/validation/publication and normal round
+setup/lifecycle authority. This supersedes older Owner-only descriptions for
+those operations. Super Admin identity management and exceptional operator,
+clock-recovery, discipline and incident privileges keep their separate guards.
+
+Routine UI saves may supply a contextual audit reason automatically; identity,
+server time, exact receipt and committed effects remain recorded. Current
+authority, CSRF, stale revisions, protected question validation and judge
+readiness remain mandatory.
+
+The organiser subsequently approved authorizing normal staff changes through the
+current signed-in session without repeated code entry. Normal actions resolve the
+current, non-revoked credential binding only after session authorization inside
+the guarded transaction; raw access codes are never retained in the frontend.
+This supersedes older per-action own-code requirements for normal staff actions.
+Legacy callers supplying a code must still pass verification. Exceptional clock
+recovery remains an explicit-code operation. Sensitive actions keep a confirmation
+step, and role, CSRF, clock, audit and exact-outcome safeguards remain in place.

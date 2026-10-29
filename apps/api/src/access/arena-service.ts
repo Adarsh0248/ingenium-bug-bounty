@@ -46,9 +46,8 @@ function validate(input: ArenaSetupCommand): string[] {
 
 export function createArenaService(pool: Pool, clock: ClockGuard, delivery: SessionDelivery) {
   const sessions = createStaffService(pool, clock, delivery);
-  async function principal(client: PoolClient, cookie: unknown, now: Date, edit = false) {
+  async function principal(client: PoolClient, cookie: unknown, now: Date) {
     const actor = await sessions.authorize(client, cookie, now);
-    if (edit && actor.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
     return actor;
   }
   async function readBudget(cookie: unknown) {
@@ -64,13 +63,12 @@ export function createArenaService(pool: Pool, clock: ClockGuard, delivery: Sess
   return {
     async command(cookie: unknown, input: ArenaSetupCommand) {
       const ids = validate(input), initial = await sessions.inspect(cookie);
-      if (initial.role === "ORGANISER") throw new AccessError("ACCESS_UNAVAILABLE");
       await staffQuota(pool, clock, initial.staff_id, "STAFF_COMMAND");
       const fingerprint = commandFingerprint(["ARENA_SETUP", input.action, input.roundId, input.expectedRevision, String(input.durationMs), input.reason, ...ids]);
       return accessTransaction(pool, clock, async (client) => {
         const gate = await control(client, true);
         const round = input.roundId ? await first<Round>(client, "SELECT * FROM rounds WHERE id=$1 FOR UPDATE", [input.roundId]) : undefined;
-        const locked = round ? [round.id] : [], now = await decisionTime(client, clock, locked), actor = await principal(client, cookie, now, true);
+        const locked = round ? [round.id] : [], now = await decisionTime(client, clock, locked), actor = await principal(client, cookie, now);
         const prior = await first<Receipt>(client, `SELECT * FROM arena_setup_outcomes WHERE actor_id=$1 AND action=$2
           AND round_id IS NOT DISTINCT FROM $3::uuid AND request_key=$4`, [actor.staff_id, input.action, input.roundId, input.requestKey]);
         if (prior) { if (!sameVerifier(prior.fingerprint, fingerprint)) throw new AccessError("INTENT_CONFLICT"); return receiptView(prior); }
@@ -140,7 +138,7 @@ export function createArenaService(pool: Pool, clock: ClockGuard, delivery: Sess
       if (!["CREATE", "CONFIGURE"].includes(action) || (action === "CREATE") !== (roundId === null)) throw new AccessError("INVALID_CONTEXT");
       await readBudget(cookie);
       return accessTransaction(pool, clock, async (client) => {
-        const actor = await principal(client, cookie, await decisionTime(client, clock), true);
+        const actor = await principal(client, cookie, await decisionTime(client, clock));
         const row = await first<Receipt>(client, `SELECT * FROM arena_setup_outcomes WHERE actor_id=$1 AND action=$2
           AND round_id IS NOT DISTINCT FROM $3::uuid AND request_key=$4`, [actor.staff_id, action, roundId, key]);
         return { status: row ? "OBSERVED" as const : "NOT_OBSERVED" as const, outcome: row ? receiptView(row) : null };

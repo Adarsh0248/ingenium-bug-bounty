@@ -2,7 +2,7 @@ import { STAFF_ACTIONS } from "./service.js";
 import { JUDGING_VIEWS } from "./staff-judging.js";
 const id = { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" };
 const text = { type: "string", maxLength: 1024 }, time = { type: "string", format: "date-time", maxLength: 40 }, number = { type: "integer", minimum: 0, maximum: 10000000000 };
-const object = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", additionalProperties: false, required, properties });
+const object = (properties: Record<string, unknown>, required = Object.keys(properties).filter(key => key !== "own_code")) => ({ type: "object", additionalProperties: false, required, properties });
 const nullable = (value: unknown) => ({ anyOf: [value, { type: "null" }] });
 const list = (items: unknown, maxItems: number) => ({ type: "array", maxItems, items });
 export const roundParams = object({ round_id: id }), outcomeParams = object({ round_id: id, request_key: id }), bountyParams = object({ round_id: id, bounty_id: id });

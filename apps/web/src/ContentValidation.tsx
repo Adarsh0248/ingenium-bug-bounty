@@ -59,7 +59,6 @@ export default function ContentValidation({
     [report, setReport] = useState<ValidationReport | null>(null),
     [intent, setIntent] = useState<Intent | null>(null),
     [notes, setNotes] = useState(""),
-    [code, setCode] = useState(""),
     [reviews, setReviews] = useState<boolean[]>([false, false, false, false]),
     [loading, setLoading] = useState(false),
     [busy, setBusy] = useState(false),
@@ -100,7 +99,7 @@ export default function ContentValidation({
       setRuns(null);
       setReport(null);
       setIntent(null);
-      setCode("");
+
       setNotes("");
       setDenied(true);
     }
@@ -272,8 +271,8 @@ export default function ContentValidation({
     if (locked || !snapshot || (action === "RUN" ? !current : !canPublish))
       return;
     setIntent({ action, snapshot, runId });
-    setNotes("");
-    setCode("");
+    setNotes(action === "RUN" ? "Validate the current question revision." : "");
+
     setReviews([false, false, false, false]);
     setError("");
     setNotice("");
@@ -281,7 +280,7 @@ export default function ContentValidation({
   async function acknowledge(value: any) {
     const action = sent.current?.action;
     setIntent(null);
-    setCode("");
+
     if (value.outcome === "REJECTED")
       setError(`Action declined: ${label(value.reason ?? "unavailable")}.`);
     else if (action === "RUN") {
@@ -302,15 +301,13 @@ export default function ContentValidation({
     if (
       !notes.trim() ||
       contentTextError(text, 1024, true) ||
-      (selected.action === "PUBLISH" &&
-        (!reviews.every(Boolean) || !code.trim()))
+      (selected.action === "PUBLISH" && !reviews.every(Boolean))
     )
       return;
     sent.current = selected;
     setBusy(true);
     setError("");
-    const ownCode = code;
-    setCode("");
+
     try {
       await acknowledge(
         await command.current!.send(
@@ -321,7 +318,7 @@ export default function ContentValidation({
             expected_revision: selected.snapshot.content_revision,
             ...(selected.action === "RUN"
               ? { reason: text }
-              : { run_id: selected.runId, review: text, own_code: ownCode }),
+              : { run_id: selected.runId, review: text }),
           },
           `/api/v1/staff/outcomes/${selected.action === "RUN" ? "validation-run" : "publication"}/${selected.snapshot.snapshot_id}`,
         ),
@@ -632,7 +629,6 @@ export default function ContentValidation({
           close={() => {
             if (!busy && !unresolved) {
               setIntent(null);
-              setCode("");
             }
           }}
         >
@@ -681,22 +677,16 @@ export default function ContentValidation({
                       {text}
                     </label>
                   ))}
-                  <label>
-                    Your staff code
-                    <input
-                      type="password"
-                      required
-                      autoComplete="off"
-                      maxLength={96}
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                    />
-                  </label>
                 </>
               )}
               <label>
                 {intent.action === "RUN" ? "Validation reason" : "Review notes"}
                 <textarea
+                  aria-label={
+                    intent.action === "RUN"
+                      ? "Validation reason"
+                      : "Review notes"
+                  }
                   required
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -709,7 +699,6 @@ export default function ContentValidation({
                 disabled={busy || unresolved}
                 onClick={() => {
                   setIntent(null);
-                  setCode("");
                 }}
               >
                 Cancel
@@ -724,8 +713,7 @@ export default function ContentValidation({
                     1024,
                     true,
                   ) ||
-                  (intent.action === "PUBLISH" &&
-                    (!reviews.every(Boolean) || !code.trim()))
+                  (intent.action === "PUBLISH" && !reviews.every(Boolean))
                 }
               >
                 <Check size={16} />

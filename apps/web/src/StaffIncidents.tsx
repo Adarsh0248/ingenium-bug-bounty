@@ -41,7 +41,6 @@ export default function StaffIncidents({
     [incident, setIncident] = useState(""),
     [confirmation, setConfirmation] = useState(""),
     [reason, setReason] = useState(""),
-    [code, setCode] = useState(""),
     [busy, setBusy] = useState(false),
     [denied, setDenied] = useState(false),
     [error, setError] = useState(""),
@@ -78,7 +77,7 @@ export default function StaffIncidents({
         if (e instanceof ApiError && [401, 403].includes(e.status)) {
           setData(null);
           setIntent(null);
-          setCode("");
+
           setReason("");
           setDenied(true);
         }
@@ -108,7 +107,7 @@ export default function StaffIncidents({
     setIntent({ action, revision: data.revision });
     setConfirmation("");
     setReason("");
-    setCode("");
+
     setError("");
     setNotice("");
   }
@@ -132,14 +131,12 @@ export default function StaffIncidents({
       !intent ||
       !reason.trim() ||
       new TextEncoder().encode(reason).length > 1024 ||
-      !code.trim() ||
       (intent.action === "CANCEL_ROUND" &&
         (confirmation !== roundId ||
           !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/.test(incident)))
     )
       return;
-    const own = code;
-    setCode("");
+
     setBusy(true);
     setError("");
     try {
@@ -148,7 +145,7 @@ export default function StaffIncidents({
           action: intent.action,
           expected_revision: intent.revision,
           reason,
-          own_code: own,
+
           payload:
             intent.action === "CANCEL_ROUND"
               ? {
@@ -278,7 +275,7 @@ export default function StaffIncidents({
           close={() => {
             if (!busy && !command.current!.unresolved) {
               setIntent(null);
-              setCode("");
+
               setReason("");
             }
           }}
@@ -338,18 +335,7 @@ export default function StaffIncidents({
                 required
               />
             </label>
-            <label>
-              Your staff code
-              <input
-                aria-label="Cancellation staff code"
-                type="password"
-                autoComplete="off"
-                value={code}
-                disabled={busy || command.current!.unresolved}
-                onChange={(e) => setCode(e.target.value)}
-                required
-              />
-            </label>
+
             {intent.revision !== data.revision && (
               <p role="alert">
                 State changed. Close this confirmation and review the latest
@@ -377,7 +363,7 @@ export default function StaffIncidents({
                   disabled={busy}
                   onClick={() => {
                     setIntent(null);
-                    setCode("");
+
                     setReason("");
                   }}
                 >
@@ -391,7 +377,6 @@ export default function StaffIncidents({
                     locked ||
                     intent.revision !== data.revision ||
                     !reason.trim() ||
-                    !code.trim() ||
                     (intent.action === "CANCEL_ROUND" &&
                       (confirmation !== roundId ||
                         !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$/.test(incident)))
