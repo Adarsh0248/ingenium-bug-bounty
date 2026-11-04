@@ -157,6 +157,21 @@ test("the outer backend recovers all five real disk checkpoints without Docker, 
     } finally { await store.close(); }
   }
 });
+test("batch case records retain durable original hardlinks and recover without overwriting evidence",async()=>{
+  const c=claim(),p=planFor(c),store=await storeFor(c),intent={version:1,nonce:randomUUID(),image_id:`sha256:${"a".repeat(64)}`,release_sha256:"b".repeat(64)};
+  const folder=`${CHECKPOINT_DIRECTORY}/capsule-${p.hostEpochId}-${p.attemptId}`;
+  try{
+    await store.reserveCapsule(p,intent,signal());const original={phase:"original"};
+    await store.saveCapsule(p,"b00_init",original);
+    const target=await lstat(folder+"/b00_init.json"),pending=await lstat(folder+"/.b00_init.pending");
+    assert.equal(target.ino,pending.ino);assert.equal(target.nlink,2);assert.equal(target.mode&0o7777,0o400);
+    await store.saveCapsule(p,"b00_init",original);assert.deepEqual(await store.readCapsuleRecord(p,"b00_init"),original);
+    await assert.rejects(store.saveCapsule(p,"b00_init",{phase:"different"}));
+    await unlink(folder+"/b00_init.json");await store.saveCapsule(p,"b00_init",original);
+    assert.deepEqual(await store.readCapsuleRecord(p,"b00_init"),original);assert.equal((await lstat(folder+"/b00_init.json")).ino,target.ino);
+  }finally{await store.close();}
+});
+
 test("capsule journal records cannot be overwritten, copied to another binding or treated as safe after incomplete/writable writes", async () => {
   const c = claim(), p = planFor(c), store = await storeFor(c);
   const intent = { version: 1, nonce: randomUUID(), image_id: `sha256:${"a".repeat(64)}`, release_sha256: "b".repeat(64) };
@@ -175,6 +190,15 @@ test("capsule journal records cannot be overwritten, copied to another binding o
     await writeFile(`${folder}/.start.pending`, "unfinished", { mode: 0o400, flag: "wx" });
     assert.equal((await store.capsule(p)).start, null); await assert.rejects(store.saveCapsule(p, "start", { id: "c".repeat(64) }));
     assert.equal(await readFile(`${folder}/.start.pending`, "ascii"), "unfinished");
+    const original = { id: "c".repeat(64) }, pending = `${folder}/.removed.pending`;
+    await writeFile(pending, judgeJson(original), { mode: 0o600, flag: "wx" });
+    await assert.rejects(store.saveCapsule(p, "removed", original));
+    await chmod(pending, 0o400);
+    await assert.rejects(store.saveCapsule(p, "removed", { id: "d".repeat(64) }));
+    await store.saveCapsule(p, "removed", original);
+    assert.deepEqual(await store.readCapsuleRecord(p, "removed"), original);
+    assert.equal((await lstat(pending)).ino, (await lstat(`${folder}/removed.json`)).ino);
+    await store.saveCapsule(p, "removed", original);
     await assert.rejects(store.reserveCapsule(p, intent, signal()));
     const other = planFor(claim(p.hostEpochId)); await store.reserveCapsule(other, intent, signal());
     const otherFolder = `${CHECKPOINT_DIRECTORY}/capsule-${other.hostEpochId}-${other.attemptId}`;

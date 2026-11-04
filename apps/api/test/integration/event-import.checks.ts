@@ -29,7 +29,7 @@ const keys = [
 ];
 const importData = (q: object) =>
   Object.fromEntries(
-    keys.map((key) => [key, (q as Record<string, unknown>)[key]]),
+    [...keys, ...((q as { round_type?: number }).round_type === 2 ? ["base_bounty"] : [])].map((key) => [key, (q as Record<string, unknown>)[key]]),
   );
 
 export async function eventImportChecks(

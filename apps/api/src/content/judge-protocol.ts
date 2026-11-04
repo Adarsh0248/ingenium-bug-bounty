@@ -92,7 +92,7 @@ function capture(value: unknown, raw: Buffer, diagnostic: boolean) {
   bool(row[diagnostic ? "truncated" : "complete"]);
   return row;
 }
-function phase(value: unknown, limits: { cpu_ms: number; wall_ms: number; memory_kb: number }) {
+export function validateJudgePhase(value: unknown, limits: { cpu_ms: number; wall_ms: number; memory_kb: number }) {
   const row = object(value, ["limits", "identity_verified", "tree_accounted", "exit_code", "exit_signal", "cpu_limited", "wall_limited", "memory_limited",
     "output_limited", "infrastructure_error", "failure_attribution", "cpu_ns", "peak_bytes"]);
   if (judgeJson(row.limits) !== judgeJson(limits) || row.identity_verified !== true || row.tree_accounted !== true) return bad();
@@ -106,7 +106,7 @@ function phase(value: unknown, limits: { cpu_ms: number; wall_ms: number; memory
 function failed(row: Record<string, unknown>): boolean {
   return row.exit_code !== 0 || row.exit_signal !== null || ["cpu_limited", "wall_limited", "memory_limited", "output_limited", "infrastructure_error"].some(k => row[k] === true);
 }
-function classify(run: Record<string, unknown>, complete: boolean, stdoutBytes: number): string {
+export function classifyRunEvidence(run: Record<string, unknown>, complete: boolean, stdoutBytes: number): string {
   if (run.infrastructure_error || run.failure_attribution === "INFRASTRUCTURE") return "INFRA_ERROR";
   if (run.output_limited) { if (stdoutBytes !== 1048577) return bad(); return "OUTPUT_LIMIT_EXCEEDED"; }
   if (stdoutBytes > 1048576) return bad();
@@ -138,7 +138,7 @@ export function acceptJudgeReply(value: unknown, p: AuthoringPayload, requestId:
   const stdout = base64(evidence.stdout_b64, 1048577), stderr = base64(evidence.stderr_b64, 65536), compiler = base64(evidence.compiler_output_b64, 65536);
   const captures = object(meta.captures, ["stdout", "stderr", "compiler"]), out = capture(captures.stdout, stdout, false), err = capture(captures.stderr, stderr, true), comp = capture(captures.compiler, compiler, true);
   const compiled = ["c", "cpp", "java"].includes(p.language);
-  const compilation = compiled ? phase(meta.compile, { cpu_ms: 15000, wall_ms: 30000, memory_kb: 1048576 }) : null;
+  const compilation = compiled ? validateJudgePhase(meta.compile, { cpu_ms: 15000, wall_ms: 30000, memory_kb: 1048576 }) : null;
   if (!compiled && (meta.compile !== null || compiler.length !== 0 || comp.truncated)) return bad();
   let result: string, accounting: Record<string, unknown>;
   if (compilation && failed(compilation)) {
@@ -150,8 +150,8 @@ export function acceptJudgeReply(value: unknown, p: AuthoringPayload, requestId:
     result = "NORMAL"; accounting = compilation;
   } else {
     if (compilation && compilation.failure_attribution !== null) return bad();
-    const run = phase(meta.run, { cpu_ms: p.cpuMs, wall_ms: p.wallMs, memory_kb: p.memoryKb });
-    result = classify(run, out.complete as boolean, stdout.length); accounting = run;
+    const run = validateJudgePhase(meta.run, { cpu_ms: p.cpuMs, wall_ms: p.wallMs, memory_kb: p.memoryKb });
+    result = classifyRunEvidence(run, out.complete as boolean, stdout.length); accounting = run;
   }
   if (meta.drain !== null) {
     const drain = object(meta.drain, ["cannot_start", "processes_stopped", "workspace_removed", "proof_digest"]);

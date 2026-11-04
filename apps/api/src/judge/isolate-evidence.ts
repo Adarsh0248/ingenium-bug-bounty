@@ -32,23 +32,65 @@ export function readIsolateMetadata(bytes: Buffer) {
   return result;
 }
 
+const javaSourceErrors = new Set([
+  "expected", "illegal.start.of.expr", "illegal.start.of.type", "cant.resolve", "cant.resolve.location", "cant.resolve.location.args",
+  "incompatible.types", "prob.found.req", "operator.cant.be.applied.1", "operator.cant.be.applied.2", "not.stmt", "premature.eof",
+  "unclosed.str.lit", "unclosed.char.lit", "class.public.should.be.in.file", "doesnt.exist", "cant.apply.symbol", "non-static.cant.be.ref",
+  "missing.ret.stmt", "already.defined", "var.might.not.have.been.initialized", "unreachable.stmt", "cant.assign.val.to.var",
+  "break.outside.switch.loop", "cont.outside.loop", "else.without.if", "unclosed.comment", "int.number.too.large", "cant.deref",
+  "unreported.exception.need.to.catch.or.throw",
+]);
+
+function sourceLinkerError(sourceFile: string, text: string): boolean {
+  const lines = text.trimEnd().split("\n");
+  if (lines.length < 4 || lines.length > 128 || lines.shift() !== "[]" || lines.pop() !== "collect2: error: ld returned 1 exit status") return false;
+  let origin: "source" | "entry" | null = null, errors = 0, groupErrors = 0;
+  const file = sourceFile.replaceAll(".", "\\.");
+  const source = new RegExp(`^${file}:\\(\\.[A-Za-z0-9_.]+\\+0x[0-9a-f]+\\): undefined reference to \x60[^'\x60\\r\\n]{1,512}'$`);
+  for (const line of lines) {
+    if (/^\/usr\/bin\/ld: \/(?:tmp|box)\/cc[A-Za-z0-9_]{1,32}\.o: in function `[^'`\r\n]{1,512}':$/.test(line)) {
+      if (origin && !groupErrors) return false; origin = "source"; groupErrors = 0;
+    } else if (line === "/usr/bin/ld: /lib/x86_64-linux-gnu/crt1.o: in function `_start':") {
+      if (origin && !groupErrors) return false; origin = "entry"; groupErrors = 0;
+    } else if (origin === "source" && source.test(line) || origin === "entry" && /^\(\.text\+0x[0-9a-f]+\): undefined reference to `main'$/.test(line)) {
+      errors++; groupErrors++;
+    } else return false;
+  }
+  return errors > 0 && groupErrors > 0;
+}
+
 // Only trusted compiler bytes plus a verified normal compiler exit can reach this check.
 export function sourceCompilationError(plan: ExecutionPlan, output: Buffer, truncated: boolean): boolean {
   if (truncated || output.length > 65536) return false;
   let text: string;
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(output); } catch { return false; }
   if (plan.language === "c" || plan.language === "cpp") {
+    if (text.startsWith("[]\n") && sourceLinkerError(plan.sourceFile, text)) return true;
     try {
       const rows: unknown = JSON.parse(text);
       if (!Array.isArray(rows) || rows.length < 1 || rows.length > 128) return false;
       let errors = 0;
       for (const row of rows) {
-        if (!row || typeof row !== "object" || !["error", "warning", "note"].includes(row.kind) || !Array.isArray(row.locations)) return false;
-        if (row.kind !== "error") continue;
+        if (!row || typeof row !== "object" || !["error", "warning", "note", "fatal error"].includes(row.kind) || !Array.isArray(row.locations)) return false;
+        if (row.kind !== "error" && row.kind !== "fatal error") continue;
+        if (row.kind === "fatal error" && (typeof row.message !== "string" || !/^[^\0\r\n]{1,512}: No such file or directory$/.test(row.message))) return false;
         const caret = row.locations[0]?.caret;
         if (!caret || caret.file !== `/box/${plan.sourceFile}` || !Number.isSafeInteger(caret.line) || caret.line < 1
           || caret.line > plan.source.length + 1 || !Number.isSafeInteger(caret.column) || caret.column < 1 || caret.column > plan.source.length + 1) return false;
-        if (!Array.isArray(row.children) || row.children.some((child: { kind?: unknown }) => child?.kind !== "note")) return false;
+        if (!Array.isArray(row.children)) return false;
+        // GCC template diagnostics can nest another error beneath a source-anchored error.
+        const pending = row.children.map((child: unknown) => ({ child, depth: 1 }));
+        let count = 0;
+        while (pending.length) {
+          const { child, depth } = pending.pop()!;
+          if (++count > 512 || depth > 8 || !child || typeof child !== "object") return false;
+          const diagnostic = child as { kind?: unknown; children?: unknown };
+          if (!["note", "error", "warning"].includes(diagnostic.kind as string)) return false;
+          if (diagnostic.children !== undefined) {
+            if (!Array.isArray(diagnostic.children) || diagnostic.children.length > 128) return false;
+            pending.push(...diagnostic.children.map((nested: unknown) => ({ child: nested, depth: depth + 1 })));
+          }
+        }
         errors++;
       }
       return errors > 0;
@@ -58,7 +100,10 @@ export function sourceCompilationError(plan: ExecutionPlan, output: Buffer, trun
     // Conservative source-error codes only; tool, IO, processor and VM failures are not participant mistakes.
     const lines = text.trimEnd().split("\n"), summary = lines.pop();
     if (!summary || !/^[1-9][0-9]{0,2} errors?$/.test(summary) || lines.length !== Number(summary.split(" ")[0])) return false;
-    return lines.every(line => /^Main\.java:[1-9][0-9]*:[1-9][0-9]*: compiler\.err\.(?:expected|illegal\.start\.of\.(?:expr|type)|cant\.resolve(?:\.location)?|incompatible\.types|prob\.found\.req|not\.stmt|premature\.eof|unclosed\.(?:str|char)\.lit|class\.public\.should\.be\.in\.file|doesnt\.exist)(?::|$)/.test(line));
+    return lines.every(line => {
+      const match = /^Main\.java:[1-9][0-9]*:[1-9][0-9]*: compiler\.err\.([a-z0-9.-]+)(?::|$)/.exec(line);
+      return !!match && javaSourceErrors.has(match[1]!);
+    });
   }
   return false;
 }

@@ -20,7 +20,7 @@ export const validationSnapshots = pgTable("validation_snapshots", {
   unique("snapshot_version_revision").on(t.versionId,t.contentRevision), unique("snapshot_same_version").on(t.id,t.versionId), unique("snapshot_source_once").on(t.sourceId),
   check("snapshot_metadata", sql`${t.versionNumber} between 1 and 1000 and ${t.contentRevision}>=1 and ${t.roundType} in (1,2)
     and octet_length(${t.title}) between 1 and 160 and length(btrim(${t.title}))>0 and octet_length(${t.statement})<=65536
-    and ${t.difficulty} between 1 and 100 and (${t.baseBounty}=10*${t.difficulty} or (${t.roundType}=1 and ${t.baseBounty}=50*${t.difficulty})) and ${t.submissionFormat}='FULL_PROGRAM'
+    and ${t.difficulty} between 1 and 100 and (${t.baseBounty}=10*${t.difficulty} or (${t.roundType}=1 and ${t.baseBounty}=50*${t.difficulty}) or (${t.roundType}=2 and ${t.baseBounty} between 250 and 1000 and ${t.baseBounty}%10=0)) and ${t.submissionFormat}='FULL_PROGRAM'
     and ${t.checkerMode} in ('TOKENS','EXACT_TEXT') and ${t.checkerVersion}='ingenium-text-v1'`),
   check("snapshot_fingerprint", sql`octet_length(${t.manifestText}) between 1 and 32768 and jsonb_typeof(${t.manifestText}::jsonb)='object'
     and octet_length(${t.fingerprint})=32 and ${t.fingerprint}=sha256(convert_to(${t.manifestText},'UTF8')) and ${t.contentBytes} between 65536 and 3221225472`)]);

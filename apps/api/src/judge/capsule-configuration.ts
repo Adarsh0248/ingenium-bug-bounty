@@ -30,7 +30,8 @@ export function capsuleConfiguration(settings: IsolateSettings, plan: ExecutionP
   const bytes = Buffer.from(judgeJson({ schema_version: 1, policy_sha256: EXECUTION_PLAN_SHA256, host_epoch_id: settings.hostEpochId,
     boot_id: settings.bootId, attempt_id: safe.attemptId, permit_owner: safe.owner, provider_token: safe.providerToken,
     payload_digest: authoringPayloadDigest(claim.payload).toString("hex"), runtimes: runtimeRecord(settings.runtimes),
-    executables: Object.fromEntries(ISOLATE_BINARIES.map((path, i) => [tags[i]!, settings.binaries[path]])) }));
+    executables: Object.fromEntries(ISOLATE_BINARIES.map((path, i) => [tags[i]!, settings.binaries[path]])),
+    ...(settings.batch?{batch:{batch_id:settings.batch.batchId,digest:settings.batch.digest,raw_b64:settings.batch.raw.toString('base64')}}:{}) }));
   readCapsuleRequest(bytes, Buffer.from(judgeJson(executionRequest(claim, settings.bootId, settings.runtimes, "EXECUTE"))));
   return bytes;
 }

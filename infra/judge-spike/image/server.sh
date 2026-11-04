@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Judge0 startup adaptation; GPL-3.0, see LICENSE.judge0 and root THIRD_PARTY_NOTICES.md.
 set +x
 set -euo pipefail
 umask 077

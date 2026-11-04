@@ -11,7 +11,7 @@ import type { JudgeRuntimes } from "../content/judge-protocol.js";
 
 export const EXECUTOR_PROTOCOL = "ingenium-executor-v1";
 const LAUNCHER = "/opt/ingenium/judge-executor/launch";
-const TIMEOUT_MS = 90000;
+const TIMEOUT_MS = 330000;
 export interface ExecutionClaim { payload: AuthoringPayload; owner: string; providerToken: string; }
 export interface ExecutorSettings { hostEpochId: string; bootId: string; runtimes: JudgeRuntimes; launcherSha256: string; }
 export interface TrustedProtectedExecutor {

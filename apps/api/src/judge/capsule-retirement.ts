@@ -8,7 +8,8 @@ import type { ExecutionCheckpoints } from "./checkpoints.js";
 import { retainedStorage } from "./capsule-storage.js";
 import { checkedExecutionEvidence, reviewedExecutionPlan } from "./execution-plan.js";
 import type { ExecutionPlan } from "./execution-plan.js";
-import { retainedPhaseGroups } from "./phase-resources.js";
+import { retainedPhaseGroups, retainedBatchPhaseGroups } from "./phase-resources.js";
+import type { ParticipantBatchCase } from '../content/batch-protocol.js';
 
 export interface RetirementRequest {
   version: 1; host_epoch_id: string; boot_id: string; attempt_id: string; plan_sha256: string;
@@ -18,6 +19,7 @@ export interface RetirementRequest {
 // Receipts or caller flags cannot replace live host observations and the original consumed permit.
 export interface TrustedHostRetirementAuthority {
   readonly hostEpochId: string; readonly bootId: string; readonly releaseSha256: string;
+  readonly batchCases?: readonly ParticipantBatchCase[];
   prove(request: Readonly<RetirementRequest>, signal: AbortSignal): Promise<unknown>;
 }
 const fail = (): never => { throw new Error("Complete host retirement unproved; retain the original slot and evidence."); };
@@ -28,8 +30,8 @@ function object(value: unknown, keys: readonly string[]) {
 }
 function hex(value: unknown): string { if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) return fail(); return value; }
 
-export async function retirementContext(checkpoints: ExecutionCheckpoints, release: CapsuleRelease, plan: ExecutionPlan) {
-  const row = await checkpoints.capsule(plan); if (!row) return fail();
+export async function retirementContext(checkpoints: ExecutionCheckpoints, release: CapsuleRelease, plan: ExecutionPlan, batchCases?: readonly ParticipantBatchCase[]) {
+  const row = await checkpoints.capsule(plan, batchCases !== undefined); if (!row) return fail();
   const ref = capsuleReference(plan, row.intent);
   if (ref.intent.image_id !== release.imageId || ref.intent.release_sha256 !== release.digest) return fail();
   const physical = physicalIdentity(await checkpoints.physical(plan));
@@ -40,12 +42,21 @@ export async function retirementContext(checkpoints: ExecutionCheckpoints, relea
   if (resources.intent_sha256 !== digest(row.resource_intent)) return fail();
   const removal = { version: 1, boot_id: checkpoints.bootId, container_id: physical.container_id, resources_sha256: digest(row.resources) };
   if (judgeJson(row.resource_remove) !== judgeJson(removal) || judgeJson(row.resource_removed) !== judgeJson(removal)) return fail();
-  const phase = retainedPhaseGroups(plan, checkpoints.bootId, physical, row); if (phase.groups === null) return fail();
+  const phase = batchCases ? retainedBatchPhaseGroups(plan, batchCases, checkpoints.bootId, physical, row) : retainedPhaseGroups(plan, checkpoints.bootId, physical, row);
+  if (phase.groups === null) return fail();
   retainedStorage(plan, checkpoints.bootId, physical, row.storage);
   const saved = await checkpoints.read(plan); if (!saved.begun || !saved.evidence) return fail();
   const evidence = checkedExecutionEvidence(plan, saved.evidence), originalDrain = evidence.metadata.drain;
   evidence.metadata.drain = null;
-  const { retirement, ...records } = row;
+  const { retirement, ...allRecords } = row;
+  const records: Record<string, unknown> = {}, batch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(allRecords)) {
+    // Optional batch records must not change legacy certificates or exceed the wire object's 64-key bound.
+    if (key.startsWith('batch_') || /^b[01][0-9]_(init|groups|result)$/.test(key)) {
+      if (value !== null) batch[key] = value;
+    } else records[key] = value;
+  }
+  if (Object.keys(batch).length) records.batch = batch;
   const common = { version: 1 as const, host_epoch_id: checkpoints.hostEpochId, boot_id: checkpoints.bootId, attempt_id: plan.attemptId,
     plan_sha256: ref.labels["ingenium.executor.plan"]!, container_id: physical.container_id, cgroup_parent: ref.parent,
     release_sha256: release.digest, context_sha256: digest({ records, physical }), evidence_sha256: digest(evidence) };
@@ -57,7 +68,7 @@ export function createCapsuleRetirement(checkpoints: ExecutionCheckpoints, drive
   const prove = authority.prove.bind(authority);
   if (pinned.epoch !== checkpoints.hostEpochId || pinned.boot !== checkpoints.bootId || authority.releaseSha256 !== pinned.digest
     || !/^sha256:[0-9a-f]{64}$/.test(pinned.imageId)) return fail();
-  const context = (plan: ExecutionPlan) => retirementContext(checkpoints, pinned, plan);
+  const context = (plan: ExecutionPlan) => retirementContext(checkpoints, pinned, plan, authority.batchCases);
   function receipt(value: unknown, common: Omit<RetirementRequest, "nonce">) {
     const row = object(value, ["request", "observation_sha256"]), request = object(row.request, [...Object.keys(common), "nonce"]);
     const expected: RetirementRequest = { ...common, nonce: uuid(request.nonce) };

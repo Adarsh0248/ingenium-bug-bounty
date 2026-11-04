@@ -48,7 +48,7 @@ export function createWorkbenchService(pool:Pool,clock:ClockGuard){
     async metadata(cookie:unknown,round:string,bounty:string){return read(cookie,round,bounty,async c=>{
       const v=await variant(c),samples=(await c.client.query("SELECT row_number() OVER(ORDER BY position)::integer AS sample_number,octet_length(input_data) AS input_bytes,octet_length(expected_output) AS output_bytes FROM validation_snapshot_cases WHERE snapshot_id=$1 AND visibility='SAMPLE' ORDER BY position",[c.bounty.snapshot_id])).rows;
       const work=await first(c.client,`SELECT EXISTS(SELECT 1 FROM participant_judging WHERE bounty_id=$1 AND team_round_id=$2 AND lane='OFFICIAL' AND completed_at IS NULL AND status<>'CANCELLED') AS official_pending,
-        (SELECT count(*)::integer FROM participant_judging WHERE member_round_id=$3 AND lane='SAMPLE' AND completed_at IS NULL AND status<>'CANCELLED' AND created_at>$4::timestamptz-interval '120 seconds') AS unfinished_runs,
+        (SELECT count(*)::integer FROM participant_judging p WHERE member_round_id=$3 AND lane='SAMPLE' AND completed_at IS NULL AND status<>'CANCELLED' AND NOT sample_run_expired(p,$4::timestamptz)) AS unfinished_runs,
         COALESCE((SELECT max(level) FROM hint_purchases WHERE bounty_id=$1 AND team_round_id=$2),0) AS hint_tier`,[bounty,c.teamRoundId,c.memberRoundId,c.now]);
       return{round_id:round,bounty_id:bounty,member_round_id:c.memberRoundId,title:c.bounty.title,difficulty:c.bounty.difficulty,base_bounty:c.bounty.base_bounty,
         submission_format:c.bounty.submission_format,checker_mode:c.bounty.checker_mode,language:c.language,cpu_ms:v.cpu_ms,wall_ms:v.wall_ms,memory_kb:v.memory_kb,

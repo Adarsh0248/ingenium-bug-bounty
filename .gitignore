@@ -33,6 +33,15 @@ staff-maintenance-runtime.json
 *service_account*.json
 *.log
 
+# Local publication work, participant reviews and temporary guide renders
+tmp/
+private/
+docs/manual-submission-review-20261031.md
+docs/round1-report-compensation-review-20261031.md
+*.bundle
+*.dump
+*.backup
+
 # Operating system metadata
 .DS_Store
 Thumbs.db

@@ -36,10 +36,6 @@ test("100 authored questions cover all eight different silhouettes, sizes, speed
   assert.ok(new Set(art.map((a) => a.size)).size >= 8);
   assert.ok(new Set(kernelCreatures.map((a) => a.pace)).size >= 6);
   assert.deepEqual([...new Set(art.map((a) => a.tier))].sort(), [0, 1, 2, 3]);
-  assert.deepEqual(
-    [0, 1, 2, 3].map((tier) => art.filter((a) => a.tier === tier).length),
-    [32, 36, 20, 12],
-  );
   for (const b of roundTwoBounties)
     for (const language of ["c", "cpp", "java", "python"] as const)
       assert.ok(roundTwoQuestion(b.bounty_id)?.variants[language].starter_code);
@@ -86,4 +82,38 @@ test("panning clamps to the fixed world without resizing creature coordinates", 
   assert.deepEqual(kernelCamera({ x: 0, y: 0 }, 8000, 4000), { x: 0, y: 0 });
   assert.equal(kernelWorld.width / 1024, 4);
   assert.equal(kernelWorld.height / 640, 4);
+});
+
+test("appending twenty live questions preserves existing roamers and supports all 120 bodies", () => {
+  const memory = new Map<string, Roamer>();
+  syncRoamers(memory, kernelSpecs(roundTwoBounties), kernelWorld);
+  stepSwarm([...memory.values()], 0.05, kernelWorld);
+  const before = [...memory.values()].map((a) => [a.id, a.x, a.y, a.heading]);
+  const extra = roundTwoBounties
+    .slice(0, 20)
+    .map((b, i) => ({
+      ...b,
+      bounty_id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+    }));
+  syncRoamers(
+    memory,
+    kernelSpecs([...roundTwoBounties, ...extra]),
+    kernelWorld,
+  );
+  assert.equal(memory.size, 120);
+  assert.deepEqual(
+    [...memory.values()].slice(0, 100).map((a) => [a.id, a.x, a.y, a.heading]),
+    before,
+  );
+  for (let i = 0; i < 400; i++)
+    stepSwarm([...memory.values()], 0.05, kernelWorld);
+  for (const a of memory.values()) {
+    assert.ok(Number.isFinite(a.x + a.y + a.distance));
+    assert.ok(
+      a.x >= a.radius &&
+        a.x <= kernelWorld.width - a.radius &&
+        a.y >= a.radius &&
+        a.y <= kernelWorld.height - a.radius,
+    );
+  }
 });

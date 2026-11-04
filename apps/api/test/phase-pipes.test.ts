@@ -35,6 +35,7 @@ test("Isolate phase commands use only frozen plans, protected pipes and fixed pr
     const p = plan(language), n = nonce(), command = isolatePhaseCommand(p, "run", n);
     assert.equal(command.file, "/usr/local/bin/isolate"); assert.equal(command.wallMs, p.run!.limits.wallMs + 5000);
     assert.ok(command.args.includes("--cg")); assert.ok(command.args.includes("--inherit-fds"));
+    assert.equal(p.restrictions.processes,64); assert.ok(command.args.includes("--processes=1024"));
     assert.ok(command.args.includes("--time=1.000")); assert.ok(command.args.includes("--meta=/run/ingenium/control/run.meta"));
     assert.doesNotMatch(command.args.join(" "), /--(?:share-net|full-env|stdin|stdout|stderr|wait)|synthetic fixture/);
     assert.deepEqual(command.args.slice(command.args.indexOf("/usr/local/bin/ingenium-phase-exec") + 1), [n, "3", "4", "--", ...p.run!.argv]);

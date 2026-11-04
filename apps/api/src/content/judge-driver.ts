@@ -7,6 +7,13 @@ import { sha256, uuid } from "../access/credentials.js";
 import type { AuthoringPayload, TrustedAuthoringDriver } from "./execution-policy.js";
 import { acceptJudgeReady, acceptJudgeReply, authoringRequest, JUDGE_BODY_LIMIT, judgeJson, readJudgeJson, runtimeRecord } from "./judge-protocol.js";
 import type { JudgeRuntimes } from "./judge-protocol.js";
+import {readParticipantBatch,PARTICIPANT_BATCH_PROTOCOL} from './batch-protocol.js';
+import {acceptParticipantBatchResult} from './batch-result.js';
+export interface TrustedParticipantBatchDriver extends TrustedAuthoringDriver{
+  assertBatchReady(signal:AbortSignal):Promise<void>;
+  submitBatch(raw:Buffer,batchId:string,digest:string,signal:AbortSignal):Promise<ReturnType<typeof acceptParticipantBatchResult>|null>;
+  observeBatch(raw:Buffer,batchId:string,digest:string,signal:AbortSignal):Promise<ReturnType<typeof acceptParticipantBatchResult>|null>;
+}
 
 export interface JudgeDriverSettings {
   hostEpochId: string; endpointRef: string; address: string; port: number; serverName: string;
@@ -18,7 +25,7 @@ export function privateJudgeAddress(address: string): boolean {
   const [a, b] = address.split(".").map(Number);
   return a === 10 || a === 172 && b! >= 16 && b! <= 31 || a === 192 && b === 168 || address === "127.0.0.1";
 }
-export function createAuthoringJudgeDriver(settings: JudgeDriverSettings): TrustedAuthoringDriver {
+export function createAuthoringJudgeDriver(settings: JudgeDriverSettings): TrustedParticipantBatchDriver {
   uuid(settings.hostEpochId);
   if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(settings.endpointRef) || !privateJudgeAddress(settings.address) || !Number.isInteger(settings.port) || settings.port < 1 || settings.port > 65535
     || !/^(?=.{1,253}$)[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(settings.serverName) || isIPv4(settings.serverName) || !/^[0-9a-f]{64}$/.test(settings.serverCertificateSha256)) throw unavailable();
@@ -76,6 +83,18 @@ export function createAuthoringJudgeDriver(settings: JudgeDriverSettings): Trust
     if (!submit && ![200, 404].includes(reply.status) || submit && ![200, 201, 202].includes(reply.status)) throw unavailable();
     return acceptJudgeReply(reply.value, p, nonce, reply.status);
   }
+  const batches='/ingenium/v1/participant/batches';
+  async function batchOperation(raw:Buffer,batchId:string,digest:string,signal:AbortSignal,submit:boolean){
+    raw=Buffer.from(raw);readParticipantBatch(raw,{batchId,hostEpochId:frozen.hostEpochId,digest},runtimes);
+    const nonce=randomUUID(),reply=await exchange(submit?'POST':'GET',`${batches}/${batchId}`,nonce,signal,submit?readJudgeJson(raw):undefined,digest);
+    if(submit?![200,201].includes(reply.status):![200,404].includes(reply.status))throw unavailable();
+    const row=reply.value as Record<string,unknown>;
+    if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).sort().join(',')!==['protocol','request_id','host_epoch_id','batch_id','batch_digest','state','evidence'].sort().join(',')
+      ||row.protocol!==PARTICIPANT_BATCH_PROTOCOL||row.request_id!==nonce||row.host_epoch_id!==frozen.hostEpochId||row.batch_id!==batchId||row.batch_digest!==digest)throw unavailable();
+    if(row.state==='ABSENT'&&reply.status===404&&row.evidence===null||row.state==='PENDING'&&reply.status!==404&&row.evidence===null)return null;
+    if(row.state!=='FINISHED'||reply.status===404)throw unavailable();
+    return acceptParticipantBatchResult(raw,{batchId,hostEpochId:frozen.hostEpochId,digest},runtimes,row.evidence);
+  }
   return {
     hostEpochId: frozen.hostEpochId, endpointRef: frozen.endpointRef,
     get runtimes() { return new Map([...runtimes].map(([k, v]) => [k, { ...v }])); },
@@ -86,5 +105,12 @@ export function createAuthoringJudgeDriver(settings: JudgeDriverSettings): Trust
     },
     submit: (p, signal) => operation(p, signal, true),
     observe: (p, signal) => operation(p, signal, false),
+    async assertBatchReady(signal){
+      const nonce=randomUUID(),reply=await exchange('GET',`${batches}/ready`,nonce,signal),row=reply.value as Record<string,unknown>;
+      if(reply.status!==200||!row||row.protocol!==PARTICIPANT_BATCH_PROTOCOL)throw unavailable();
+      acceptJudgeReady({...row,protocol:'ingenium-authoring-v1'},nonce,frozen.hostEpochId,runtimes);
+    },
+    submitBatch:(raw,id,digest,signal)=>batchOperation(raw,id,digest,signal,true),
+    observeBatch:(raw,id,digest,signal)=>batchOperation(raw,id,digest,signal,false),
   };
 }

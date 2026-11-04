@@ -9,6 +9,8 @@ import { openExecutionCheckpoints } from "./checkpoints.js";
 import { createCapsuleRecovery } from "./capsule-backend.js";
 import { createGuardedLauncher } from "./launcher.js";
 import { createExecutionPlan } from "./execution-plan.js";
+import { judgeFaultDiagnostic } from "./fault-diagnostic.js";
+import {readParticipantBatch,participantBatchWallBudget} from '../content/batch-protocol.js';
 
 const FILE = "/etc/ingenium/judge-launcher.json";
 async function main() {
@@ -20,8 +22,8 @@ async function main() {
   process.umask(0o077);
   const stop = new AbortController(), abort = () => stop.abort();
   process.once("SIGINT", abort); process.once("SIGTERM", abort);
-  const deadline = setTimeout(() => process.exit(125), 85000); deadline.unref();
-  const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(80000)]);
+  let deadline = setTimeout(() => process.exit(125), 85000); deadline.unref();
+  let signal = AbortSignal.any([stop.signal, AbortSignal.timeout(80000)]);
   const config = parseHostRuntime(await rootRuntimeJson(FILE, 4194304));
   const { Pool } = await import("pg"), { assertJudgeDatabaseRole } = await import("./database-role.js"),
     { createJudgeSupervisorStore } = await import("./registry.js");
@@ -43,11 +45,31 @@ async function main() {
       const chunks: Buffer[] = []; let size = 0;
       for await (const chunk of process.stdin) { signal.throwIfAborted(); const bytes = Buffer.from(chunk); size += bytes.length; if (size > JUDGE_BODY_LIMIT) throw new Error("Oversized host request."); chunks.push(bytes); }
       const raw = Buffer.concat(chunks, size), operation = option === "--retire" ? "RECOVER" : option!.slice(2).toUpperCase() as "READY" | "EXECUTE" | "RECOVER";
+      let batch:Awaited<ReturnType<typeof store.batchForAttempt>>=null;
+      if(operation!=='READY'){
+        const request=readJudgeJson(raw) as {payload?:{attempt_id?:string}};
+        if(request.payload?.attempt_id)batch=await store.batchForAttempt(request.payload.attempt_id);
+        if(batch&&operation==='EXECUTE'){
+          const decoded=readParticipantBatch(batch.raw,{...batch,hostEpochId:config.hostEpochId},config.runtimes),budget=participantBatchWallBudget(decoded.cases)+60000;
+          clearTimeout(deadline);deadline=setTimeout(()=>process.exit(125),budget+5000);deadline.unref();
+          signal=AbortSignal.any([stop.signal,AbortSignal.timeout(budget)]);
+        }
+      }
       let backend = createCapsuleRecovery(checkpoints, config.release, config.runtimes);
+      const recovery=backend;
+      if(batch)backend={...recovery,async recover(plan,current){
+        const evidence=await recovery.recover(plan,current);
+        if(evidence!==null){
+          const result=await checkpoints!.readCapsuleRecord(plan,'batch_result');
+          if(result===null)throw new Error('Original batch result checkpoint missing.');
+          await store.sealBatch(plan.attemptId,plan.providerToken,plan.owner,result);
+        }
+        return evidence;
+      }};
       if (option !== "--recover") {
         const { openVerifiedHost } = await import("./host-verification.js"), { createHostBackend } = await import("./host-backend.js");
         host = await openVerifiedHost(config, config.release, config.manifest, signal);
-        active = createHostBackend(store, checkpoints, host, config, config.release); backend = active;
+        active = createHostBackend(store, checkpoints, host, {...config,...(batch?{batch}:{})}, config.release); backend = active;
       }
       const launcher = createGuardedLauncher(store, backend);
       output = await launcher.handle(raw, operation, signal);
@@ -73,6 +95,7 @@ async function main() {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
   main().catch(error => { try {
     writeSync(2, "Protected host refused; preserve original attempts, inspection intents and physical holds.\n");
+    writeSync(2, "Protected host diagnostic: " + JSON.stringify(judgeFaultDiagnostic(error)) + "\n");
     const frames=error instanceof Error?error.stack?.split("\n").slice(1).filter(line=>/\/opt\/ingenium\/judge-executor\/app\/[a-zA-Z0-9_./-]+\.js:\d+:\d+/.test(line)).slice(0,6):[];
     for(const frame of frames??[])writeSync(2,frame.slice(0,256)+"\n");
   } finally { process.exit(125); } });

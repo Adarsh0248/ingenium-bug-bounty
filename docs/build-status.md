@@ -1,3 +1,7 @@
+# Historical build-status snapshots
+
+The competition is finished. Dates, percentages and pending items below describe earlier implementation stages. Use [project status](project-status.md) for the open-source handoff.
+
 # Build Status and 22 October Target
 
 Readiness update, 29 October 2026: the extended two-round rehearsal now passes

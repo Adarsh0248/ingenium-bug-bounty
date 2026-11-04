@@ -1,0 +1,8 @@
+{
+  "scope": "TRUSTED_LOCAL_CONTENT_CHECKS",
+  "state": "RECHECK_REQUIRED",
+  "pack_sha256": "73873627ef234892c0fe83ad4cc36d54c55c1631f3813ff1a52e60c95daf4ec5",
+  "passed": false,
+  "production_judge_validated": false,
+  "human_pilot_difficulty_reviewed": false
+}

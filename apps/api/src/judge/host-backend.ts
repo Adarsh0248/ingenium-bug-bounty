@@ -13,6 +13,7 @@ import { createHostCapsuleResources } from "./host-resources.js";
 import { openCapsuleNamespacePins } from "./host-storage-pins.js";
 import { storageAcknowledgement } from "./capsule-storage.js";
 import { verifyNoCapsuleReferences } from "./capsule-residue.js";
+import { readParticipantBatch } from '../content/batch-protocol.js';
 import type { openVerifiedHost } from "./host-verification.js";
 import type { IsolateSettings } from "./isolate-context.js";
 import type { createJudgeSupervisorStore } from "./registry.js";
@@ -28,6 +29,7 @@ export function checkedRetirementRequest(request: Readonly<RetirementRequest>, c
 export function createHostBackend(store: ReturnType<typeof createJudgeSupervisorStore>, checkpoints: ExecutionCheckpoints,
   host: Awaited<ReturnType<typeof openVerifiedHost>>, settings: IsolateSettings, release: CapsuleRelease) {
   const pinned = { imageId: release.imageId, digest: release.digest };
+  const batchCases = settings.batch ? readParticipantBatch(settings.batch.raw, { ...settings.batch, hostEpochId: settings.hostEpochId }, settings.runtimes).cases : undefined;
   if (store.hostEpochId !== settings.hostEpochId || store.bootId !== settings.bootId || checkpoints.hostEpochId !== store.hostEpochId
     || checkpoints.bootId !== store.bootId || judgeJson(Object.fromEntries(store.runtimes)) !== judgeJson(Object.fromEntries(settings.runtimes))) return fail();
   let namespacePins: { attempt: string; handles: Awaited<ReturnType<typeof openCapsuleNamespacePins>> } | null = null;
@@ -45,9 +47,9 @@ export function createHostBackend(store: ReturnType<typeof createJudgeSupervisor
   });
   const resources = { ...physicalResources,
     retire: (plan: ExecutionPlan, ref: Parameters<typeof physicalResources.retire>[1], signal: AbortSignal) =>
-      store.withRetirementInspection(signal, current => physicalResources.retire(plan, ref, current)),
+      store.withRetirementInspection(signal, current => physicalResources.retire(plan, ref, current), parseInt(plan.attemptId.slice(-1), 16) % 2),
     assertRetired: (plan: ExecutionPlan, ref: Parameters<typeof physicalResources.assertRetired>[1], signal: AbortSignal) =>
-      store.withRetirementInspection(signal, current => physicalResources.assertRetired(plan, ref, current)),
+      store.withRetirementInspection(signal, current => physicalResources.assertRetired(plan, ref, current), parseInt(plan.attemptId.slice(-1), 16) % 2),
   };
   async function original(attempt: string) {
     const record = await store.execution(uuid(attempt));
@@ -85,15 +87,16 @@ export function createHostBackend(store: ReturnType<typeof createJudgeSupervisor
   } };
   const authority: TrustedHostRetirementAuthority = {
     hostEpochId: store.hostEpochId, bootId: store.bootId, releaseSha256: pinned.digest,
+    ...(batchCases ? { batchCases } : {}),
     async prove(request, signal) {
       signal.throwIfAborted();
-      const plan = await original(request.attempt_id), before = await retirementContext(checkpoints, pinned, plan);
+      const plan = await original(request.attempt_id), before = await retirementContext(checkpoints, pinned, plan, batchCases);
       checkedRetirementRequest(request, before.common);
       const readiness = await host.assertReady(signal);
       await driver.assertAbsent(before.ref, request.container_id, signal);
       await resources.assertRetired(plan, before.ref, signal);
       await driver.assertAbsent(before.ref, request.container_id, signal);
-      const after = await retirementContext(checkpoints, pinned, await original(request.attempt_id));
+      const after = await retirementContext(checkpoints, pinned, await original(request.attempt_id), batchCases);
       checkedRetirementRequest(request, after.common);
       if (!readiness.equals(await host.assertReady(signal))) return fail();
       // Drop the only exempted references before certifying that the original workspace is gone.
@@ -103,5 +106,13 @@ export function createHostBackend(store: ReturnType<typeof createJudgeSupervisor
         removed_resources_sha256: before.common.context_sha256, no_remaining_references: true }) };
     },
   };
-  return { ...createCapsuleBackend(checkpoints, driver, pinned, store.runtimes, host.assertReady, resources, authority), close: closePins };
+  return { ...createCapsuleBackend(checkpoints, driver, pinned, store.runtimes, host.assertReady, resources, authority, async (plan, evidence) => {
+    const record = await store.execution(plan.attemptId);
+    if (!record?.started || record.owner !== plan.owner || record.providerToken !== plan.providerToken) return fail();
+    if(settings.batch){
+      const result=await checkpoints.readCapsuleRecord(plan,'batch_result');if(result===null)return fail();
+      await store.sealBatch(plan.attemptId,plan.providerToken,plan.owner,result);
+    }
+    await store.seal(record.payload, record.providerToken, record.owner, evidence);
+  }), close: closePins };
 }

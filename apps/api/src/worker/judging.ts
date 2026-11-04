@@ -26,9 +26,26 @@ export function createJudgingCoordinator(
   clock: ClockGuard,
   driver: TrustedAuthoringDriver,
 ) {
+  let claimReadiness: Promise<void> | undefined;
+  let claimReadinessAt = -Infinity;
+  const claimDriver: TrustedAuthoringDriver = {
+    ...driver,
+    async assertReady(signal) {
+      signal.throwIfAborted();
+      // All four lanes renew the same worker lease in this one claim batch.
+      if (!claimReadiness || performance.now() - claimReadinessAt >= 5000) {
+        claimReadinessAt = performance.now();
+        claimReadiness = driver.assertReady(signal);
+      }
+      await claimReadiness;
+      signal.throwIfAborted();
+    },
+  };
   const workerId = randomUUID(),
-    validation = createValidationWorker(pool, clock, driver, workerId),
-    participant = createParticipantJudgeWorker(pool, clock, driver, workerId);
+    validation = Array.from({ length: 2 }, () => createValidationWorker(pool, clock, claimDriver, workerId)),
+    participants = Array.from({ length: 2 }, () =>
+      createParticipantJudgeWorker(pool, clock, claimDriver, workerId),
+    );
   let busy = false,
     stopping = false,
     readyAt = -Infinity;
@@ -44,18 +61,29 @@ export function createJudgingCoordinator(
       try {
         clock.assertHealthy();
         if (performance.now() - readyAt >= 5000) {
-          if (
-            !(await validation.claim()) ||
-            stopping ||
-            !(await participant.claim())
-          )
-            return "STANDBY" as const;
-          readyAt = performance.now();
+          try {
+            for (const validator of validation)
+              if (!(await validator.claim()) || stopping) return "STANDBY" as const;
+            for (const participant of participants)
+              if (!(await participant.claim()) || stopping)
+                return "STANDBY" as const;
+            readyAt = claimReadinessAt;
+          } finally {
+            claimReadiness = undefined;
+            claimReadinessAt = -Infinity;
+          }
         }
         if (stopping) return "STOPPED" as const;
-        await validation.tick();
+        const validations = await Promise.allSettled(validation.map(validator => validator.tick()));
+        for (const turn of validations)
+          if (turn.status === "rejected") throw turn.reason;
         if (stopping) return "STOPPED" as const;
-        await participant.tick();
+        // Finish both original requests before renewal, shutdown or another turn.
+        const turns = await Promise.allSettled(
+          participants.map((participant) => participant.tick()),
+        );
+        for (const turn of turns)
+          if (turn.status === "rejected") throw turn.reason;
         return "TICKED" as const;
       } catch (error) {
         readyAt = -Infinity;

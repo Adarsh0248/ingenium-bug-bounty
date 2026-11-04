@@ -98,14 +98,60 @@ static int authenticate(void) {
   length = sizeof peer_fd;
   if (getsockopt(connection, SOL_SOCKET, SO_PEERPIDFD, &peer_fd, &length) || length != sizeof peer_fd || peer_fd < 0
     || fcntl(peer_fd, F_SETFD, FD_CLOEXEC)) { close(connection); return -1; }
-  close(connection);
   char path[64];
   if (snprintf(path, sizeof path, "/proc/%d", credentials.pid) >= (int)sizeof path) return -1;
   proc_fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-  return proc_fd >= 0 && peer_ok() ? 0 : -1;
+  if (proc_fd < 0 || !peer_ok()) { close(connection); return -1; }
+  return connection;
+}
+static int hexadecimal(const char *value, size_t length) {
+  for (size_t i = 0; i < length; i++) if (!((value[i] >= '0' && value[i] <= '9') || (value[i] >= 'a' && value[i] <= 'f'))) return 0;
+  return 1;
+}
+static int read_path(const char *path) {
+  size_t length = strlen(path);
+  if (!strcmp(path, "/info") || !strcmp(path, "/containers/json?all=true")) return 1;
+  return (length == 84 && !strncmp(path, "/images/sha256:", 15) && hexadecimal(path + 15, 64) && !strcmp(path + 79, "/json"))
+    || (length == 81 && !strncmp(path, "/containers/", 12) && hexadecimal(path + 12, 64) && !strcmp(path + 76, "/json"));
+}
+/* Read-only HTTP uses the exact authenticated socket; mutations still use the pinned CLI. */
+static int http_read(int connection, const char *path) {
+  char request[512], buffer[16384];
+  int length = snprintf(request, sizeof request, "GET %s HTTP/1.0\r\nHost: localhost\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n", path);
+  if (length < 1 || length >= (int)sizeof request || !peer_ok()) return -1;
+  struct timespec start, now;
+  if (clock_gettime(CLOCK_MONOTONIC, &start)) return -1;
+  size_t sent = 0, received = 0;
+  for (;;) {
+    if (!peer_ok() || clock_gettime(CLOCK_MONOTONIC, &now) || now.tv_sec - start.tv_sec >= 10) return -1;
+    struct pollfd p = { .fd = connection, .events = sent < (size_t)length ? POLLOUT : POLLIN };
+    int ready = poll(&p, 1, 20);
+    if (ready < 0) { if (errno == EINTR) continue; return -1; }
+    if (!ready) continue;
+    if (p.revents & (POLLERR | POLLNVAL)) return -1;
+    if (sent < (size_t)length) {
+      ssize_t size = send(connection, request + sent, (size_t)length - sent, MSG_NOSIGNAL);
+      if (size < 0) { if (errno == EINTR || errno == EAGAIN) continue; return -1; }
+      if (!size) return -1;
+      sent += (size_t)size;
+    } else {
+      ssize_t size = read(connection, buffer, sizeof buffer);
+      if (size < 0) { if (errno == EINTR || errno == EAGAIN) continue; return -1; }
+      if (!size) return received > 0 && peer_ok() ? 0 : -1;
+      received += (size_t)size; if (received > 2097152) return -1;
+      size_t written = 0;
+      while (written < (size_t)size) {
+        ssize_t count = write(STDOUT_FILENO, buffer + written, (size_t)size - written);
+        if (count < 0) { if (errno == EINTR) continue; return -1; }
+        if (!count) return -1;
+        written += (size_t)count;
+      }
+    }
+  }
 }
 static int arguments(int argc, char **argv) {
   if (argc < 2 || argc > 256) return 0;
+  if (!strcmp(argv[1], "--http-get")) return argc == 3 && read_path(argv[2]);
   if (!strcmp(argv[1], "export")) {
     if (argc != 3 || strlen(argv[2]) != 64) return 0;
     for (size_t i = 0; i < 64; i++) if (!((argv[2][i] >= '0' && argv[2][i] <= '9') || (argv[2][i] >= 'a' && argv[2][i] <= 'f'))) return 0;
@@ -132,7 +178,12 @@ int main(int argc, char **argv) {
   for (int i = 0; i < 3; i++) if (u[i] || g[i]) return failure();
   if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) || prctl(PR_SET_PDEATHSIG, SIGKILL) || getppid() != parent
     || !executable(3, &probe) || !executable(4, &cli) || fcntl(3, F_SETFD, FD_CLOEXEC) || fcntl(4, F_SETFD, FD_CLOEXEC) || fcntl(5, F_SETFD, FD_CLOEXEC)
-    || authenticate()) return failure();
+    ) return failure();
+  int connection = authenticate(); if (connection < 0) return failure();
+  if (!strcmp(argv[1], "--http-get")) {
+    int result = http_read(connection, argv[2]); close(connection); return result == 0 ? 0 : failure();
+  }
+  close(connection);
   if (signal(SIGCHLD, SIG_DFL) == SIG_ERR) return failure();
   pid_t helper = getpid(), child = fork(); if (child < 0) return failure();
   if (child == 0) {

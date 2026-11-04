@@ -47,7 +47,7 @@ export const overview = object({
       draft_saved: { type: "boolean" },
       awarded_points: nullable(integer),
     }),
-    100,
+    120,
   ),
 });
 export const query = {

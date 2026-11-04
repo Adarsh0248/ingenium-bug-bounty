@@ -50,7 +50,23 @@ int main(void) {
     if (access("/opt/ingenium/exit-peer", F_OK) == 0) return 0;
     if (access("/opt/ingenium/exec-peer", F_OK) == 0) { execl("/bin/sleep", "sleep", "20", (char *)NULL); return 3; }
     struct pollfd p = { .fd = listener, .events = POLLIN };
-    if (poll(&p, 1, 20) > 0) { int client = accept4(listener, NULL, NULL, SOCK_CLOEXEC); if (client >= 0) close(client); }
+    if (poll(&p, 1, 20) > 0) {
+      int client = accept4(listener, NULL, NULL, SOCK_CLOEXEC);
+      if (client >= 0) {
+        char request[512]; struct pollfd incoming = { .fd = client, .events = POLLIN };
+        if (poll(&incoming, 1, 2000) > 0) {
+          ssize_t size = read(client, request, sizeof request - 1);
+          if (size > 0) {
+            request[size] = 0;
+            int info = !strncmp(request, "GET /info HTTP/1.0", 18);
+            const char *body = info ? (access("/opt/ingenium/changed-daemon", F_OK) == 0 ? ${JSON.stringify(wrongDaemonLine)} : ${JSON.stringify(daemonLine)})
+              : !strncmp(request, "GET /images/", 12) ? (access("/opt/ingenium/changed-image", F_OK) == 0 ? ${JSON.stringify(wrongImageLine)} : ${JSON.stringify(imageLine)}) : "[]";
+            dprintf(client, "HTTP/1.0 200 OK\\r\\nContent-Type: application/json\\r\\nContent-Length: %zu\\r\\n\\r\\n%s", strlen(body), body);
+          }
+        }
+        close(client);
+      }
+    }
   }
 }
 `);
@@ -338,7 +354,8 @@ test("unsupported commands and endpoint overrides never run, and cancellation st
   try {
     for (const name of ["docker", "dockerd", "peer-exec"]) files.push(await openFile(`${root}/${name}`, "r"));
     const command = localDockerCommand(...files.map(file => file.fd));
-    for (const args of [["pull", "ignored"], ["info", "--host=unix:///tmp/other"], ["info", "--context", "other"], ["info", "-Hother"], ["info", "--config=/tmp/other"]]) {
+    for (const args of [["pull", "ignored"], ["info", "--host=unix:///tmp/other"], ["info", "--context", "other"], ["info", "-Hother"], ["info", "--config=/tmp/other"],
+      ["--http-get", "/containers/create"], ["--http-get", "/info\\r\\nPOST /containers/create"], ["--http-get", "http://other/info"], ["--http-get", "/containers/short/json"]]) {
       await assert.rejects(command(args, Buffer.alloc(0), signal()));
     }
     const before = await readFile("/opt/ingenium/created-ids"), controller = new AbortController();

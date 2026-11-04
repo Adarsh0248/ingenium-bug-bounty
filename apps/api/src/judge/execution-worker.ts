@@ -1,5 +1,6 @@
 import { authoringRequest, judgeJson, readJudgeJson, runtimeRecord } from "../content/judge-protocol.js";
 import { uuid } from "../access/credentials.js";
+import { authoringPayloadDigest } from "../content/execution-policy.js";
 import { acceptExecutionReply, executionRequest } from "./executor.js";
 import type { ExecutionClaim, TrustedProtectedExecutor } from "./executor.js";
 import { claimJudgeDelivery } from "./queue.js";
@@ -19,7 +20,16 @@ export function createJudgeExecutionWorker(store: ReturnType<typeof createJudgeS
     activeAttempt = claim.payload.attemptId;
     const request = executionRequest(claim, boot, runtimes, operation), bytes = Buffer.from(judgeJson(request));
     // The executor receives its own copy; asynchronous mutation cannot alter our result binding.
-    const reply = await executor.exchange(readJudgeJson(bytes) as typeof request, signal);
+    let reply: unknown;
+    try { reply = await executor.exchange(readJudgeJson(bytes) as typeof request, signal); }
+    catch (error) {
+      // A lost launcher acknowledgement must not cancel other jobs when this exact result is already fully drained.
+      const saved = await store.execution(claim.payload.attemptId).catch(() => null);
+      if (saved?.started && saved.evidence?.metadata.drain && saved.owner === claim.owner && saved.providerToken === claim.providerToken
+        && authoringPayloadDigest(saved.payload).equals(authoringPayloadDigest(claim.payload)))
+        return { state: "SEALED", attemptId: claim.payload.attemptId } as const;
+      throw error;
+    }
     const evidence = acceptExecutionReply(reply, claim, request);
     if (evidence === null) return { state: "RECOVERY_REQUIRED", attemptId: claim.payload.attemptId } as const;
     // Saving a completed trusted result is reconciliation, not a fresh execution, even if cancellation arrived meanwhile.

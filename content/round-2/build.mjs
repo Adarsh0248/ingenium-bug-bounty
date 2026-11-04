@@ -3,15 +3,15 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { languages, program, mutate } from "../programs.mjs";
 import { statementFor } from "../statement.mjs";
-import { arrays } from "./arrays.mjs";
-import { systems } from "./systems.mjs";
-import { graphs } from "./graphs.mjs";
-import { logic } from "./logic.mjs";
+import { arrays } from "./revision-easy/arrays.mjs";
+import { systems } from "./revision-easy/systems.mjs";
+import { graphs } from "./revision-easy/graphs.mjs";
+import { logic } from "./revision-easy/logic.mjs";
 import { scannerSection } from "./scanner.mjs";
-import { arraysScanner } from "./scanner-arrays.mjs";
-import { systemsScanner } from "./scanner-systems.mjs";
-import { graphsScanner } from "./scanner-graphs.mjs";
-import { logicScanner } from "./scanner-logic.mjs";
+import { arraysScanner } from "./revision-easy/scanner-arrays.mjs";
+import { systemsScanner } from "./revision-easy/scanner-systems.mjs";
+import { graphsScanner } from "./revision-easy/scanner-graphs.mjs";
+import { logicScanner } from "./revision-easy/scanner-logic.mjs";
 
 const scannerSections = {
   ...arraysScanner,
@@ -29,16 +29,15 @@ const groups = [
 const originals = JSON.parse(
   await readFile(new URL("../round-1/pack.json", import.meta.url), "utf8"),
 );
-const authored = groups.flatMap(([category, questions]) => {
+const authored = groups.flatMap(([category, questions], group) => {
   assert.equal(questions.length, 25, category);
   assert.deepEqual(
     [
-      questions.filter((q) => q.difficulty >= 25 && q.difficulty <= 45).length,
-      questions.filter((q) => q.difficulty >= 46 && q.difficulty <= 65).length,
-      questions.filter((q) => q.difficulty >= 66 && q.difficulty <= 85).length,
-      questions.filter((q) => q.difficulty >= 86 && q.difficulty <= 100).length,
+      questions.filter((q) => q.difficulty >= 1 && q.difficulty <= 20).length,
+      questions.filter((q) => q.difficulty >= 21 && q.difficulty <= 30).length,
+      questions.filter((q) => q.difficulty >= 31 && q.difficulty <= 40).length,
     ],
-    [8, 9, 5, 3],
+    group < 2 ? [18, 5, 2] : [17, 5, 3],
     category,
   );
   return questions.map((q) => ({ ...q, category }));
@@ -65,7 +64,7 @@ const questions = authored.map((q, index) => {
       `${q.title}: ${field}`,
     );
   assert.ok(
-    Number.isInteger(q.difficulty) && q.difficulty >= 25 && q.difficulty <= 100,
+    Number.isInteger(q.difficulty) && q.difficulty >= 1 && q.difficulty <= 40,
   );
   assert.equal(q.hints.length, 3);
   assert.equal(new Set(q.hints).size, 3);
@@ -108,14 +107,14 @@ const questions = authored.map((q, index) => {
     }),
   );
   return {
-    id: `20000000-0000-4000-8000-${String(1000 + index).padStart(12, "0")}`,
+    id: `21000000-0000-4000-8000-${String(1000 + index).padStart(12, "0")}`,
     slug,
     title: q.title,
     round_type: 2,
     category: q.category,
     region: "The Kernel Breach",
     difficulty: q.difficulty,
-    base_bounty: q.difficulty * 10,
+    base_bounty: 250 + 10 * Math.round((q.difficulty - Math.min(...authored.map(q => q.difficulty))) * 75 / (40 - Math.min(...authored.map(q => q.difficulty)))),
     submission_format: "FULL_PROGRAM",
     checker_mode: "TOKENS",
     statement: statementFor(q, 2),
@@ -211,7 +210,7 @@ const table = questions
   .join("\n");
 await writeFile(
   new URL("README.md", import.meta.url),
-  `# Protocol Rebellion — Round 2\n\nPrivate organiser content. Never copy this directory into public assets.\n\n100 independent debugging missions in The Kernel Breach, with 25 per topic and four equivalent language variants: C, C++, Java and Python. There are 32 questions at 25–45, 36 at 46–65, 20 at 66–85 and 12 at 86–100. Ratings are authoring targets, not measured pilot difficulty.\n\nEach mission provides a plain-English incident, exact expected behaviour, buggy program, code-reading guide, two samples, at least six hidden tests and three progressive hints. Bounty remains 10 × difficulty (250–1,000 coins). Round 2's additional hint costs stay 10%, 30%, 80%, with winning score multipliers 90%, 70%, 50%. No scoring or shop rule is changed by the pack.\n\nUse the [question book](questions.md) for review and [validation summary](validation-summary.json) for exact local check scope. Local compiler checks do not publish questions or verify the production judge. Organiser review, language-fairness pilots and protected publication validation are still required.\n\nRebuild: \`npm.cmd run content:round2:build\`. Authored bodies keep explicit four-space blocks and one statement per line; no external formatter is required. Verify all organiser-authored programs: \`npm.cmd run content:round2:verify\` (GCC, G++, Java and Python required). Detailed reports and temporary binaries go under ignored \`apps/api/test-results/round2-validation/\`.\n\n| # | Topic | Mission | Difficulty | Bounty | Private defect |\n| --- | --- | --- | ---: | ---: | --- |\n${table}\n`,
+  `# Protocol Rebellion — Round 2\n\nPrivate organiser content. Never copy this directory into public assets.\n\n100 independent debugging missions in The Kernel Breach, with 25 per topic and four equivalent language variants: C, C++, Java and Python. There are 70 questions at 1–20, 20 at 21–30 and 10 at 31–40, matching the easier Round 1 style requested after the first event. Ratings are authoring targets, not measured pilot difficulty.\n\nEach mission provides a plain-English incident, exact expected behaviour, buggy program, code-reading guide, two samples, at least six hidden tests and three progressive hints. Bounties range from 250–1,000 coins independently of difficulty so Round 2 shop items remain affordable. Round 2's additional hint costs stay 10%, 30%, 80%, with winning score multipliers 90%, 70%, 50%. Existing hint percentages, winning score multipliers and shop prices stay unchanged.\n\nUse the [question book](questions.md) for review and [validation summary](validation-summary.json) for exact local check scope. Local compiler checks do not publish questions or verify the production judge. Organiser review, language-fairness pilots and protected publication validation are still required.\n\nRebuild: \`npm.cmd run content:round2:build\`. Authored bodies keep explicit four-space blocks and one statement per line; no external formatter is required. Verify all organiser-authored programs: \`npm.cmd run content:round2:verify\` (GCC, G++, Java and Python required). Detailed reports and temporary binaries go under ignored \`apps/api/test-results/round2-validation/\`.\n\n| # | Topic | Mission | Difficulty | Bounty | Private defect |\n| --- | --- | --- | ---: | ---: | --- |\n${table}\n`,
 );
 const book = questions
   .map(
@@ -238,7 +237,7 @@ const book = questions
 await writeFile(
   new URL("questions.md", import.meta.url),
   "# Protocol Rebellion — Round 2 organiser review book\n\nPrivate draft: includes unpurchased hints. References and hidden cases are in pack.json.\n\n" +
-    book +
+    book.trimEnd() +
     "\n",
 );
 console.log(

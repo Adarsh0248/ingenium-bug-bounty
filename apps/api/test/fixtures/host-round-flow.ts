@@ -26,8 +26,10 @@ import {createShopService} from "../../src/competition/shop.js";
 import {installShopIntel} from "../../src/competition/shop-intel.js";
 
 export interface RuntimeManifestFixture {language:(typeof LANGUAGES)[number];key:string;digest:string;manifest:unknown;}
-export async function runLocalRoundFlow(ownerConnection:string,apiConnection:string,driver:TrustedAuthoringDriver,manifests:RuntimeManifestFixture[],mode:"REAL"|"SYNTHETIC_PREFLIGHT"|"REAL_BURST"|"SYNTHETIC_BURST",save:(name:string,value:unknown)=>Promise<void>){
+export async function runLocalRoundFlow(ownerConnection:string,apiConnection:string,driver:TrustedAuthoringDriver,manifests:RuntimeManifestFixture[],mode:"REAL"|"SYNTHETIC_PREFLIGHT"|"REAL_BURST"|"SYNTHETIC_BURST",save:(name:string,value:unknown)=>Promise<void>,burstTeams=100,batch=false){
+  assert.ok(Number.isSafeInteger(burstTeams)&&burstTeams>=2&&burstTeams<=100);
   const burst=mode==="REAL_BURST"||mode==="SYNTHETIC_BURST";
+  assert.ok(!batch||burst,'Batch timing uses the bounded burst fixture');
   const ownerUrl=new URL(ownerConnection),apiUrl=new URL(apiConnection);
   assert.equal(ownerUrl.hostname,"127.0.0.1");assert.equal(apiUrl.hostname,"127.0.0.1");
   assert.equal(ownerUrl.username,"ingenium_schema_owner");assert.equal(apiUrl.username,"ingenium_api");assert.equal(ownerUrl.pathname,"/ingenium_schema_test");
@@ -56,7 +58,7 @@ export async function runLocalRoundFlow(ownerConnection:string,apiConnection:str
     async function person(){const id=randomUUID(),code=newAccessCode();await owner.query("INSERT INTO staff_identities(id,display_name,role) VALUES($1,'Isolated round-flow owner','OWNER')",[id]);await owner.query("INSERT INTO access_credentials(id,staff_id,verifier,version,issued_at) VALUES($1,$2,$3,1,date_trunc('milliseconds',clock_timestamp()))",[randomUUID(),id,code.verifier]);const flow=await entry.begin(code.code,{ip:"127.0.0.1",browserId:randomUUID()});assert.equal(flow.audience,"STAFF");return {...await staff.activate(flow.proofCookie,randomUUID()),code:code.code};}
     const actor=await person();
     // Publication setup is synthetic; only participant Run/Submit below uses the real installed judge.
-    const seedDriver={...driver,async submit(p:Parameters<typeof driver.submit>[0]){const nonce=randomUUID(),value=judgeReply(p,nonce,Buffer.from(p.sourceRole==="STARTER"?"0\n":"12\n"));return acceptJudgeReply(value,p,nonce,200);},async observe(p:Parameters<typeof driver.observe>[0]){return this.submit(p);}};
+    const seedDriver={...driver,async submit(p:Parameters<typeof driver.submit>[0]){const nonce=randomUUID(),sum=p.stdin.toString().trim().split(/\s+/).reduce((a,b)=>a+Number(b),0),value=judgeReply(p,nonce,Buffer.from(p.sourceRole==="STARTER"?"0\n":`${sum}\n`));return acceptJudgeReply(value,p,nonce,200);},async observe(p:Parameters<typeof driver.observe>[0]){return this.submit(p);}};
     const seedWorker=createValidationWorker(api,clock,seedDriver);await seedWorker.claim();
     async function fixture(round:number){
       const edit=async(action:Parameters<typeof content.command>[1]["action"],targetId:string|null,payload:unknown)=>{
@@ -68,6 +70,7 @@ export async function runLocalRoundFlow(ownerConnection:string,apiConnection:str
       for(const language of EVENT_LANGUAGES)await edit("VARIANT",version,{language,starter_code:starters[language],reference_solution_code:FIXED_HOST_SOURCES[language],defect_description:"The starter ignores its inputs and prints zero.",runtime_key:driver.runtimes.get(language)!.key,cpu_time_limit_ms:2000,wall_time_limit_ms:10000,memory_limit_kb:524288});
       await edit("CASE",version,{case_id:null,position:1,visibility:"SAMPLE",input_data:"7 5\n",expected_output:"12\n"});
       const hidden=(await edit("CASE",version,{case_id:null,position:2,visibility:"HIDDEN",input_data:"5 7\n",expected_output:"12\n"})).case_id!;
+      if(batch)for(const [i,[a,b]]of [[0,0],[-9,5],[100,-10],[1234,5678],[-1000,-1],[42,-42]].entries())await edit('CASE',version,{case_id:null,position:i+3,visibility:i===0?'SAMPLE':'HIDDEN',input_data:`${a} ${b}\n`,expected_output:`${a!+b!}\n`});
       for(const level of [1,2,3])await edit("HINT",version,{level,content:`Isolated hint ${level}`});
       for(const language of EVENT_LANGUAGES)await edit("WITNESSES",version,{language,witnesses:[{check_type:"TEST_CASE",test_case_id:hidden,expected_failure:"WRONG_OUTPUT"}]});
       const revision=(await owner.query("SELECT content_revision FROM bug_versions WHERE id=$1",[version])).rows[0].content_revision;
@@ -84,8 +87,9 @@ export async function runLocalRoundFlow(ownerConnection:string,apiConnection:str
     stage="fixture-publication";const first=[await fixture(1)],second=[await fixture(2)];
     if(!burst){for(let i=1;i<6;i++)first.push(await fixture(1));second.push(await fixture(2));}
     await owner.query("DELETE FROM quota_buckets");
-    const teams:{id:string;code:string;members:string[]}[]=[];for(let i=0;i<(burst?100:2);i++){const id=randomUUID(),code=newAccessCode(),members=[randomUUID(),randomUUID()];await owner.query("INSERT INTO teams(id,display_name) VALUES($1,$2)",[id,`Isolated team ${i}`]);await owner.query("INSERT INTO team_members(id,team_id,position,display_name) VALUES($1,$3,1,'First'),($2,$3,2,'Second')",[...members,id]);await owner.query("INSERT INTO access_credentials(id,team_id,verifier,version,issued_at) VALUES($1,$2,$3,1,date_trunc('milliseconds',clock_timestamp()))",[randomUUID(),id,code.verifier]);teams.push({id,code:code.code,members});}
+    const teams:{id:string;code:string;members:string[]}[]=[];for(let i=0;i<(burst?burstTeams:2);i++){const id=randomUUID(),code=newAccessCode(),members=[randomUUID(),randomUUID()];await owner.query("INSERT INTO teams(id,display_name) VALUES($1,$2)",[id,`Isolated team ${i}`]);await owner.query("INSERT INTO team_members(id,team_id,position,display_name) VALUES($1,$3,1,'First'),($2,$3,2,'Second')",[...members,id]);await owner.query("INSERT INTO access_credentials(id,team_id,verifier,version,issued_at) VALUES($1,$2,$3,1,date_trunc('milliseconds',clock_timestamp()))",[randomUUID(),id,code.verifier]);teams.push({id,code:code.code,members});}
     await until(async()=>(await owner.query("SELECT lease_until<=clock_timestamp() expired FROM judge_control WHERE id=1")).rows[0].expired,45000);
+    if(batch)await owner.query('UPDATE participant_batch_control SET enabled=true WHERE id=1');
     worker=startJudgingWorker(runner,clock,driver,()=>{workerFaults++;});
     async function paced<T>(work:()=>Promise<T>):Promise<T>{
       for(let attempt=0;;attempt++){try{return await work();}catch(error){if(!(error instanceof AccessError)||error.code!=="RATE_LIMITED"||attempt>=3||!error.retryAfterSeconds||error.retryAfterSeconds>60)throw error;await delay(error.retryAfterSeconds*1000);}}
@@ -110,7 +114,7 @@ export async function runLocalRoundFlow(ownerConnection:string,apiConnection:str
       for(let i=0;i<teams.length;i++){
         // Fixture setup only; no quota counters change in the measured burst or settlement.
         if(i%10===0)await owner.query("DELETE FROM quota_buckets");
-        for(let member=0;member<2;member++){const language=EVENT_LANGUAGES[(i*2+member)%EVENT_LANGUAGES.length]!,a=await join(teams[i]!,language,member);members.push({cookie:a.sessionCookie,language});}
+        for(let member=0;member<2;member++){const language=EVENT_LANGUAGES[((batch?i:i*2)+member)%EVENT_LANGUAGES.length]!,a=await join(teams[i]!,language,member);members.push({cookie:a.sessionCookie,language});}
       }
       const bounty=(await owner.query("SELECT id FROM bounties WHERE round_id=$1",[r1])).rows[0].id;
       await owner.query("DELETE FROM quota_buckets");stage="burst-admission";
@@ -118,15 +122,17 @@ export async function runLocalRoundFlow(ownerConnection:string,apiConnection:str
       const replies=[];
       for(let i=0;i<members.length;i+=16)replies.push(...await Promise.all(members.slice(i,i+16).map(async m=>{const begin=performance.now(),key=randomUUID(),r=await competition.submit(m.cookie,r1,bounty,FIXED_HOST_SOURCES[m.language],key);latency.push(performance.now()-begin);return{m,key,receipt:r};})));
       const accepted=replies.filter(r=>r.receipt.result.status==="ADMITTED"),refused=replies.filter(r=>r.receipt.result.status!=="ADMITTED");
-      assert.equal(accepted.length,100);assert.equal(refused.length,100);assert.equal(new Set(accepted.map(r=>r.receipt.result.submission_id)).size,100);
-      await save("burst-admitted",{admitted:100,refused:100,service_admission_ms:Math.round(performance.now()-at)});
-      console.log(`BURST: 200 service requests, 100 retained receipts, 100 team/bug refusals; no quota reset`);
+      assert.equal(accepted.length,burstTeams);assert.equal(refused.length,burstTeams);assert.equal(new Set(accepted.map(r=>r.receipt.result.submission_id)).size,burstTeams);
+      await save("burst-admitted",{admitted:burstTeams,refused:burstTeams,service_admission_ms:Math.round(performance.now()-at)});
+      console.log(`BURST: ${members.length} service requests, ${burstTeams} retained receipts, ${burstTeams} team/bug refusals; no quota reset`);
       stage="burst-sample";const sampleAt=performance.now(),sample=await competition.run(members[0]!.cookie,r1,bounty,FIXED_HOST_SOURCES[members[0]!.language],randomUUID());
       assert.equal(sample.result.status,"ADMITTED");assert.equal(await complete(sample.result.run_id as string),"PASSED");
       const sampleMs=Math.round(performance.now()-sampleAt);stage="burst-settlement";
       await until(async()=>(await owner.query("SELECT count(*)::int n FROM participant_judging WHERE round_id=$1 AND lane='OFFICIAL' AND completed_at IS NULL",[r1])).rows[0].n===0,1200000);
-      assert.equal((await owner.query("SELECT count(*)::int n FROM participant_judging WHERE round_id=$1 AND lane='OFFICIAL' AND result='PASSED'",[r1])).rows[0].n,100);
-      assert.equal((await owner.query("SELECT count(*)::int n FROM bounty_awards WHERE bounty_id=$1",[bounty])).rows[0].n,100);
+      assert.equal((await owner.query("SELECT count(*)::int n FROM participant_judging WHERE round_id=$1 AND lane='OFFICIAL' AND result='PASSED'",[r1])).rows[0].n,burstTeams);
+      assert.equal((await owner.query("SELECT count(*)::int n FROM bounty_awards WHERE bounty_id=$1",[bounty])).rows[0].n,burstTeams);
+      // Results are deliberately sealed before cleanup; keep reconciliation alive until every original reservation drains.
+      await until(async()=>(await owner.query("SELECT count(*)::int n FROM execution_capacity_slots WHERE participant_attempt_id IS NOT NULL")).rows[0].n===0,120000);
       assert.equal((await owner.query("SELECT count(*)::int n FROM execution_capacity_slots WHERE participant_attempt_id IS NOT NULL")).rows[0].n,0);
       for(const r of accepted.slice(0,5))assert.equal((await competition.submit(r.m.cookie,r1,bounty,FIXED_HOST_SOURCES[r.m.language],r.key)).result.submission_id,r.receipt.result.submission_id);
       // A real compiler queue may outlast the staff idle window; use normal sign-in rather than extending its deadline.
@@ -135,7 +141,13 @@ export async function runLocalRoundFlow(ownerConnection:string,apiConnection:str
       assert.notEqual(freshStaff.sessionCookie,actor.sessionCookie);await assert.rejects(staff.inspect(actor.sessionCookie));actor.sessionCookie=freshStaff.sessionCookie;
       await command("CLOSE",r1);await command("FINALISE",r1);
       latency.sort((a,b)=>a-b);
-      const report={scope:mode==="REAL_BURST"?"REAL_COMPILER_100_TEAM_SERVICE_BURST":"SYNTHETIC_BURST_PREFLIGHT",admission_transport:"IN_PROCESS_AUTHORISED_SERVICE",admission_parallelism:16,application_slots:(await owner.query("SELECT count(*)::int n FROM execution_capacity_slots")).rows[0].n,participant_execution_real:mode==="REAL_BURST",fixture_authoring_synthetic:true,synthetic_clock:true,teams:100,members:200,admitted:100,refused:100,official_passed:100,independent_awards:100,staff_fresh_signin:true,sample_ms:sampleMs,elapsed_ms:Math.round(performance.now()-at),service_admission_p95_ms:Math.ceil(latency[189]!),worker_fault_notifications:workerFaults,event_deployed:false};
+      const timings=(await owner.query("SELECT language,extract(epoch FROM(completed_at-created_at))*1000 ms FROM participant_judging WHERE round_id=$1 AND lane='OFFICIAL' ORDER BY ms",[r1])).rows;
+      if(batch){
+        assert.equal((await owner.query('SELECT count(*)::int n FROM participant_batches')).rows[0].n,burstTeams+1);
+        assert.equal((await owner.query('SELECT count(*)::int n FROM participant_batch_members')).rows[0].n,burstTeams*8+2);
+        assert.equal((await owner.query('SELECT count(*)::int n FROM participant_attempts WHERE released_at IS NULL')).rows[0].n,0);
+      }
+      const report={scope:mode==="REAL_BURST"?`REAL_COMPILER_${burstTeams}_TEAM_SERVICE_BURST`:"SYNTHETIC_BURST_PREFLIGHT",admission_transport:"IN_PROCESS_AUTHORISED_SERVICE",admission_parallelism:16,application_slots:(await owner.query("SELECT count(*)::int n FROM execution_capacity_slots")).rows[0].n,participant_execution_real:mode==="REAL_BURST",fixture_authoring_synthetic:true,synthetic_clock:true,teams:burstTeams,members:members.length,admitted:burstTeams,refused:burstTeams,official_passed:burstTeams,independent_awards:burstTeams,staff_fresh_signin:true,sample_ms:sampleMs,official_p50_ms:Math.ceil(Number(timings[Math.ceil(timings.length*.5)-1]!.ms)),official_p95_ms:Math.ceil(Number(timings[Math.ceil(timings.length*.95)-1]!.ms)),official_max_ms:Math.ceil(Number(timings.at(-1)!.ms)),batch,cases_per_official:batch?8:2,cases_per_sample:batch?2:1,official_languages:timings.map(t=>t.language),elapsed_ms:Math.round(performance.now()-at),service_admission_p95_ms:Math.ceil(latency[Math.ceil(latency.length*.95)-1]!),worker_fault_notifications:workerFaults,event_deployed:false};
       await save("completed",report);console.log(`PASS: ${report.scope}; original official receipts settled without permit replay`);console.log(JSON.stringify(report));return;
     }
     const a=await join(teams[0]!,"cpp"),b=await join(teams[1]!,"python");

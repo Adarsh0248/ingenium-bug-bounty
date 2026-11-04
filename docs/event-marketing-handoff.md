@@ -312,7 +312,7 @@ At the next chat's start, prioritise the event name, date, venue, registration l
 
 ### Existing assets and local references
 
-Repository location for a chat with local access: `D:\College\Ingenium\Bug bounty`.
+Repository location for a chat with local access: `C:\path\to\ingenium-bug-bounty`.
 
 | Reference | Purpose |
 | --- | --- |

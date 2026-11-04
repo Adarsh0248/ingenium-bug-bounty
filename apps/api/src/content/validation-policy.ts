@@ -32,7 +32,8 @@ export function planValidation(capture: ValidationCapture): { issues: Validation
   };
   if (v.publication_status !== "DRAFT") issue("CONTENT_LOCKED");
   if (!v.title.trim() || !v.statement.trim()) issue("STATEMENT_INCOMPLETE");
-  if (!Number.isInteger(v.difficulty) || v.difficulty < 1 || v.difficulty > 100 || (v.base_bounty !== v.difficulty * 10 && !(v.round_type === 1 && v.base_bounty === v.difficulty * 50))) issue("REWARD_INVALID");
+  if (!Number.isInteger(v.difficulty) || v.difficulty < 1 || v.difficulty > 100 || (v.base_bounty !== v.difficulty * 10 && !(v.round_type === 1 && v.base_bounty === v.difficulty * 50)
+    && !(v.round_type === 2 && Number.isInteger(v.base_bounty) && v.base_bounty >= 250 && v.base_bounty <= 1000 && v.base_bounty % 10 === 0))) issue("REWARD_INVALID");
   if (v.submission_format !== "FULL_PROGRAM" || !["TOKENS", "EXACT_TEXT"].includes(v.checker_mode) || v.checker_version !== CHECKER_VERSION) issue("CHECKER_UNSUPPORTED");
   if (!capture.cases.some(c => c.visibility === "SAMPLE")) issue("SAMPLE_REQUIRED");
   if (!capture.cases.some(c => c.visibility === "HIDDEN")) issue("HIDDEN_REQUIRED");

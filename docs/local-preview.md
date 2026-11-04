@@ -14,7 +14,7 @@ This mode needs no Docker and does not modify another preview or database.
 Start Docker Desktop with Linux containers, then run from PowerShell:
 
 ```powershell
-cd "D:\College\Ingenium\Bug bounty"
+cd "C:\path\to\ingenium-bug-bounty"
 npm.cmd run preview:app
 ```
 

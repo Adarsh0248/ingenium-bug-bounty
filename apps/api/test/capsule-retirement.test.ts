@@ -4,12 +4,51 @@ import { test } from "node:test";
 import { judgeJson } from "../src/content/judge-protocol.js";
 import { sha256 } from "../src/access/credentials.js";
 import { createCapsuleBackend } from "../src/judge/capsule-backend.js";
-import { createCapsuleRetirement } from "../src/judge/capsule-retirement.js";
+import { createCapsuleRetirement, retirementContext } from "../src/judge/capsule-retirement.js";
 import { retirementFixture } from "./fixtures/retirement.js";
-import { judgeRuntimes, syntheticCapsuleResources } from "./fixtures/judge.js";
+import { judgeRuntimes, judgePayload, syntheticCapsuleResources } from "./fixtures/judge.js";
+import { phaseInitialisation, phaseResourceRecord } from '../src/judge/phase-resources.js';
 
 const signal = () => AbortSignal.timeout(5000);
 const issuer = (h: ReturnType<typeof retirementFixture>) => createCapsuleRetirement(h.store, h.driver, h.release, h.authority);
+
+test("optional absent batch checkpoints preserve legacy retirement digests and complete the bounded certificate", async () => {
+  const h = retirementFixture();
+  const before = await retirementContext(h.store, h.release, h.plan);
+  for (const key of ['batch_compile', 'batch_artifact', 'batch_result']) h.rows[key] = null;
+  for (let i = 0; i < 20; i++) for (const field of ['init', 'groups', 'result']) h.rows[`b${String(i).padStart(2, '0')}_${field}`] = null;
+  assert.ok(Object.keys(h.rows).length > 64);
+  assert.deepEqual((await retirementContext(h.store, h.release, h.plan)).common, before.common);
+  assert.ok((await issuer(h).seal(h.plan, signal())).metadata.drain);
+});
+
+test("Python batch retirement checks every case group and rejects missing or foreign retained phases", async () => {
+  const payload = judgePayload('python');
+  const h = retirementFixture({ payload, owner: randomUUID(), providerToken: randomUUID() });
+  const init = phaseInitialisation(h.plan, 'run', h.boot, h.physical, 'a'.repeat(64));
+  h.rows.run_init = null; h.rows.run_groups = null;
+  h.rows.b00_init = init;
+  h.rows.b00_groups = phaseResourceRecord(init, { memory: { device: '11', inode: '12' }, cpuacct: { device: '21', inode: '22' } });
+  h.rows.b00_result = { result: 'PASSED' };
+  const cases = [{ caseId: randomUUID(), position: 1, checker: 'TOKENS' as const, expected: Buffer.from('12\n'), payload }];
+  const authority = { ...h.authority, batchCases: cases };
+  const readCapsule = h.store.capsule.bind(h.store);
+  h.store.capsule = async (plan, loadBatch = false) => {
+    const row = await readCapsule(plan, loadBatch);
+    if (!loadBatch && row) for (const key of Object.keys(row))
+      if (key.startsWith('batch_') || /^b[0-9]{2}_/.test(key)) (row as Record<string, unknown>)[key] = null;
+    return row;
+  };
+  const context = await retirementContext(h.store, h.release, h.plan, cases);
+  assert.match(context.common.context_sha256, /^[a-f0-9]{64}$/);
+  await assert.rejects(retirementContext(h.store, h.release, h.plan));
+  const groups = h.rows.b00_groups;
+  h.rows.b00_groups = null;
+  await assert.rejects(retirementContext(h.store, h.release, h.plan, cases));
+  h.rows.b00_groups = groups;
+  await assert.rejects(retirementContext(h.store, h.release, h.plan, [{ ...cases[0]!, payload: { ...payload, attemptId: randomUUID() } }]));
+  assert.ok((await createCapsuleRetirement(h.store, h.driver, h.release, authority).seal(h.plan, signal())).metadata.drain);
+});
 
 test("complete retirement is challenge/identity-bound, certificate-first and append-only without changing original result bytes", async () => {
   const h = retirementFixture(), original = judgeJson(h.original), result = await issuer(h).seal(h.plan, signal());

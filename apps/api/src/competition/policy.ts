@@ -12,13 +12,15 @@ export function bounty(difficulty: number, multiplier = 1) {
 export function hintPrice(round: number, difficulty: number, level: number, baseBounty = bounty(difficulty)) {
   bounty(difficulty);
   if (![1, 2].includes(round) || !Number.isInteger(level) || level < 1 || level > 3) throw new Error("Invalid hint.");
-  if (baseBounty !== bounty(difficulty) && !(round === 1 && baseBounty === bounty(difficulty,5))) throw new Error("Invalid frozen bounty.");
+  if (baseBounty !== bounty(difficulty) && !(round === 1 && baseBounty === bounty(difficulty,5))
+    && !(round === 2 && Number.isInteger(baseBounty) && baseBounty >= 250 && baseBounty <= 1000 && baseBounty % 10 === 0)) throw new Error("Invalid frozen bounty.");
   return baseBounty / 10 * [1, 3, round === 1 ? 4 : 8][level - 1]!;
 }
 export function winPoints(round: number, difficulty: number, tier: number, baseBounty = bounty(difficulty)) {
   bounty(difficulty);
   if (![1, 2].includes(round) || !Number.isInteger(tier) || tier < 0 || tier > 3) throw new Error("Invalid tier.");
-  if (baseBounty !== bounty(difficulty) && !(round === 1 && baseBounty === bounty(difficulty,5))) throw new Error("Invalid frozen bounty.");
+  if (baseBounty !== bounty(difficulty) && !(round === 1 && baseBounty === bounty(difficulty,5))
+    && !(round === 2 && Number.isInteger(baseBounty) && baseBounty >= 250 && baseBounty <= 1000 && baseBounty % 10 === 0)) throw new Error("Invalid frozen bounty.");
   return baseBounty / 10 * (round === 1 ? 10 : [10, 9, 7, 5][tier]!);
 }
 export interface Standing { team_round_id: string; points: number; effective_time_ms: number; difficulties: number[]; }

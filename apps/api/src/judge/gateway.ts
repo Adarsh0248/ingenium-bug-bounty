@@ -5,6 +5,7 @@ import { sha256, uuid } from "../access/credentials.js";
 import { privateJudgeAddress } from "../content/judge-driver.js";
 import { judgeJson, JUDGE_BODY_LIMIT, JUDGE_PROTOCOL, readAuthoringRequest, readJudgeJson, runtimeRecord } from "../content/judge-protocol.js";
 import type { createJudgeRegistry } from "./registry.js";
+import {PARTICIPANT_BATCH_PROTOCOL,readParticipantBatch} from '../content/batch-protocol.js';
 
 interface GatewaySettings {
   registry: ReturnType<typeof createJudgeRegistry>; serverName: string; workerAddress: string; workerCertificateSha256: string;
@@ -81,6 +82,24 @@ export function buildJudgeGateway(settings: GatewaySettings) {
     }
     return reply.code(result.status).type("application/json").send(judgeJson(result.value));
   }) });
+  const batchPrefix='/ingenium/v1/participant/batches';
+  app.get(`${batchPrefix}/ready`,async(request,reply)=>handle(request,async()=>{
+    if(request.headers['content-length']!==undefined||request.headers['transfer-encoding']!==undefined)throw new RequestError(400);
+    return reply.type('application/json').send(judgeJson({protocol:PARTICIPANT_BATCH_PROTOCOL,request_id:header(request,'x-ingenium-request-id'),host_epoch_id:epoch,ready:await registry.ready(),runtimes:runtimeRecord(runtimes)}));
+  }));
+  app.route<{Params:{batch:string}}>({method:['GET','POST'],url:`${batchPrefix}/:batch`,handler:async(request,reply)=>handle(request,async()=>{
+    const nonce=header(request,'x-ingenium-request-id'),digest=header(request,'x-ingenium-payload-digest');let batch:string;
+    try{batch=uuid(request.params.batch);if(!/^[0-9a-f]{64}$/.test(digest))throw new Error();}catch{throw new RequestError(400);}
+    let result;
+    if(request.method==='POST'){
+      const raw=Buffer.from(judgeJson(request.body));try{readParticipantBatch(raw,{batchId:batch,hostEpochId:epoch,digest},runtimes);}catch{throw new RequestError(400);}
+      result=await registry.admitBatch(raw,batch,digest,nonce);
+    }else{
+      if(request.headers['content-length']!==undefined||request.headers['transfer-encoding']!==undefined)throw new RequestError(400);
+      result=await registry.observeBatch(batch,digest,nonce);
+    }
+    return reply.code(result.status).type('application/json').send(judgeJson(result.value));
+  })});
   app.addHook("onClose", async () => { for (const state of active.values()) clearTimeout(state.timer); active.clear(); bodies.clear(); });
   return app;
 }

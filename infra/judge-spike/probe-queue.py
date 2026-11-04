@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 
-API = "ingenium-judge-spike-api-1"
+API = "ingenium-judge-spike-api-1"  # gitleaks:allow -- Docker service name
 DB = "ingenium-judge-spike-db-1"
 REDIS = "ingenium-judge-spike-redis-1"
 

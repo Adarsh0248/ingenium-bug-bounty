@@ -48,7 +48,8 @@ const metadata = (v?: ContentDetail) => ({
   title: v?.title ?? "",
   statement: v?.statement ?? "",
   difficulty: v?.difficulty ?? 10,
-  reward_multiplier: v ? v.base_bounty / (v.difficulty * 10) : 5,
+  reward_multiplier: v?.round_type === 2 ? 1 : v ? v.base_bounty / (v.difficulty * 10) : 5,
+  ...(v?.round_type === 2 ? { base_bounty: v.base_bounty } : {}),
   category: v?.category ?? "ARRAYS",
   checker_mode: v?.checker_mode ?? "TOKENS",
 });
@@ -471,6 +472,7 @@ export default function StaffContent({
                 round_type: roundType,
                 ...metadata(),
                 reward_multiplier: roundType === 1 ? 5 : 1,
+                ...(roundType === 2 ? { base_bounty: 250 } : {}),
               });
             }}
           >
@@ -1105,6 +1107,7 @@ export default function StaffContent({
                           round_type: Number(e.target.value),
                           reward_multiplier:
                             Number(e.target.value) === 1 ? 5 : 1,
+                          base_bounty: Number(e.target.value) === 2 ? 250 : undefined,
                         })
                       }
                     >
@@ -1160,9 +1163,15 @@ export default function StaffContent({
                     </option>
                   </select>
                 </label>
-                <output>
-                  Bounty: {p!.difficulty * 10 * p!.reward_multiplier}
-                </output>
+                {(edit.action === "CREATE" ? p!.round_type : detail?.round_type) === 2 && (
+                  <label>
+                    Bounty (coins)
+                    <input type="number" required min={250} max={1000} step={10}
+                      value={p!.base_bounty ?? p!.difficulty * 10}
+                      onChange={e => update({ base_bounty: Number(e.target.value), reward_multiplier: 1 })} />
+                  </label>
+                )}
+                <output>Bounty: {p!.base_bounty ?? p!.difficulty * 10 * p!.reward_multiplier}</output>
                 <label>
                   Checker
                   <select

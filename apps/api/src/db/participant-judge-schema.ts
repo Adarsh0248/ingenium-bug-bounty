@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, customType, foreignKey, index, integer, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, customType, foreignKey, index, integer, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { accessCredentials, staffIdentities, rounds, teamRounds, memberRounds } from "./access-schema.js";
 import { staffSessions } from "./staff-schema.js";
@@ -20,10 +20,12 @@ export const participantJudging = pgTable("participant_judging", {
   snapshotId: uuid("snapshot_id").notNull().references(() => validationSnapshots.id), source: bytes("source"), language: text("language").notNull(),
   hostEpochId: uuid("host_epoch_id").notNull().references(() => judgeHostEpochs.id), runtimeKey: text("runtime_key").notNull(), runtimeDigest: bytes("runtime_digest").notNull(),
   createdAt: instant("created_at").notNull(), policyVersion: integer("policy_version").notNull().default(1),
+  sampleExpiryPolicy: integer("sample_expiry_policy").notNull().default(2),
   status: text("status").notNull(), result: text("result"), startedAt: instant("started_at"), completedAt: instant("completed_at"),
   cancellationId: uuid("cancellation_id").references(() => roundCancellations.id),
   reservedBytes: bigint("reserved_bytes", { mode: "bigint" }).notNull(),
 }, t => [index("shop_unfinished_work").on(t.bountyId,t.teamRoundId).where(sql`${t.completedAt} is null and ${t.status}<>'CANCELLED'`), unique("participant_official_plan").on(t.submissionId), unique("participant_sample_receipt").on(t.sourceId), unique("participant_queue_order").on(t.queueOrder),
+  check("participant_judging_sample_expiry_policy_check", sql`${t.sampleExpiryPolicy} in (1,2)`),
   check("participant_parent_shape", sql`${t.policyVersion}=1 and octet_length(${t.source}) between 1 and 131072 and octet_length(${t.runtimeDigest})=32
     and ${t.language} in ('c','cpp','java','python','javascript') and ${t.reservedBytes} between 524288 and 21495808
     and ((${t.lane}='OFFICIAL' and ${t.submissionId} is not null and ${t.submissionId}=${t.id} and ${t.sourceId} is null) or (${t.lane}='SAMPLE' and ${t.submissionId} is null and ${t.sourceId} is not null))
@@ -67,6 +69,20 @@ export const participantScheduler = pgTable("participant_scheduler", {
 export const participantRetryPermissions = pgTable("participant_retry_permissions", {
   jobId: uuid("job_id").primaryKey().references(() => participantJobs.id), sourceId: uuid("source_id").notNull().references(() => competitionOutcomes.id),
 }, t => [unique("participant_retry_source").on(t.sourceId)]);
+
+export const participantBatchControl = pgTable("participant_batch_control", {
+  id: integer("id").primaryKey(), enabled: boolean("enabled").notNull().default(false),
+}, t => [check("participant_batch_control_id_check", sql`${t.id}=1`)]);
+export const participantBatches = pgTable("participant_batches", {
+  id: uuid("id").primaryKey(), parentId: uuid("parent_id").notNull().unique().references(() => participantJudging.id),
+  carrierAttemptId: uuid("carrier_attempt_id").notNull().unique().references(() => participantAttempts.id),
+  raw: bytes("raw"), digest: bytes("digest").notNull(), createdAt: instant("created_at").notNull(),
+}, t => [check("participant_batches_raw_check", sql`octet_length(${t.raw}) between 1 and 16384`),
+  check("participant_batches_digest_check", sql`octet_length(${t.digest})=32 and ${t.digest}=sha256(${t.raw})`)]);
+export const participantBatchMembers = pgTable("participant_batch_members", {
+  batchId: uuid("batch_id").notNull().references(() => participantBatches.id),
+  attemptId: uuid("attempt_id").primaryKey().references(() => participantAttempts.id), ordinal: integer("ordinal").notNull(),
+}, t => [unique("participant_batch_members_batch_id_ordinal_key").on(t.batchId,t.ordinal), check("participant_batch_members_ordinal_check", sql`${t.ordinal} between 0 and 7`)]);
 
 export const submissionReviewAudits = pgTable("submission_review_audits", {
   id: uuid("id").primaryKey(), parentId: uuid("parent_id").notNull().references(() => participantJudging.id),

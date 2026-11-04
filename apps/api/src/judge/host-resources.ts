@@ -10,7 +10,8 @@ import type { ExecutionPlan } from "./execution-plan.js";
 import { assertHostCgroupAbsent, inspectHostCgroups, prepareHostCgroup, removeHostCgroup, verifyHostCgroup, cpusetRange } from "./host-cgroups.js";
 import type { CgroupAllocation, CgroupRoot } from "./host-cgroups.js";
 import type { IsolateSettings } from "./isolate-context.js";
-import { retainedPhaseGroups } from "./phase-resources.js";
+import { retainedPhaseGroups,retainedBatchPhaseGroups } from "./phase-resources.js";
+import {readParticipantBatch} from '../content/batch-protocol.js';
 import { verifyNoCapsuleReferences } from "./capsule-residue.js";
 import { retainedStorage } from "./capsule-storage.js";
 
@@ -56,13 +57,17 @@ export function createHostCapsuleResources(checkpoints: ExecutionCheckpoints, se
   assertRetired(plan: ExecutionPlan, reference: CapsuleReference, signal: AbortSignal): Promise<void>;
 } {
   const copied: IsolateSettings = { hostEpochId: uuid(settings.hostEpochId), bootId: uuid(settings.bootId), binaries: { ...settings.binaries },
-    runtimes: new Map([...settings.runtimes].map(([key, value]) => [key, { ...value }])) };
+    runtimes: new Map([...settings.runtimes].map(([key, value]) => [key, { ...value }])),
+    ...(settings.batch?{batch:{...settings.batch,raw:Buffer.from(settings.batch.raw)}}:{}) };
+  const batch=copied.batch?readParticipantBatch(copied.batch.raw,{...copied.batch,hostEpochId:copied.hostEpochId},copied.runtimes):null;
+  const phases=(plan:ExecutionPlan,physical:Pick<import('./checkpoints.js').PhysicalExecutionIdentity,'container_id'|'cgroup_parent'>,row:Record<string,unknown|null>)=>
+    batch?retainedBatchPhaseGroups(plan,batch.cases,copied.bootId,physical,row):retainedPhaseGroups(plan,copied.bootId,physical,row as Parameters<typeof retainedPhaseGroups>[3]);
   runtimeRecord(copied.runtimes);
   if (copied.hostEpochId !== checkpoints.hostEpochId || copied.bootId !== checkpoints.bootId) return fail();
   async function state(plan: ExecutionPlan, reference: CapsuleReference, signal: AbortSignal) {
     signal.throwIfAborted();
     if (process.platform !== "linux" || process.getuid?.() !== 0 || (await readFile("/proc/sys/kernel/random/boot_id", "ascii")).trim() !== copied.bootId) return fail();
-    const ref = capsuleReference(plan, reference.intent), row = await checkpoints.capsule(plan);
+    const ref = capsuleReference(plan, reference.intent), row = await checkpoints.capsule(plan,batch!==null);
     if (!row || judgeJson(row.intent) !== judgeJson(ref.intent) || JSON.stringify(ref) !== JSON.stringify(reference)) return fail();
     const configuration = capsuleConfiguration(copied, plan, ref);
     return { row, ref, configuration };
@@ -93,7 +98,7 @@ export function createHostCapsuleResources(checkpoints: ExecutionCheckpoints, se
       if (!physical || physical.cgroup_parent !== ref.parent) return fail();
       const receipt = { version: 1, boot_id: copied.bootId, container_id: physical.container_id, resources_sha256: saved.digest };
       if (judgeJson(row.resource_remove) !== judgeJson(receipt) || judgeJson(row.resource_removed) !== judgeJson(receipt)) return fail();
-      retainedPhaseGroups(plan, copied.bootId, physical, row); retainedStorage(plan, copied.bootId, physical, row.storage);
+      phases(plan,physical,row); retainedStorage(plan, copied.bootId, physical, row.storage);
       if (judgeJson(await inspectHostCgroups(copied.bootId)) !== judgeJson(Object.fromEntries(Object.entries(saved.groups).map(([key, value]) => [key, value.root])))) return fail();
       for (const group of Object.values(saved.groups)) { signal.throwIfAborted(); await assertHostCgroupAbsent(group.root, ref.parent); }
       await assertCapsuleConfigurationAbsent(ref);
@@ -120,7 +125,7 @@ export function createHostCapsuleResources(checkpoints: ExecutionCheckpoints, se
       for (const key of ["stopped", "remove", "removed"] as const) if (object(row[key], ["id"]).id !== container.id) return fail();
       const physical = await checkpoints.physical(plan);
       if (physical !== null && (physical.container_id !== container.id || physical.cgroup_parent !== ref.parent)) return fail();
-      const phase = retainedPhaseGroups(plan, copied.bootId, { container_id: container.id, cgroup_parent: ref.parent }, row);
+      const phase = phases(plan,{ container_id: container.id, cgroup_parent: ref.parent },row);
       if (physical === null && (phase.phase !== null || row.storage !== null)) return fail();
       if (physical !== null) retainedStorage(plan, copied.bootId, physical, row.storage);
       const saved = manifest(row, configuration), receipt = { version: 1, boot_id: copied.bootId, container_id: container.id, resources_sha256: saved.digest };

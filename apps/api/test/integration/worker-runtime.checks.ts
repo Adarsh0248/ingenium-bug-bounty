@@ -42,8 +42,14 @@ export async function workerRuntimeChecks(
   const posts = new Map<string, number>(),
     lost = new Set<string>();
   let ready = true,
+    readinessRequests = 0,
+    readinessDelay = 0,
     reached: (() => void) | undefined,
     blocked: Promise<void> | undefined,
+    parallelReached: (() => void) | undefined,
+    parallelBarrier: Promise<void> | undefined,
+    parallelActive = 0,
+    parallelPeak = 0,
     error: unknown;
   const server = createServer(
     {
@@ -70,6 +76,10 @@ export async function workerRuntimeChecks(
         res.setHeader("Content-Type", "application/json");
         const root = "/ingenium/v1/authoring";
         if (req.url === `${root}/ready`) {
+          readinessRequests++;
+          const wait = readinessDelay;
+          readinessDelay = 0;
+          if (wait) await delay(wait);
           res.statusCode = ready ? 200 : 503;
           res.end(
             judgeJson({
@@ -97,6 +107,16 @@ export async function workerRuntimeChecks(
           posts.set(attempt, (posts.get(attempt) ?? 0) + 1);
           assert.equal(posts.get(attempt), 1);
           records.set(attempt, { payload, token: randomUUID() });
+          if (payload.source.toString().includes("parallel pipeline")) {
+            parallelActive++;
+            parallelPeak = Math.max(parallelPeak, parallelActive);
+            if (parallelActive === 2) parallelReached?.();
+            try {
+              await parallelBarrier;
+            } finally {
+              parallelActive--;
+            }
+          }
           if (payload.source.toString().includes("shutdown")) {
             reached?.();
             await blocked;
@@ -277,13 +297,56 @@ export async function workerRuntimeChecks(
           dependency.assertReady(AbortSignal.timeout(10000)),
         );
         ready = true;
+        const beforeReady = readinessRequests;
         assert.equal(await coordinator.tick(), "TICKED");
+        assert.equal(readinessRequests - beforeReady, 1, "The four lanes share one fresh authenticated readiness observation per renewal batch");
         await dependency.assertReady(AbortSignal.timeout(10000));
         const wrong = competitionRuntime(c.api, c.clock, {
           ...settings,
           hostEpochId: randomUUID(),
         });
         await assert.rejects(wrong.assertReady(AbortSignal.timeout(10000)));
+      },
+    );
+    await t.test(
+      "a slow readiness observation cannot extend the five-second renewal window for the remaining lanes",
+      async () => {
+        coordinator.stop();
+        await expireLease();
+        coordinator = createJudgingCoordinator(pool, c.clock, driver);
+        const before = readinessRequests;
+        readinessDelay = 5100;
+        assert.equal(await coordinator.tick(), "TICKED");
+        assert.equal(readinessRequests - before, 2);
+      },
+    );
+    await t.test(
+      "two participant dispatches overlap without duplicate attempts or exceeding the persisted slot bound",
+      async () => {
+        await c.budgets();
+        const first = (await service.run(a.aa, a.round, a.x, "parallel pipeline first", randomUUID())).result.run_id;
+        const second = (await service.run(a.ab, a.round, a.y, "parallel pipeline second", randomUUID())).result.run_id;
+        const arrived = new Promise<void>((resolve) => { parallelReached = resolve; });
+        let release!: () => void;
+        parallelBarrier = new Promise<void>((resolve) => { release = resolve; });
+        const tick = coordinator.tick();
+        try {
+          await Promise.race([arrived, delay(10000).then(() => assert.fail("Participant dispatches remained serial"))]);
+          assert.equal(parallelActive, 2);
+          assert.equal(parallelPeak, 2);
+          assert.equal(await coordinator.tick(), "BUSY");
+          assert.equal((await query("SELECT count(*)::int n FROM execution_capacity_slots WHERE participant_attempt_id IS NOT NULL"))[0].n, 2);
+        } finally {
+          release();
+          await tick;
+          parallelBarrier = undefined;
+          parallelReached = undefined;
+        }
+        await waitFor(async () => (await query("SELECT count(*)::int n FROM participant_judging WHERE id=ANY($1::uuid[]) AND completed_at IS NOT NULL", [[first, second]]))[0].n === 2, () => coordinator.tick());
+        assert.ok([...posts.values()].every((n) => n === 1));
+        assert.equal(parallelActive, 0);
+        // Keep the real per-member sample cooldown before the following scenario.
+        await delay(5100);
       },
     );
     await t.test(

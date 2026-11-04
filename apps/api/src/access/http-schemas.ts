@@ -145,7 +145,7 @@ export const arenaCurrentData = object({ control_revision: revision, instance: {
   round: { anyOf: [object({ round_id: id, kind: { type: "integer", const: 1 }, state: sessionSchema.properties.round_state,
     duration_ms: duration, configuration_revision: revision, teams: { type: "array", maxItems: 100, items: arenaTeam }, can_start: { type: "boolean", const: false } }), { type: "null" }] } });
 export const contentCommandBody = object({ request_key: id, expected_revision: revision, reason, payload: { type: "object" } });
-export const contentImportBody = object({ question: { type: "object", maxProperties: 10 } });
+export const contentImportBody = object({ question: { type: "object", maxProperties: 11 } });
 export const contentListQuery = object({ after: id, round_type: { type: "string", enum: ["1", "2"] } }, []);
 export const contentDefinitionParams = object({ definition_id: id });
 export const contentVersionParams = object({ version_id: id });

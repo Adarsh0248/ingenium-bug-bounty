@@ -140,7 +140,6 @@ export function createCapsuleLifecycle(checkpoints: ExecutionCheckpoints, driver
       await checkpoints.saveCapsule(safe, "stopped", { id });
       await checkpoints.saveCapsule(safe, "remove", { id }); signal.throwIfAborted();
       await driver.remove(record.ref, id, signal);
-      if (await driver.find(record.ref, signal) !== null) return fail();
       await driver.assertAbsent(record.ref, id, signal);
       await checkpoints.saveCapsule(safe, "removed", { id });
       await resources.retire(safe, record.ref, signal);

@@ -155,6 +155,21 @@ test("the outer backend returns only bound checkpoint evidence and removes the c
   assert.equal((result as ReturnType<typeof judgeReply>["evidence"]).metadata.drain, null); assert.ok(h.records.removed);
   assert.equal(h.events.filter(value => value === "launch").length, 1);
 });
+
+test("genuine output can be sealed before cleanup without inventing a drain or releasing the reservation", async () => {
+  const h = backendHarness(); let published = false;
+  h.resources.retire = async () => { assert.equal(published, true); throw new Error("cleanup still held"); };
+  const backend = createCapsuleBackend(h.store, h.driver, release, judgeRuntimes(), async () => sha256("synthetic readiness"), h.resources, undefined,
+    async (plan, value) => {
+      assert.equal(plan.attemptId, h.plan.attemptId); assert.equal(h.records.remove, undefined);
+      const evidence = value as ReturnType<typeof judgeReply>["evidence"];
+      assert.equal(evidence.stdout_b64, "MTIK"); assert.equal(evidence.metadata.drain, null); published = true;
+    });
+  await assert.rejects(backend.execute(h.plan, signal()), /cleanup still held/);
+  assert.equal(published, true);
+  const recovered = await backend.recover(h.plan, signal()) as ReturnType<typeof judgeReply>["evidence"];
+  assert.equal(recovered.metadata.drain, null); assert.equal(h.events.filter(value => value === "launch").length, 1);
+});
 test("outer backend recovery after a lost reply reads original evidence without readiness, Docker calls or more source execution", async () => {
   const h = backendHarness(), start = h.driver.start;
   h.driver.start = async (...args) => { await start(...args); throw new Error("lost reply after saved synthetic result"); };
@@ -260,13 +275,21 @@ test("removal reconciliation refuses a retained original ID even when its expect
   await assert.rejects(h.lifecycle().recover(h.plan, signal())); await assert.rejects(h.lifecycle().stopAndRemove(h.plan, signal()));
   assert.equal(h.records.removed, undefined); assert.equal(h.events.filter(event => event === "launch").length, 1);
 });
-test("the shared absence check queries full original ID and exact name separately and rejects any nonempty or failed response", async () => {
+test("one bounded absence snapshot rejects either original identity, malformed listings and failed observations", async () => {
   const { ref } = fixture(), id = "c".repeat(64), calls: string[][] = [];
   const empty = createDockerCapsuleDriver(async args => { calls.push([...args]); return Buffer.alloc(0); }, seccompHash, async () => {});
   await empty.assertAbsent(ref, id, signal());
-  assert.deepEqual(calls.map(args => args[5]), [`id=${id}`, `name=^/${ref.name}$`]);
-  for (const index of [0, 1]) {
-    let n = 0; const present = createDockerCapsuleDriver(async () => n++ === index ? Buffer.from(`${id}\n`) : Buffer.alloc(0), seccompHash, async () => {});
+  assert.deepEqual(calls, [["container", "ls", "--all", "--no-trunc", "--format", "{{.ID}} {{.Names}}"]]);
+  const other = "a".repeat(64);
+  const unrelated = createDockerCapsuleDriver(async () => Buffer.from(`${other} unrelated-container\n`), seccompHash, async () => {});
+  await unrelated.assertAbsent(ref, id, signal());
+  for (const listing of [
+    `${id} renamed-original\n`, `${other} ${ref.name}\n`, `${id} ${ref.name}\n`,
+    `${other} unrelated\n${other} duplicate\n`, `${other} invalid name\n`,
+    `${other} unrelated`, "short unrelated\n", "\n", "\0\n", "\u00ff\n",
+    "x".repeat(1048577),
+  ]) {
+    const present = createDockerCapsuleDriver(async () => Buffer.from(listing), seccompHash, async () => {});
     await assert.rejects(present.assertAbsent(ref, id, signal()));
   }
   const broken = createDockerCapsuleDriver(async () => { throw new Error("Daemon unavailable"); }, seccompHash, async () => {});

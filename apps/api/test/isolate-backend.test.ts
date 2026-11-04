@@ -1,3 +1,4 @@
+import {isolateObservation as observation} from "./fixtures/isolate-observation.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
@@ -17,23 +18,7 @@ function claim(language: Parameters<typeof judgePayload>[0] = "cpp") {
   const payload = judgePayload(language), owner = randomUUID(), providerToken = randomUUID();
   return { payload, owner, providerToken, plan: createExecutionPlan({ payload, owner, providerToken }, judgeRuntimes()) };
 }
-function observation(kind: "compile" | "run", extra: { code?: number; signal?: number; timeout?: "cpu" | "wall"; oom?: boolean; overflow?: boolean; compiler?: Buffer; stdout?: Buffer } = {}): IsolateObservation {
-  const code = extra.code ?? 0, cpu = extra.timeout === "cpu" ? "1100000000" : "10000000", wall = extra.timeout === "wall" ? "5.100" : "0.020";
-  const controls = extra.timeout ? `status:TO\nmessage:Time limit exceeded${extra.timeout === "wall" ? " (wall clock)" : ""}\nkilled:1\n`
-    : extra.signal ? `status:SG\nexitsig:${extra.signal}\nmessage:Caught fatal signal ${extra.signal}\n`
-      : code ? `status:RE\nexitcode:${code}\nmessage:Exited with error status ${code}\n` : "exitcode:0\n";
-  const failed = Boolean(extra.timeout || extra.signal || code);
-  const time = extra.timeout === "cpu" ? "1.100" : "0.010";
-  const diagnostic = extra.timeout ? `Time limit exceeded${extra.timeout === "wall" ? " (wall clock)" : ""}\n`
-    : extra.signal ? `Caught fatal signal ${extra.signal}\n` : code ? `Exited with error status ${code}\n` : `OK (${time} sec real, ${wall} sec wall)\n`;
-  return { metadata: Buffer.from(`time:${time}\ntime-wall:${wall}\nmax-rss:4\ncsw-voluntary:1\ncsw-forced:0\ncg-mem:4\n${controls}${extra.oom ? "cg-oom-killed:1\n" : ""}`),
-    counters: { cpuNs: cpu, peakBytes: "4096", memoryHits: "0", combinedHits: extra.oom ? "38" : "0", oomKills: extra.oom ? "1" : "0" },
-    targetObserved: true, workspaceHasRoom: true, wallElapsedMs: extra.timeout === "wall" ? 5110 : 30,
-    pipes: { managerExitCode: failed ? 1 : 0, managerExitSignal: null, managerDiagnostics: Buffer.from(diagnostic),
-      stdout: kind === "compile" ? Buffer.alloc(0) : extra.overflow ? Buffer.alloc(1048577, 65) : extra.stdout ?? Buffer.from("12\n"),
-      stderr: Buffer.alloc(0), compiler: extra.compiler ?? Buffer.alloc(0), stdoutComplete: !extra.overflow, stderrTruncated: false, compilerTruncated: false,
-      handoffVerified: true, outputLimitObserved: Boolean(extra.overflow) } };
-}
+
 const compilerError = (name = "main.cpp") => Buffer.from(JSON.stringify([{ kind: "error", locations: [{ caret: { file: `/box/${name}`, line: 1, column: 2 } }], children: [], message: "expected semicolon" }]));
 function accepted(c: ReturnType<typeof claim>, evidence: unknown) {
   return acceptJudgeReply({ protocol: JUDGE_PROTOCOL, request_id: c.owner, host_epoch_id: c.payload.hostEpochId, attempt_id: c.payload.attemptId,
@@ -76,6 +61,14 @@ test("runtime limits and nonzero/signal outcomes cross the original decoder with
     assert.equal(accepted(c, value).execution_result, expected);
   }
 });
+test("Java invalid operand types are source errors while tool and foreign-source diagnostics remain infrastructure faults", () => {
+  const c = claim("java");
+  assert.equal(sourceCompilationError(c.plan, Buffer.from("Main.java:15:33: compiler.err.operator.cant.be.applied.1: &&, boolean, int\n1 error\n"), false), true);
+  assert.equal(sourceCompilationError(c.plan, Buffer.from("Main.java:15:33: compiler.err.operator.cant.be.applied.2: !, int\n1 error\n"), false), true);
+  for (const text of ["Other.java:15:33: compiler.err.operator.cant.be.applied.1: &&, boolean, int\n1 error\n", "Main.java:1:1: compiler.err.error.reading.file: IO error\n1 error\n", "Main.java:1:1: compiler.err.proc.processorpath.no.processormodulepath\n1 error\n"])
+    assert.equal(sourceCompilationError(c.plan, Buffer.from(text), false), false);
+});
+
 test("an already cancelled request or failed source verification cannot start even a compiler", async () => {
   const c = claim(); let calls = 0;
   const session = { async verifySource() { throw new Error("source changed"); }, async phase() { calls++; return observation("run"); } };
@@ -116,6 +109,16 @@ test("compiler blame needs source-bound structured bytes, a normal exit one, com
   const c = claim(), good = compilerError(); assert.equal(sourceCompilationError(c.plan, good, false), true);
   for (const bytes of [Buffer.from("error in main.cpp"), compilerError("foreign.cpp"), Buffer.from("[]"), Buffer.from([255]), Buffer.alloc(65537)]) assert.equal(sourceCompilationError(c.plan, bytes, false), false);
   assert.equal(sourceCompilationError(c.plan, good, true), false);
+  const nested = JSON.parse(good.toString("utf8"));
+  nested[0].children = [{ kind: "note" }, { kind: "error", children: [{ kind: "note" }] }];
+  assert.equal(sourceCompilationError(c.plan, Buffer.from(JSON.stringify(nested)), false), true);
+  nested[0].locations[0].caret.file = "/usr/include/engine-failure.h";
+  assert.equal(sourceCompilationError(c.plan, Buffer.from(JSON.stringify(nested)), false), false);
+  nested[0].locations[0].caret.file = `/box/${c.plan.sourceFile}`;
+  nested[0].children = [{ kind: "internal compiler error" }];
+  assert.equal(sourceCompilationError(c.plan, Buffer.from(JSON.stringify(nested)), false), false);
+  nested[0].children = Array.from({ length: 513 }, () => ({ kind: "note" }));
+  assert.equal(sourceCompilationError(c.plan, Buffer.from(JSON.stringify(nested)), false), false);
   const full = observation("compile", { code: 1, compiler: good }); full.workspaceHasRoom = false;
   assert.equal(isolatePhaseEvidence(c.plan, "compile", full).infrastructure_error, true);
   const ice = observation("compile", { code: 4, compiler: good }); assert.equal(isolatePhaseEvidence(c.plan, "compile", ice).failure_attribution, "INFRASTRUCTURE");

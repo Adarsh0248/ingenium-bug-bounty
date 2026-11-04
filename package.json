@@ -2,7 +2,9 @@
   "name": "ingenium-bug-bounty",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "engines": {
     "node": ">=24.22.0 <25"
   },
@@ -10,7 +12,9 @@
   "overrides": {
     "fast-uri@^3.0.0": "3.1.9",
     "fast-uri@^4.0.0": "4.2.3",
-    "monaco-editor": {"dompurify": "3.4.17"},
+    "monaco-editor": {
+      "dompurify": "3.4.17"
+    },
     "@esbuild-kit/core-utils": {
       "esbuild": "0.25.12"
     }
@@ -53,6 +57,16 @@
     "db:migrate": "npm run db:migrate --workspace @ingenium/api",
     "db:up": "docker compose --env-file .env.database up -d --wait postgres",
     "db:stop": "docker compose --env-file .env.database stop postgres",
-    "db:logs": "docker compose --env-file .env.database logs --tail=50 postgres"
-  }
+    "db:logs": "docker compose --env-file .env.database logs --tail=50 postgres",
+    "docs:check": "node --test scripts/check-docs.test.mjs && node scripts/check-docs.mjs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Adarsh0248/ingenium-bug-bounty.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Adarsh0248/ingenium-bug-bounty/issues"
+  },
+  "homepage": "https://github.com/Adarsh0248/ingenium-bug-bounty#readme"
 }

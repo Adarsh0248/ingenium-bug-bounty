@@ -9,7 +9,8 @@ import type { JudgeRuntimes } from "../content/judge-protocol.js";
 export const ISOLATE_CONFIGURATION = "box_root = /var/local/lib/isolate\ncg_root = /run/ingenium/cgroups\nfirst_uid = 60000\nfirst_gid = 60000\nnum_boxes = 1\n";
 export const ISOLATE_BINARIES = ["/usr/local/bin/isolate", "/usr/local/bin/ingenium-phase-exec", "/usr/local/bin/gcc", "/usr/local/bin/g++",
   "/usr/local/bin/python3.14", "/usr/local/bin/node", "/usr/local/java/bin/java", "/usr/local/java/bin/javac"] as const;
-export interface IsolateSettings { hostEpochId: string; bootId: string; runtimes: JudgeRuntimes; binaries: Readonly<Record<typeof ISOLATE_BINARIES[number], string>>; }
+export interface IsolateSettings { hostEpochId: string; bootId: string; runtimes: JudgeRuntimes; binaries: Readonly<Record<typeof ISOLATE_BINARIES[number], string>>;
+  batch?:{batchId:string;digest:string;raw:Buffer}; }
 const bad = (): never => { throw new Error("Verified private Isolate capsule required; retain the execution reservation."); };
 export async function protectedLinuxFile(path: string, limit: number) {
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -122,7 +123,7 @@ export async function verifyParentBudget() {
   const expected = {
     "memory/memory.limit_in_bytes": "1610612736\n", "memory/memory.memsw.limit_in_bytes": "1610612736\n", "memory/memory.use_hierarchy": "1\n",
     "memory/memory.failcnt": "0\n", "memory/memory.memsw.failcnt": "0\n", "memory/memory.oom_control": "oom_kill_disable 0\nunder_oom 0\noom_kill 0\n",
-    "cpuacct/cpu.cfs_period_us": "100000\n", "cpuacct/cpu.cfs_quota_us": "75000\n", "pids/pids.max": "128\n", "pids/pids.events": "max 0\n",
+    "cpuacct/cpu.cfs_period_us": "100000\n", "cpuacct/cpu.cfs_quota_us": "75000\n", "pids/pids.max": "64\n", "pids/pids.events": "max 0\n",
   };
   for (const [name, value] of Object.entries(expected)) if ((await protectedLinuxFile(`/run/ingenium/parent/${name}`, 4096)).toString("ascii") !== value) return bad();
 }

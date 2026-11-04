@@ -172,6 +172,10 @@ export default function StaffConsole({
       (!two || ["DRAFT", "READY"].includes(two.state)) &&
       tab === "SETUP",
     running = current && !!round && ["RUNNING", "PAUSED"].includes(round.state),
+    liveAppend = running && round?.kind === 2,
+    additions = (draft?.snapshots ?? []).filter(
+      (id) => !round?.selected.some((b) => b.snapshot_id === id),
+    ),
     clockNow = view
       ? Date.parse(view.server_time) + performance.now() - received.current
       : Date.now(),
@@ -371,7 +375,11 @@ export default function StaffConsole({
     if (next.tab) setTab(next.tab);
   }
   function prepare(next: Intent) {
-    if (locked || !manager) return;
+    if (
+      locked ||
+      (!manager && !(liveAppend && next.body.action === "APPEND_QUESTIONS"))
+    )
+      return;
     if (!next.sensitive) {
       void commit(next, `${next.title} from the control room.`);
       return;
@@ -400,6 +408,7 @@ export default function StaffConsole({
           QUALIFY: "Lock qualification",
           DISCARD: "Discard arena",
           CONFIGURE: "Save bug selection",
+          APPEND_QUESTIONS: "Release new Round 2 questions",
           SETUP_R2: "Save Round 2 setup",
         } as Record<string, string>
       )[action],
@@ -407,6 +416,7 @@ export default function StaffConsole({
       outcome: `${base}/rounds/${target.round_id}/outcomes`,
       body: { action, expected_revision: revision, payload },
       sensitive: [
+        "APPEND_QUESTIONS",
         "START",
         "PAUSE",
         "RESUME",
@@ -423,6 +433,7 @@ export default function StaffConsole({
       reason: receipt.reason,
     };
     if (result.status === "REJECTED") {
+      if (receipt.action === "APPEND_QUESTIONS") setDraft(null);
       setError(
         `Action declined: ${label(result.reason ?? "unavailable")}. Review the current state.`,
       );
@@ -436,7 +447,9 @@ export default function StaffConsole({
           : "Arena settings saved."
         : receipt.action === "CONFIGURE"
           ? "Round questions saved."
-          : `${label(receipt.action ?? "command")}: ${label(result.status ?? "acknowledged")}`,
+          : receipt.action === "APPEND_QUESTIONS"
+            ? `${result.added_count} new questions released to all teams. ${result.total_count} questions in Round 2.`
+            : `${label(receipt.action ?? "command")}: ${label(result.status ?? "acknowledged")}`,
     );
 
     setDraft(null);
@@ -1378,32 +1391,50 @@ export default function StaffConsole({
       {tab === "BOUNTIES" && (
         <section className="staff-section">
           <div className="staff-section-heading">
-            <h2>Choose questions for Round {round?.kind ?? 1}</h2>
+            <h2>
+              {liveAppend
+                ? "Add questions to live Round 2"
+                : `Choose questions for Round ${round?.kind ?? 1}`}
+            </h2>
             <strong>
-              {draft?.snapshots.length ?? 0} / {round?.kind === 2 ? 100 : 50}{" "}
-              selected
+              {liveAppend
+                ? `${round?.selected.length} / 120 live · ${additions.length} new selected`
+                : `${draft?.snapshots.length ?? 0} / ${round?.kind === 2 ? 100 : 50} selected`}
             </strong>
             <button
               disabled={
                 locked ||
-                !manager ||
-                !editable ||
+                (!manager && !liveAppend) ||
+                (!editable && !liveAppend) ||
                 !round ||
-                !draft?.snapshots.length
+                !draft?.snapshots.length ||
+                (liveAppend &&
+                  (!additions.length ||
+                    additions.length > 20 ||
+                    round.selected.length + additions.length > 120))
               }
               onClick={() =>
                 competition(
-                  "CONFIGURE",
-                  { snapshots: draft!.snapshots },
+                  liveAppend ? "APPEND_QUESTIONS" : "CONFIGURE",
+                  { snapshots: liveAppend ? additions : draft!.snapshots },
                   round,
                   draft!.revision,
                 )
               }
             >
               <Save size={15} />
-              Save round questions
+              {liveAppend
+                ? `Review and release ${additions.length || "new"} questions`
+                : "Save round questions"}
             </button>
           </div>
+          {liveAppend && (
+            <p className="notice">
+              Select up to 20 additional validated, published questions, to a
+              maximum of 120. They appear for every team after release. Existing
+              questions and the round timer stay unchanged.
+            </p>
+          )}
           <div className="staff-table-wrap">
             <table>
               <thead>
@@ -1432,12 +1463,20 @@ export default function StaffConsole({
                           checked={chosen}
                           disabled={
                             locked ||
-                            !manager ||
-                            !editable ||
+                            (!manager && !liveAppend) ||
+                            (!editable && !liveAppend) ||
+                            (liveAppend &&
+                              round?.selected.some(
+                                (old) => old.snapshot_id === b.snapshot_id,
+                              )) ||
                             family ||
                             (!chosen &&
-                              (draft?.snapshots.length ?? 0) >=
-                                (round?.kind === 2 ? 100 : 50))
+                              (liveAppend
+                                ? additions.length >= 20 ||
+                                  round!.selected.length + additions.length >=
+                                    120
+                                : (draft?.snapshots.length ?? 0) >=
+                                  (round?.kind === 2 ? 100 : 50)))
                           }
                           onChange={(e) =>
                             edit({
@@ -1651,6 +1690,27 @@ export default function StaffConsole({
               void commit(intent, reason);
             }}
           >
+            {intent.body.action === "APPEND_QUESTIONS" && (
+              <>
+                <p>
+                  Release these questions to every team now? They cannot be
+                  removed from a running round.
+                </p>
+                <ul>
+                  {(
+                    intent.body.payload as { snapshots: string[] }
+                  ).snapshots.map((id) => {
+                    const bug = bugRows.find((b) => b.snapshot_id === id);
+                    return (
+                      <li key={id}>
+                        {bug?.title ?? id} · difficulty {bug?.difficulty}/100 ·
+                        bounty {bug?.base_bounty}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
             <label>
               Change note
               <textarea

@@ -5,6 +5,14 @@ import { checkText, contentText, prepareContent } from "../src/content/policy.js
 import { AccessError } from "../src/access/transaction.js";
 
 const invalid = (e: unknown) => e instanceof AccessError && e.code === "INVALID_CONTEXT";
+
+test("Round 2 can keep bounded shop rewards independently of its beginner difficulty", () => {
+  const value = { round_type: 2, title: "Repair", statement: "Fix the supplied code", difficulty: 6, checker_mode: "TOKENS", reward_multiplier: 1 };
+  for (const base_bounty of [250, 340, 750, 1000]) assert.equal(prepareContent("CREATE", { ...value, base_bounty }).base_bounty, base_bounty);
+  for (const base_bounty of [249, 251, 1001, 5000, 12.5, "750", null]) assert.throws(() => prepareContent("CREATE", { ...value, base_bounty }), invalid);
+  assert.throws(() => prepareContent("CREATE", { ...value, round_type: 1, base_bounty: 750 }), invalid);
+  assert.throws(() => prepareContent("CREATE", { ...value, reward_multiplier: 5, base_bounty: 750 }), invalid);
+});
 test("Round 1 authoring accepts only the legacy or fivefold reward scale", () => {
   const value = {round_type:1,title:"Repair",statement:"Fix it",difficulty:20,checker_mode:"TOKENS"};
   assert.equal(prepareContent("CREATE",{...value,reward_multiplier:5}).reward_multiplier,5);

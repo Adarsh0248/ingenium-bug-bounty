@@ -19,6 +19,7 @@ import { judgeExecutionChecks } from "./judge-execution.checks.js";
 import { judgeLauncherChecks } from "./judge-launcher.checks.js";
 import { judgeSupervisorChecks } from "./judge-supervisor.checks.js";
 import { judgePayload, judgeReply, judgeRuntimes } from "../fixtures/judge.js";
+import {judgeBatchChecks,judgeBatchTransportChecks} from './judge-batch.checks.js';
 import { createTestTls } from "../fixtures/tls.js";
 
 export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
@@ -40,6 +41,11 @@ export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
     await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/004_launch_gate.sql", import.meta.url)), "utf8"));
     await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/005_participant_payloads.sql", import.meta.url)), "utf8"));
     await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/006_supervisor_service.sql", import.meta.url)), "utf8"));
+    const batchMigration=await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/008_participant_batches.sql", import.meta.url)), "utf8");
+    try{await owner.query(batchMigration);}catch(error){
+      const e=error as {position?:string;where?:string;message?:string};
+      throw new Error(`Batch migration rejected near line ${batchMigration.slice(0,Number(e.position??'1')).split('\n').length}: ${e.message}; ${e.where??''}`);
+    }
     const accounts = [];
     for (const [name, role] of [["ingenium_gateway_test_ingress", "ingenium_judge_gateway"], ["ingenium_gateway_test_runner", "ingenium_judge_supervisor"], ["ingenium_gateway_test_publisher", "ingenium_judge_publisher"]]) {
       const password = randomBytes(24).toString("hex");
@@ -213,6 +219,7 @@ export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
         const settings = { hostEpochId: config.hostEpochId, endpointRef: "synthetic-registry", runtimes: config.runtimes, address: "127.0.0.1", port: address.port, serverName: "judge.test",
           ca: tls.ca, certificate: tls.clientCert, privateKey: tls.clientKey, serverCertificateSha256: sha256(new X509Certificate(tls.cert).raw).toString("hex") };
         const driver = createAuthoringJudgeDriver(settings), signal = () => AbortSignal.timeout(10000), p = payload();
+        await judgeBatchTransportChecks(driver,{registry,supervisor,fresh});
         await driver.assertReady(signal()); assert.deepEqual(await driver.submit(p, signal()), { state: "PENDING" });
         const token = (await registry.observe(p.attemptId, authoringPayloadDigest(p).toString("hex"), randomUUID())).value.provider_token!;
         const worker = randomUUID(); assert.ok(await supervisor.claim(p.attemptId, token, worker));
@@ -251,6 +258,18 @@ export async function judgeGatewayChecks(t: TestContext, ownerUrl: string) {
       for(let i=0;i<jobs.length;i++)if(claims[i]){const j=jobs[i]!;assert.ok(await supervisor.beginLaunch(j.p.attemptId,j.token,j.owner));await supervisor.seal(j.p,j.token,j.owner,judgeReply(j.p,randomUUID(),Buffer.from("12\n"),j.token).evidence);}
       assert.deepEqual(new Set(await supervisor.held()),new Set(held));
     });
+    await t.test("sixteen-slot migration preserves every prior attempt and atomically refuses a seventeenth hold",async()=>{
+      const before=(await owner.query("SELECT to_jsonb(a) row FROM ingenium_judge.attempts a ORDER BY attempt_id")).rows;
+      await owner.query(await readFile(fileURLToPath(new URL("../../../../infra/judge-gateway/009_sixteen_slots.sql",import.meta.url)),"utf8"));
+      assert.deepEqual((await owner.query("SELECT to_jsonb(a) row FROM ingenium_judge.attempts a ORDER BY attempt_id")).rows,before);
+      const held=await supervisor.held(),jobs=[];await fresh();
+      for(let i=0;i<17-held.length;i++){const p=payload();jobs.push({p,token:await register(p),owner:randomUUID()});}
+      const claims=await Promise.all(jobs.map(j=>supervisor.claim(j.p.attemptId,j.token,j.owner)));
+      assert.equal(claims.filter(Boolean).length,16-held.length);assert.equal((await supervisor.held()).length,16);
+      for(let i=0;i<jobs.length;i++)if(claims[i]){const j=jobs[i]!;assert.ok(await supervisor.beginLaunch(j.p.attemptId,j.token,j.owner));await supervisor.seal(j.p,j.token,j.owner,judgeReply(j.p,randomUUID(),Buffer.from("12\n"),j.token).evidence);}
+      assert.deepEqual(new Set(await supervisor.held()),new Set(held));
+    });
+    await judgeBatchChecks(t,{owner,ingress,runner,registry,supervisor,fresh});
     await t.test("authoring queue refuses its 121st unresolved record atomically and fencing cannot be undone or imply cleanup", async () => {
       await fresh(); const current = (await owner.query("SELECT count(*)::integer AS n FROM ingenium_judge.attempts WHERE drain IS NULL")).rows[0].n;
       for (let i = current; i < 120; i++) await register(payload());

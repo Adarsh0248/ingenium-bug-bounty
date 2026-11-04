@@ -32,7 +32,7 @@ test("protected launcher and durable checkpoints work in disposable Linux withou
     "--log-driver", "json-file", "--log-opt", "max-size=1m", "--log-opt", "max-file=1", "--entrypoint", "/usr/local/bin/node", IMAGE,
     "--test", "--test-concurrency=1", "--test-reporter=tap", "/run/verify.mjs", "/run/checkpoints.mjs"]);
     assert.match(container, /^[a-f0-9]{64}$/);
-    const output = await docker(["start", "--attach", container]); assert.match(output, /# pass 30\b/); assert.match(output, /# fail 0\b/);
+    const output = await docker(["start", "--attach", container]); assert.match(output, /# pass 31\b/); assert.match(output, /# fail 0\b/);
   } finally {
     if (container) {
       const config = JSON.parse(await docker(["inspect", "--format", "{{json .Config}}", container]));

@@ -51,6 +51,19 @@ export async function contentChecks(t: TestContext, ownerConnection: string, api
     assert.equal(result.outcome, "APPLIED"); return result.case_id!;
   }
   try {
+    await t.test("Round 2 independent bounded rewards survive edits and cannot alter Round 1 or bypass source history", async () => {
+      const actor = await person(), values = { ...metadata, difficulty: 6, base_bounty: 750, reward_multiplier: 1 };
+      const created = await service.command(actor.sessionCookie, await command("CREATE", null, { round_type: 2, ...values }));
+      assert.equal((await service.describe(actor.sessionCookie, created.version_id!)).base_bounty, 750);
+      assert.equal((await edit(actor, created.version_id!, "METADATA", values)).outcome, "UNCHANGED");
+      await edit(actor, created.version_id!, "METADATA", { ...values, difficulty: 9, base_bounty: 1000 });
+      const updated = await service.describe(actor.sessionCookie, created.version_id!);
+      assert.equal(updated.difficulty, 9); assert.equal(updated.base_bounty, 1000);
+      const firstRound = await draft(actor);
+      await assert.rejects(edit(actor, firstRound.version, "METADATA", values));
+      assert.equal((await service.describe(actor.sessionCookie, firstRound.version)).base_bounty, 950);
+      await assert.rejects(owner.query("UPDATE bug_versions SET base_bounty=1001 WHERE id=$1", [created.version_id]), { code: "P0001" });
+    });
     await t.test("content roles and structural validation cannot create a public/ready version or accept browser-owned rewards", async () => {
       const actor = await person("ORGANISER"), organiser = await person("ORGANISER"), create = await command("CREATE", null, { round_type: 1, ...metadata });
       await assert.rejects(service.command(actor.sessionCookie, { ...create, payload: { round_type: 1, ...metadata, publication_status: "PUBLISHED" } }), denied("INVALID_CONTEXT"));

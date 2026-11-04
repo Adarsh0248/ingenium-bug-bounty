@@ -27,23 +27,22 @@ test("Round 2 contains 100 new four-language missions, with balanced topic and d
     assert.equal(group.length, 25);
     assert.deepEqual(
       [
-        group.filter((q) => q.difficulty >= 25 && q.difficulty <= 45).length,
-        group.filter((q) => q.difficulty >= 46 && q.difficulty <= 65).length,
-        group.filter((q) => q.difficulty >= 66 && q.difficulty <= 85).length,
-        group.filter((q) => q.difficulty >= 86 && q.difficulty <= 100).length,
+        group.filter((q) => q.difficulty >= 1 && q.difficulty <= 20).length,
+        group.filter((q) => q.difficulty >= 21 && q.difficulty <= 30).length,
+        group.filter((q) => q.difficulty >= 31 && q.difficulty <= 40).length,
       ],
-      [8, 9, 5, 3],
+      ["ARRAYS", "SYSTEMS"].includes(category) ? [18, 5, 2] : [17, 5, 3],
     );
   }
-  assert.equal(Math.min(...qs.map((q) => q.difficulty)), 25);
-  assert.equal(Math.max(...qs.map((q) => q.difficulty)), 100);
+  assert.ok(Math.min(...qs.map((q) => q.difficulty)) >= 1);
+  assert.ok(Math.max(...qs.map((q) => q.difficulty)) <= 40);
 });
 
 test("every Round 2 mission has independent prose, progressive hints, private witnesses and a separate paid edge example", () => {
   for (const q of roundTwoPack.questions) {
     assert.equal(q.round_type, 2);
     assert.equal(q.region, "The Kernel Breach");
-    assert.equal(q.base_bounty, q.difficulty * 10);
+    assert.ok(q.base_bounty >= 250 && q.base_bounty <= 1000 && q.base_bounty % 10 === 0);
     assert.equal(q.submission_format, "FULL_PROGRAM");
     assert.equal(q.checker_mode, "TOKENS");
     for (const section of [

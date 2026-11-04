@@ -631,6 +631,41 @@
       "when": 1793808000000,
       "tag": "0089_team_edit_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793894400000,
+      "tag": "0090_sample_queue_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793980800000,
+      "tag": "0091_round_two_independent_rewards",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1794067200000,
+      "tag": "0092_participant_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1794153600000,
+      "tag": "0093_sixteen_execution_slots",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1794240000000,
+      "tag": "0094_live_round_two_questions",
+      "breakpoints": true
     }
   ]
 }

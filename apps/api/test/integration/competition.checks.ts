@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join as pathJoin } from "node:path";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type { TestContext } from "node:test";
 import { Client, Pool } from "pg";
 import { LANGUAGES, newAccessCode, parseProof, sessionDelivery, sha256 } from "../../src/access/credentials.js";
@@ -18,7 +23,7 @@ import type { TrustedAuthoringDriver } from "../../src/content/execution-policy.
 import { createCompetitionService } from "../../src/competition/service.js";
 import type { CompetitionCommand } from "../../src/competition/service.js";
 import { createDrawCipher, createDrawPlan, drawCommitment, qualifiers } from "../../src/competition/policy.js";
-import { migrateDatabase } from "../../src/db/migrate.js";
+import { migrateDatabase, migrationsFolder } from "../../src/db/migrate.js";
 import { buildApp } from "../../src/app.js";
 import { createDatabase } from "../../src/database.js";
 import { browserPolicy } from "../../src/access/browser-policy.js";
@@ -33,7 +38,22 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
   const name = `ingenium_competition_${randomUUID().replaceAll("-", "")}`, bootstrap = new Client({ connectionString: ownerConnection });
   await bootstrap.connect(); try { await bootstrap.query(`CREATE DATABASE "${name}"`); } finally { await bootstrap.end(); }
   const ownerUrl = new URL(ownerConnection), apiUrl = new URL(apiConnection); ownerUrl.pathname = apiUrl.pathname = `/${name}`;
-  await migrateDatabase(ownerUrl.toString());
+  const expandedQuestions = process.env.INGENIUM_TEST_SUITE?.startsWith("live-questions") ?? false;
+  if (expandedQuestions) {
+    const folder = await mkdtemp(pathJoin(tmpdir(), "ingenium-live-question-upgrade-")), client = new Client({ connectionString: ownerUrl.toString() });
+    try {
+      const journal = JSON.parse(await readFile(pathJoin(migrationsFolder, "meta", "_journal.json"), "utf8"));
+      journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 94);
+      await mkdir(pathJoin(folder, "meta"));
+      await writeFile(pathJoin(folder, "meta", "_journal.json"), JSON.stringify(journal));
+      for (const entry of journal.entries) await copyFile(pathJoin(migrationsFolder, `${entry.tag}.sql`), pathJoin(folder, `${entry.tag}.sql`));
+      await client.connect(); await migrate(drizzle(client), { migrationsFolder: folder });
+    } finally {
+      await client.end();
+      assert.equal(dirname(folder), tmpdir()); assert.ok(basename(folder).startsWith("ingenium-live-question-upgrade-"));
+      await rm(folder, { recursive: true, force: true });
+    }
+  } else await migrateDatabase(ownerUrl.toString());
   const owner = new Pool({ connectionString: ownerUrl.toString(), max: 2 }), api = ["load", "load-soak", "race-load"].includes(process.env.INGENIUM_TEST_SUITE ?? "")
     ? createDatabase(apiUrl.toString(), () => { healthy = false; }, 12).pool
     : new Pool({ connectionString: apiUrl.toString(), max: 4 });
@@ -74,10 +94,11 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     const revision = (await owner.query("SELECT revision FROM rounds WHERE id=$1", [roundId])).rows[0].revision;
     return service.command(actor.sessionCookie, { action, roundId, requestKey: randomUUID(), expectedRevision: revision, reason: "Synthetic competition control", payload, ownCode: actor.code, ...patch });
   }
+  const largeQuestionFixture = expandedQuestions || process.env.INGENIUM_TEST_SUITE === "hundred-bounties";
   let editor: Person, editCount = 0;
   async function edit(action: ContentCommand["action"], targetId: string | null, payload: unknown) {
-    if (process.env.INGENIUM_TEST_SUITE === "hundred-bounties") await budgets();
-    if (!editor || (process.env.INGENIUM_TEST_SUITE !== "hundred-bounties" && editCount++ % 8 === 0)) editor = await person();
+    if (largeQuestionFixture) await budgets();
+    if (!editor || (!largeQuestionFixture && editCount++ % 8 === 0)) editor = await person();
     const revision = action === "CREATE" ? (await owner.query("SELECT revision FROM catalogue_control WHERE id=1")).rows[0].revision
       : (await owner.query("SELECT content_revision FROM bug_versions WHERE id=$1", [targetId])).rows[0].content_revision;
     return content.command(editor.sessionCookie, { action, targetId, expectedRevision: revision, payload, requestKey: randomUUID(), reason: "Synthetic competition content" });
@@ -108,12 +129,13 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
   let worker: ReturnType<typeof createValidationWorker>;
   let judge: ReturnType<typeof createParticipantJudgeWorker>;
   const judgePool = new Pool({ connectionString: ownerUrl.toString(), options: "-c role=ingenium_competition_worker", max: 2 });
-  async function published(actor: Person, kind: number, difficulty: number, rewardMultiplier = 1) {
+  async function published(actor: Person, kind: number, difficulty: number, rewardMultiplier = 1, publishSnapshot = true) {
     const version = (await edit("CREATE", null, { round_type: kind, category: "ARRAYS", title: "Synthetic competition bounty", statement: "Synthetic statement", difficulty, checker_mode: "TOKENS", ...(rewardMultiplier===1?{}:{reward_multiplier:rewardMultiplier}) })).version_id!;
     for (const language of LANGUAGES) await edit("VARIANT", version, { language, starter_code: process.env.INGENIUM_TEST_SUITE==="shop"&&kind===2?"synthetic wrong\nstate = 0\nfor each input\n  state = state - 1\nreturn state\n":"synthetic wrong", reference_solution_code: "synthetic reference", defect_description: "Synthetic defect",
       runtime_key: `competition-${language}`, cpu_time_limit_ms: 1000, wall_time_limit_ms: 5000, memory_limit_kb: 262144 });
     const sample = (await edit("CASE", version, { case_id: null, position: 1, visibility: "SAMPLE", input_data: "7 5\n", expected_output: "12\n" })).case_id!;
     const hidden = (await edit("CASE", version, { case_id: null, position: 2, visibility: "HIDDEN", input_data: "5 7\n", expected_output: "12\n" })).case_id!;
+    if(process.env.INGENIUM_TEST_SUITE==='participant-batch')for(let position=3;position<=8;position++)await edit('CASE',version,{case_id:null,position,visibility:'HIDDEN',input_data:`${position} ${12-position}\n`,expected_output:'12\n'});
     for (const level of [1, 2, 3]) await edit("HINT", version, { level, content: `Synthetic protected hint ${level}` });
     for (const language of LANGUAGES) await edit("WITNESSES", version, { language, witnesses: [{ check_type: "TEST_CASE", test_case_id: hidden, expected_failure: "WRONG_OUTPUT" }] });
     await budgets();
@@ -123,7 +145,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
     const run = (await createValidationRunService(api, clock, delivery).admit(actor.sessionCookie, { snapshotId: snapshot, requestKey: randomUUID(), expectedRevision: revision, reason: "Synthetic trusted test validation" })).run_id!;
     for (let i = 0; i < 80 && (await owner.query("SELECT status FROM validation_runs WHERE id=$1", [run])).rows[0].status !== "PASSED"; i++) await worker.tick();
     assert.equal((await owner.query("SELECT status FROM validation_runs WHERE id=$1", [run])).rows[0].status, "PASSED");
-    await createPublicationService(api,clock,delivery).publish(actor.sessionCookie,{snapshotId:snapshot,runId:run,requestKey:randomUUID(),expectedRevision:revision,review:"Synthetic reviewed five-language content",ownCode:actor.code});
+    if (publishSnapshot) await createPublicationService(api,clock,delivery).publish(actor.sessionCookie,{snapshotId:snapshot,runId:run,requestKey:randomUUID(),expectedRevision:revision,review:"Synthetic reviewed five-language content",ownCode:actor.code});
     return { snapshot, version, cases: [sample, hidden] };
   }
   async function join(a: Awaited<ReturnType<typeof team>>, member: number, language = "cpp") {
@@ -191,10 +213,11 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       });
       return;
     }
+    if(process.env.INGENIUM_TEST_SUITE==='participant-batch')await owner.query('UPDATE participant_batch_control SET enabled=true WHERE id=1');
     const created = await arena.command(actor.sessionCookie, { action: "CREATE", roundId: null, requestKey: randomUUID(), expectedRevision: "0", durationMs: 18000000, teamIds: [a.id, b.id], reason: "Synthetic competition instance" });
     const r1 = created.round_id!;
-    if (process.env.INGENIUM_TEST_SUITE === "hundred-bounties") {
-      await t.test("100 published Round 2 snapshots configure atomically; Round 1, storage and input boundaries remain bounded", async () => {
+    if (largeQuestionFixture) {
+      await t.test(expandedQuestions ? "live Round 2 release preserves the original 100 questions, work, clocks and team access" : "100 published Round 2 snapshots configure atomically; Round 1, storage and input boundaries remain bounded", async () => {
         const rawConfigure = async (round: string, snapshots: string[]) => api.query(
           "SELECT competition_staff_command($1,$2,$3,(SELECT revision FROM rounds WHERE id=$2),'CONFIGURE',$4::jsonb,'Synthetic boundary check',NULL)",
           [parseProof(actor.sessionCookie)!.id, round, randomUUID(), JSON.stringify({ snapshots })]);
@@ -207,6 +230,8 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
           await budgets();
           snapshots.push((await published(actor, 2, snapshots.length + 1)).snapshot);
         }
+        const extras: string[] = [];
+        if (expandedQuestions) while (extras.length < 22) extras.push((await published(actor, 2, 25, 1, extras.length < 21)).snapshot);
         await command(actor, "CONFIGURE", r1, { snapshots: [one.snapshot, two.snapshot] });
         await command(actor, "READY", r1); await worker.claim(); await command(actor, "START", r1);
         await command(actor, "CLOSE", r1); await command(actor, "FINALISE", r1); await command(actor, "QUALIFY", r1);
@@ -237,6 +262,18 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
         assert.equal((await service.published(actor.sessionCookie, 2, page.next_after!)).items.length, 50);
         await command(actor, "READY", r2); await worker.claim(); await command(actor, "START", r2);
         const participant = await join(a, 0);
+        if (expandedQuestions) {
+          const protectedRows = async () => (await owner.query(`SELECT jsonb_build_object(
+            'bounties',(SELECT jsonb_agg(b ORDER BY id) FROM bounties b), 'rounds',(SELECT jsonb_agg(r ORDER BY id) FROM rounds r),
+            'configs',(SELECT jsonb_agg(c ORDER BY round_id) FROM competition_configs c), 'wallet',(SELECT jsonb_agg(w ORDER BY id) FROM wallet_entries w),
+            'awards',(SELECT jsonb_agg(a ORDER BY id) FROM bounty_awards a), 'outcomes',(SELECT jsonb_agg(o ORDER BY id) FROM competition_outcomes o)) value`)).rows[0].value;
+          const original = await protectedRows();
+          assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n, 94);
+          await migrateDatabase(ownerUrl.toString());
+          assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n, 95);
+          assert.deepEqual(await protectedRows(), original);
+          assert.equal((await command(organiser, "APPEND_QUESTIONS", r1, { snapshots: [extras[0]] })).result.reason, "ROUND_NOT_OPEN");
+        }
         assert.equal((await service.state(participant.sessionCookie, r2, "PARTICIPANT")).bounties.length, 100);
         const { createLiveService } = await import("../../src/live/service.js");
         const live = createLiveService(api, clock, delivery);
@@ -245,10 +282,14 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
         const { createHistoryService } = await import("../../src/workbench/history.js");
         assert.equal((await createHistoryService(api, clock).overview(participant.sessionCookie, r2)).bounties.length, 100);
         await assert.rejects(owner.query("DELETE FROM bounties WHERE round_id=$1", [r2]), /Launched selection is immutable/);
+        if (expandedQuestions) {
+          const { liveQuestionReleaseChecks } = await import("./live-question-release.checks.js");
+          await liveQuestionReleaseChecks({ owner, api, clock, delivery, deps, service, command, budgets, organiser, actor, participant, other: await join(b, 0), r2, before, extras, wrongRoundSnapshot: one.snapshot, assess });
+        }
         await command(actor, "CLOSE", r2); await command(actor, "FINALISE", r2);
         assert.equal((await service.standings(actor.sessionCookie, r2, "STAFF")).final, true);
         await migrateDatabase(ownerUrl.toString());
-        assert.equal((await owner.query("SELECT count(*)::int n FROM bounties WHERE round_id=$1", [r2])).rows[0].n, 100);
+        assert.equal((await owner.query("SELECT count(*)::int n FROM bounties WHERE round_id=$1", [r2])).rows[0].n, expandedQuestions ? 120 : 100);
       });
       return;
     }
@@ -362,6 +403,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
           return { ca,round: current, aa: aa.sessionCookie, ab: ab.sessionCookie, ba: ba.sessionCookie, bb: bb.sessionCookie, x: bugs[0].id as string, y: bugs[1].id as string };
         } };
       if(["load","load-soak"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {loadChecks}=await import("./load.checks.js");await loadChecks(t,context);return;}
+      if(process.env.INGENIUM_TEST_SUITE==='participant-batch'){const {participantBatchChecks}=await import('./participant-batch.checks.js');await participantBatchChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="shop"){const {shopChecks}=await import("./shop.checks.js");await shopChecks(t,context);return;}
       if(process.env.INGENIUM_TEST_SUITE==="race-load"){const {raceLoadChecks}=await import("./race-load.checks.js");await raceLoadChecks(t,context);return;}
       if(["operations","operations-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")){const {operationsChecks}=await import("./operations.checks.js");await operationsChecks(t,context);return;}
@@ -397,7 +439,7 @@ export async function competitionChecks(t: TestContext, ownerConnection: string,
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {retentionChecks}=await import("./retention.checks.js");await retentionChecks(t,context);}
       if(!process.env.INGENIUM_TEST_SUITE || process.env.INGENIUM_TEST_SUITE==="competition"){const {reportChecks}=await import("./reports.checks.js");await reportChecks(t,context);}
     }
-    if (["shop","load","load-soak","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant","live","workbench","history","history-browser","judging","judging-browser","reports","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
+    if (["shop","load","load-soak","race-load","operations","operations-browser","restore","backup","https","worker","maintenance","participant-batch","participant","live","workbench","history","history-browser","judging","judging-browser","reports","review","review-browser","audit","audit-browser","announcements","announcements-browser","team-access","team-access-browser","results","results-browser","retention","browser","registration-browser","discipline","discipline-browser","cancellation","cancellation-browser"].includes(process.env.INGENIUM_TEST_SUITE??"")) { await pipeline(); return; }
     let emptyWalletKey: string, emptyWalletReceipt: unknown;
     await t.test("an unaffordable hint rejection is durable and malformed or unconfigured submissions allocate no receipt or priority", async () => {
       await budgets(); emptyWalletKey = randomUUID();

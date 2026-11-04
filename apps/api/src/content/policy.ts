@@ -30,12 +30,14 @@ export function prepareContent(action: ContentAction, value: unknown): Record<st
   if (action === "CREATE" || action === "NEW_VERSION" || action === "METADATA") {
     const hasCategory = !!value && typeof value === "object" && Object.hasOwn(value, "category");
     const hasReward = !!value && typeof value === "object" && Object.hasOwn(value, "reward_multiplier");
-    const row = record(value, [...(action === "CREATE" ? ["round_type"] : []), "title", "statement", "difficulty", "checker_mode", ...(hasCategory ? ["category"] : []), ...(hasReward ? ["reward_multiplier"] : [])]);
+    const hasBounty = !!value && typeof value === "object" && Object.hasOwn(value, "base_bounty");
+    const row = record(value, [...(action === "CREATE" ? ["round_type"] : []), "title", "statement", "difficulty", "checker_mode", ...(hasCategory ? ["category"] : []), ...(hasReward ? ["reward_multiplier"] : []), ...(hasBounty ? ["base_bounty"] : [])]);
     if (hasReward && (![1,5].includes(integer(row.reward_multiplier,5)) || (action === "CREATE" && row.round_type === 2 && row.reward_multiplier !== 1))) return invalid();
+    if (hasBounty && (integer(row.base_bounty,1000) < 250 || (row.base_bounty as number) % 10 || action === "CREATE" && row.round_type !== 2 || hasReward && row.reward_multiplier !== 1)) return invalid();
     return { ...(action === "CREATE" ? { round_type: integer(row.round_type, 2) } : {}), title: contentText(row.title, 160, true, true),
       statement: contentText(row.statement, 65536, true), difficulty: integer(row.difficulty, 100), checker_mode: choice(row.checker_mode, ["TOKENS", "EXACT_TEXT"]),
       ...(hasCategory ? { category: choice(row.category, ["ARRAYS", "GRAPHS", "SYSTEMS", "LOGIC"]) } : {}),
-      ...(hasReward ? { reward_multiplier: row.reward_multiplier } : {}) };
+      ...(hasReward ? { reward_multiplier: row.reward_multiplier } : {}), ...(hasBounty ? { base_bounty: row.base_bounty } : {}) };
   }
   if (action === "VARIANT") {
     const row = record(value, ["language", "starter_code", "reference_solution_code", "defect_description", "runtime_key", "cpu_time_limit_ms", "wall_time_limit_ms", "memory_limit_kb"]);

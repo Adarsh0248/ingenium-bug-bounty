@@ -159,11 +159,11 @@ In Cloud Shell:
 ```bash
 gcloud compute scp ~/ingenium-host-installation-20261025-v1.tar.gz \
   ingenium-judge-verification-01:~/ \
-  --project=project-8359d400-686c-4df3-a64 \
+  --project=EXAMPLE_CLOUD_PROJECT \
   --zone=asia-south1-a --tunnel-through-iap
 
 gcloud compute ssh ingenium-judge-verification-01 \
-  --project=project-8359d400-686c-4df3-a64 \
+  --project=EXAMPLE_CLOUD_PROJECT \
   --zone=asia-south1-a --tunnel-through-iap
 ```
 
@@ -295,10 +295,10 @@ link errors; that directory is preserved, and a separate complete extraction
 passed the CLI version check. No system PATH or user shell profile was changed.
 
 The working CLI is
-`C:\Users\adars\AppData\Local\ingenium-tools\gcloud590\google-cloud-sdk\bin\gcloud.cmd`,
+`C:\Users\YOUR_USER\AppData\Local\ingenium-tools\gcloud590\google-cloud-sdk\bin\gcloud.cmd`,
 with `CLOUDSDK_PYTHON=C:\Python314\python.exe`, usage reporting disabled and
 separate private `CLOUDSDK_CONFIG` at
-`C:\Users\adars\AppData\Local\ingenium-tools\gcloud-config`. The user completed
+`C:\Users\YOUR_USER\AppData\Local\ingenium-tools\gcloud-config`. The user completed
 Google's browser sign-in. Credentials and the generated test SSH key remain
 outside the checkout and are never copied into reports. Native IAP SSH and SCP
 now work for this approved VM/project. Windows' SCP client requires the observed
@@ -339,11 +339,11 @@ approved verification VM:
 ```bash
 gcloud compute scp ~/ingenium-host-context-20261025-v1.tar.gz \
   ingenium-judge-verification-01:~/ \
-  --project=project-8359d400-686c-4df3-a64 \
+  --project=EXAMPLE_CLOUD_PROJECT \
   --zone=asia-south1-a --tunnel-through-iap
 
 gcloud compute ssh ingenium-judge-verification-01 \
-  --project=project-8359d400-686c-4df3-a64 \
+  --project=EXAMPLE_CLOUD_PROJECT \
   --zone=asia-south1-a --tunnel-through-iap
 ```
 

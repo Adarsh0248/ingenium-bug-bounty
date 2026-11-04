@@ -2,9 +2,9 @@
 
 Private organiser content. Never copy this directory into public assets.
 
-100 independent debugging missions in The Kernel Breach, with 25 per topic and four equivalent language variants: C, C++, Java and Python. There are 32 questions at 25–45, 36 at 46–65, 20 at 66–85 and 12 at 86–100. Ratings are authoring targets, not measured pilot difficulty.
+100 independent debugging missions in The Kernel Breach, with 25 per topic and four equivalent language variants: C, C++, Java and Python. There are 70 questions at 1–20, 20 at 21–30 and 10 at 31–40, matching the easier Round 1 style requested after the first event. Ratings are authoring targets, not measured pilot difficulty.
 
-Each mission provides a plain-English incident, exact expected behaviour, buggy program, code-reading guide, two samples, at least six hidden tests and three progressive hints. Bounty remains 10 × difficulty (250–1,000 coins). Round 2's additional hint costs stay 10%, 30%, 80%, with winning score multipliers 90%, 70%, 50%. No scoring or shop rule is changed by the pack.
+Each mission provides a plain-English incident, exact expected behaviour, buggy program, code-reading guide, two samples, at least six hidden tests and three progressive hints. Bounties range from 250–1,000 coins independently of difficulty so Round 2 shop items remain affordable. Round 2's additional hint costs stay 10%, 30%, 80%, with winning score multipliers 90%, 70%, 50%. Existing hint percentages, winning score multipliers and shop prices stay unchanged.
 
 Use the [question book](questions.md) for review and [validation summary](validation-summary.json) for exact local check scope. Local compiler checks do not publish questions or verify the production judge. Organiser review, language-fairness pilots and protected publication validation are still required.
 
@@ -12,103 +12,103 @@ Rebuild: `npm.cmd run content:round2:build`. Authored bodies keep explicit four-
 
 | # | Topic | Mission | Difficulty | Bounty | Private defect |
 | --- | --- | --- | ---: | ---: | --- |
-| 1 | ARRAYS | Checkpoint Ledger | 25 | 250 | The prefix subtraction stops before l - 1 instead of before l, including an extra reading. |
-| 2 | ARRAYS | Balanced Repair Bay | 30 | 300 | The current value is removed from the right total after comparing, so the comparison includes it. |
-| 3 | ARRAYS | Dark-Pixel Budget | 38 | 380 | The shrinking threshold permits k + 1 dark pixels instead of k. |
-| 4 | ARRAYS | Rescue Phrase | 45 | 450 | Removing a surplus copy increases missing even though the required count is still present. |
-| 5 | ARRAYS | Zero-Length Phantom | 42 | 420 | The current prefix is inserted before querying, allowing it to pair with itself when target is zero. |
-| 6 | ARRAYS | Duplicate Address Band | 35 | 350 | The upper-bound search moves right only for values below x, so it duplicates the lower-bound search. |
-| 7 | ARRAYS | Sealed Corridor Coverage | 40 | 400 | Merging assigns the latest interval end instead of retaining the furthest end. |
-| 8 | ARRAYS | Echo Pair Collapse | 36 | 360 | The pop removes two stack entries although the incoming matching letter was never pushed. |
-| 9 | ARRAYS | Rotated Vault Index | 48 | 480 | When middle and right values tie, the search discards the left endpoint even though only the right endpoint is proven redundant. |
-| 10 | ARRAYS | Moving Threat Ceiling | 56 | 560 | The deque expiration check retains the position exactly one step before the current window. |
-| 11 | ARRAYS | Cooling Alarm Horizon | 51 | 510 | The stack resolves equal temperatures even though only a strictly higher reading is eligible. |
-| 12 | ARRAYS | Coolant Between Walls | 55 | 550 | The suffix maximum is replaced with the neighboring raw height instead of the neighboring suffix maximum. A zero sentinel after the input keeps that faulty access bounded. |
-| 13 | ARRAYS | Maintenance Slot Picker | 46 | 460 | Accepting a slot stores its start instead of its end as the next availability boundary. |
-| 14 | ARRAYS | Overlapping Distress Calls | 65 | 650 | A complete match resets matched to zero instead of retaining the longest reusable border. |
-| 15 | ARRAYS | Mirror Frame Repair | 64 | 640 | The matching-endpoint branch adds a repair cost instead of inheriting only the inner substring cost. |
-| 16 | ARRAYS | Strict Upgrade Trail | 57 | 570 | The tails search skips equal entries, computing a nondecreasing subsequence instead of a strictly increasing one. |
-| 17 | ARRAYS | Circular Power Reserve | 60 | 600 | The circular complement candidate is considered for an all-negative list, where it removes the entire list and represents an empty section. |
-| 18 | ARRAYS | Crossed Arrival Records | 66 | 660 | A right-side merge choice counts the whole original left block instead of only its unmerged suffix. |
-| 19 | ARRAYS | Patch Transcript Distance | 71 | 710 | The saved diagonal is overwritten with the current row result rather than the previous row cell. |
-| 20 | ARRAYS | Firewall Plate Area | 76 | 760 | The popped rectangle width includes the remaining shorter stack-top position. |
-| 21 | ARRAYS | Wildcard Quarantine Rule | 80 | 800 | The star transition consumes from the previous rule column instead of remaining on the star column, preventing repeated consumption. |
-| 22 | ARRAYS | Signed Burst Recovery | 85 | 850 | Only one qualifying deque-front prefix is consumed at an endpoint, leaving potentially shorter qualifying starts unexamined. |
-| 23 | ARRAYS | Suffix Archive Census | 90 | 900 | The Kasai-style scan carries the full previous common-prefix length to the next starting position instead of reducing it by one. |
-| 24 | ARRAYS | Nested Signature Relay | 94 | 940 | Failure-link propagation replaces a node's terminal count instead of adding inherited suffix counts to its own count. |
-| 25 | ARRAYS | Three-Image Recovery | 100 | 1000 | On suffix-link fallback the matched length becomes zero instead of the length of the retained suffix state, losing still-valid match evidence. |
-| 26 | SYSTEMS | Aligned Rescue Span | 25 | 250 | The fit check uses the unaligned span start instead of the aligned candidate. |
-| 27 | SYSTEMS | Fragment Tailroom | 29 | 290 | The final-fragment fit check uses the rounded nonfinal chunk size, discarding legal final tailroom. |
-| 28 | SYSTEMS | Boundary Tag Reunion | 32 | 320 | The right boundary tag is set to one rather than the merged length, so later left-neighbor merges use stale information. |
-| 29 | SYSTEMS | Wrapped Burst Admission | 35 | 350 | Admission also demands physically contiguous tailroom, although a circular queue can wrap. |
-| 30 | SYSTEMS | Clean Fill, Dirty Ghost | 38 | 380 | A miss retains the evicted block's dirty bit instead of giving the incoming block a clean state. |
-| 31 | SYSTEMS | Pinned Cache Refuge | 41 | 410 | Victim selection prefers the oldest resident without excluding pinned pages. |
-| 32 | SYSTEMS | End-Around Carry | 43 | 430 | Folding discards the carry instead of adding it back into the low bits. |
-| 33 | SYSTEMS | C-LOOK Return Journey | 45 | 450 | The wrap branch skips charging the physical seek back to the selected lower track. |
-| 34 | SYSTEMS | Frequency Inheritance | 48 | 480 | A replacement increments the victim slot's old frequency instead of starting the new page at one. |
-| 35 | SYSTEMS | Translation After Remap | 50 | 500 | A page-table change leaves its cached translation valid. |
-| 36 | SYSTEMS | Recycled Badge Generation | 53 | 530 | Validation accepts any older generation instead of requiring exact equality with the current generation. |
-| 37 | SYSTEMS | Undo in Reverse | 55 | 550 | Undo records are replayed oldest first, so later before-images overwrite the true original value. |
-| 38 | SYSTEMS | Two Owners, One Frame | 58 | 580 | The copy-on-write guard excludes frames with exactly two owners. |
-| 39 | SYSTEMS | Reservation Window Baseline | 60 | 600 | The query sweep starts accumulating differences only at left, losing the load already active there. |
-| 40 | SYSTEMS | Length-Tagged Dispatch | 62 | 620 | The parser advances by only one header byte plus the payload length, although the header has two bytes. |
-| 41 | SYSTEMS | Reassembly Must Remember | 64 | 640 | Conflict detection is disabled when all message positions have been filled. |
-| 42 | SYSTEMS | Clock Hand Privilege | 65 | 650 | A newly installed page starts with reference bit zero instead of one. |
-| 43 | SYSTEMS | Compactor's Interior Address | 70 | 700 | Relocation returns the new block base without adding the old address's interior offset. |
-| 44 | SYSTEMS | The Last Strong Owner | 74 | 740 | Destruction tests external ownership instead of the total reference count, overlooking internal strong owners. |
-| 45 | SYSTEMS | Idle Credit in the Router | 78 | 780 | Emptying a queue preserves its unused deficit, letting later arrivals inherit idle credit. |
-| 46 | SYSTEMS | Committed Child, Aborted Parent | 82 | 820 | Every commit clears the undo log, including child commits whose history is still needed by a parent. |
-| 47 | SYSTEMS | Buddy, Not Just Neighbor | 85 | 850 | The merge computes every buddy to the right, forgetting that an upper half's buddy is on its left. |
-| 48 | SYSTEMS | Commit Order at Dawn | 90 | 900 | Recovery orders committed batches by first-write position instead of commit-marker position. |
-| 49 | SYSTEMS | Disk Route State | 96 | 960 | A transition stores its result under the old endpoint rather than the newly serviced request. |
-| 50 | SYSTEMS | The Black-to-White Breach | 100 | 1000 | The write barrier shades targets of gray owners instead of black owners, missing links added after an owner's scan. |
-| 51 | GRAPHS | Twin Arrival Ledger | 25 | 250 | An equal-distance arrival replaces the accumulated route count instead of contributing to it. |
-| 52 | GRAPHS | Repair Front Collision | 34 | 340 | The meeting cable is omitted when combining distances from two different owners. |
-| 53 | GRAPHS | Even Pulse Corridor | 40 | 400 | Crossing a link keeps the old hop parity instead of switching to the other parity state. |
-| 54 | GRAPHS | Parallel Repair Clock | 42 | 420 | The prerequisite merge adds finish times instead of keeping their maximum. |
-| 55 | GRAPHS | Cycle Admission Desk | 39 | 390 | The cycle test compares immediate parent links rather than the roots already found. |
-| 56 | GRAPHS | Two Phase Isolation | 35 | 350 | The conflict check treats opposite phases as a conflict instead of equal phases. |
-| 57 | GRAPHS | Nested Repair Load | 45 | 450 | A child passes only its original load instead of its fully accumulated subtree total. |
-| 58 | GRAPHS | Cooling Tree Core | 43 | 430 | Only one queued leaf is removed per round instead of the complete layer present at the round's start. |
-| 59 | GRAPHS | Tentative Alarm Queue | 49 | 490 | The next settled relay is chosen by its label rather than its tentative cost. |
-| 60 | GRAPHS | Zero Cost Fast Lane | 60 | 600 | The deque insertion ends are reversed, breaking the distance order required before finalisation. |
-| 61 | GRAPHS | Worst Link Shield | 53 | 530 | When a new link is worse, its cost is added instead of replacing the previous maximum. |
-| 62 | GRAPHS | Reachable Credit Spiral | 65 | 650 | The final improvement test performs arithmetic on the unreachable sentinel without checking reachability. |
-| 63 | GRAPHS | Cheapest Repair Backbone | 58 | 580 | A frontier key stores the previous key plus the cable price instead of just the cable price. |
-| 64 | GRAPHS | Backup Cable Pairing | 62 | 620 | The skipped-cable test removes every record with matching endpoints instead of only the chosen record index. |
-| 65 | GRAPHS | Disconnected Junction Audit | 64 | 640 | Removal results are compared with one component instead of the measured original component count. |
-| 66 | GRAPHS | Exact Hop Manifest | 56 | 560 | The new route-length layer is added to the old layer instead of replacing it. |
-| 67 | GRAPHS | One Way Cluster Gates | 65 | 650 | The component membership test accepts reachability in either direction instead of requiring both directions. |
-| 68 | GRAPHS | Condensed Service Tour | 78 | 780 | The DAG transition adds one for the next component instead of adding that component's relay count. |
-| 69 | GRAPHS | Ancestor Jump Table | 74 | 740 | A doubled jump copies one half-jump instead of composing two half-jumps. |
-| 70 | GRAPHS | Moving Root Repair Zones | 83 | 830 | The complement case removes x's whole original subtree instead of just the child branch leading to the temporary root. |
-| 71 | GRAPHS | Equal Price Backbone Fork | 85 | 850 | The temporary batch forest starts with isolated vertices instead of preserving cheaper-edge contractions. |
-| 72 | GRAPHS | Undoable Bandwidth Repair | 85 | 850 | Augmentation consumes forward capacity but fails to create the matching reverse residual capacity. |
-| 73 | GRAPHS | Alternating Drone Assignments | 90 | 900 | Path reconstruction forgets the displaced job, so it stops after changing only the final assignment. |
-| 74 | GRAPHS | Negative Echo Containment | 96 | 960 | Negative-cycle influence is propagated for only one edge-list sweep, which depends on input order. |
-| 75 | GRAPHS | Priced Residual Treaty | 100 | 1000 | A reverse residual edge has the original positive price instead of the negative price needed to refund cancelled flow. |
-| 76 | LOGIC | Clock Without a Wall | 25 | 250 | The receive branch adds a newer remote timestamp instead of adopting it before incrementing. |
-| 77 | LOGIC | Recursive Service Latch | 29 | 290 | A release clears the owner even when the reentrant depth is still positive. |
-| 78 | LOGIC | Barrier Generations | 32 | 320 | The per-worker arrival flags are retained when a new barrier generation begins. |
-| 79 | LOGIC | Client Receipt Namespaces | 34 | 340 | The deduplication key omits the client namespace. |
-| 80 | LOGIC | Half-Range Sequence Fence | 37 | 370 | The acceptance boundary includes the ambiguous half-range distance. |
-| 81 | LOGIC | Binary Residue Gate | 40 | 400 | The transition adds the new bit without doubling the previous remainder for its binary place value. |
-| 82 | LOGIC | Quiet Shift Planner | 43 | 430 | The take transition extends the best previous total rather than only the total that skipped the previous day. |
-| 83 | LOGIC | Borrowed Quantum | 45 | 450 | Elapsed time advances by a full quantum even for a shorter final turn. |
-| 84 | LOGIC | One-Use Repair Kits | 48 | 480 | Ascending in-place budget updates reuse the current kit within its own pass. |
-| 85 | LOGIC | Unordered Power Credits | 50 | 500 | Putting the amount loop outside the denomination loop counts ordered sequences instead of denomination combinations. |
-| 86 | LOGIC | Snapshot Write Sets | 52 | 520 | Commit copies clean snapshot cells as well as written cells, causing unrelated lost updates. |
-| 87 | LOGIC | Causal Fingerprints | 54 | 540 | The BEFORE branch checks for a smaller component but does not exclude a greater component. |
-| 88 | LOGIC | The First Release Rule | 56 | 560 | Shrinking begins only after the last held lock is released instead of after the first successful release. |
-| 89 | LOGIC | Borrowed Resources Return | 59 | 590 | The completion step returns the remaining need instead of the resources originally allocated. |
-| 90 | LOGIC | Distinct Recovery Phrases | 61 | 610 | Duplicate removal subtracts the count through the previous equal letter instead of the count just before it. |
-| 91 | LOGIC | Compatible Maintenance Windows | 63 | 630 | Taking a job extends the unrestricted previous optimum instead of the last compatible prefix optimum. |
-| 92 | LOGIC | Composite-Modulus Rosters | 65 | 650 | The recurrence reduces modulo modulus before an exact integer division, which does not preserve the quotient remainder. |
-| 93 | LOGIC | Read Sets Against Write Skew | 69 | 690 | Commit validates only written cells and overlooks read-only dependencies, allowing write skew. |
-| 94 | LOGIC | Adjacent Archive Fusion | 73 | 730 | The last merge is charged only the endpoint weights instead of the entire interval weight. |
-| 95 | LOGIC | Crew Assignment Masks | 77 | 770 | The cost row uses the mask remainder instead of the count of already assigned jobs. |
-| 96 | LOGIC | Sealed Credit Stocks | 81 | 810 | A denomination stage reads its own growing output, allowing same-stage choices to be reused beyond the stock limit. |
-| 97 | LOGIC | Two-Ended Quarantine Game | 85 | 850 | The right-end transition adds the next player's interval advantage instead of subtracting it. |
-| 98 | LOGIC | Atomic History Witness | 89 | 890 | A call is considered ready when any required predecessor is present rather than when all are present. |
-| 99 | LOGIC | Count the Legal Interleavings | 95 | 950 | The acquisition test checks only the acting worker's prefix instead of locks held by all workers. |
-| 100 | LOGIC | Exact Coverage Under Conflicts | 100 | 1000 | The coverage test rejects only full containment, allowing a partially overlapping switch to repair a module twice. |
+| 1 | ARRAYS | Alternating Supply Ribbons | 10 | 340 | Both outputs in a pair read from the first ribbon. |
+| 2 | ARRAYS | Marked Cargo Removal | 11 | 360 | The retention condition selects removal flags instead of keep flags. |
+| 3 | ARRAYS | Step Change Tape | 12 | 380 | The subtraction uses previous minus current instead of current minus previous. |
+| 4 | ARRAYS | Missing Crate Insertion | 14 | 430 | The insertion condition compares the loop position to the following gap. |
+| 5 | ARRAYS | Local Mirror Strip | 18 | 510 | The second half of a swap reads an entry that has already been overwritten. |
+| 6 | ARRAYS | Two Lane Unpacking | 16 | 470 | Each lane pass starts at position zero instead of its lane number. |
+| 7 | ARRAYS | Missing Reading Carry | 17 | 490 | The remembered reading is updated on missing entries instead of real entries. |
+| 8 | ARRAYS | Delta Tape Reconstruction | 19 | 540 | Each change is subtracted from the reconstructed value. |
+| 9 | ARRAYS | Trailing Padding Cutter | 13 | 400 | The trimming condition inspects the first character rather than the current final retained character. |
+| 10 | ARRAYS | Transcript Difference Markers | 13 | 400 | The difference check accepts equal letters. |
+| 11 | ARRAYS | Wildcard Badge Stencil | 18 | 510 | The mismatch condition rejects wildcard positions regardless of their matching rule. |
+| 12 | ARRAYS | Ordered Rescue Letters | 23 | 630 | A match resets progress to one instead of advancing the saved position. |
+| 13 | ARRAYS | Packed Run Expansion | 20 | 560 | The copy loop stops before the final required copy. |
+| 14 | ARRAYS | Addressed Shelf Picks | 14 | 430 | The output uses a position directly instead of looking up its value. |
+| 15 | ARRAYS | Vertical Log Reader | 12 | 380 | The flat position uses the column number as the row number. |
+| 16 | ARRAYS | Transposed Control Sheet | 24 | 650 | The source address uses transposed dimensions instead of original dimensions. |
+| 17 | ARRAYS | Snake Row Patrol | 18 | 510 | The reversal branch selects even rows rather than odd rows. |
+| 18 | ARRAYS | Shared Header Length | 16 | 470 | The prefix loop no longer stops when corresponding letters differ. |
+| 19 | ARRAYS | Damaged Span Removal | 15 | 450 | The retention test includes positions equal to the deletion endpoints. |
+| 20 | ARRAYS | Ascending Shelf Passes | 28 | 740 | The candidate comparison selects the largest remaining entry. |
+| 21 | ARRAYS | Dictionary Gate Order | 26 | 690 | The scan continues replacing a decision after the first unequal letters. |
+| 22 | ARRAYS | Single Pass Sensor Smoothing | 32 | 820 | The left term is read from the partially updated result rather than the original input. |
+| 23 | ARRAYS | Two Token Packet Folding | 29 | 760 | A successful fold consumes only its first token. |
+| 24 | ARRAYS | Settling Storage Columns | 35 | 890 | A crate is written back to its source row rather than to the next free bottom destination. |
+| 25 | ARRAYS | Safe Range Labels | 10 | 340 | The upper-bound branch assigns the lower endpoint. |
+| 26 | SYSTEMS | Sector Offset Split | 8 | 290 | The offset calculation uses the quotient rather than the remainder within a sector. |
+| 27 | SYSTEMS | Payload Only Meter | 10 | 340 | Each frame's payload length is left equal to its full length, so headers are counted as data. |
+| 28 | SYSTEMS | Truncate Without Growth | 12 | 380 | The trim guard accepts any unequal limit, including limits that extend the file. |
+| 29 | SYSTEMS | Overwrite End Marker | 16 | 470 | Extension is tested using the write's starting position instead of its ending position. |
+| 30 | SYSTEMS | Cursor at End | 18 | 510 | The cursor advances by the requested amount rather than the clipped amount actually returned. |
+| 31 | SYSTEMS | Severity Byte Filter | 9 | 320 | The severity filter uses a strict comparison and drops records at the threshold. |
+| 32 | SYSTEMS | Checksum Byte Wrap | 12 | 380 | The checksum wraps using 255 possible states instead of 256. |
+| 33 | SYSTEMS | Minimum Packet Padding | 14 | 430 | A short packet receives a full minimum's worth of extra bytes instead of being raised to the minimum. |
+| 34 | SYSTEMS | Final Buffer Dispatch | 20 | 560 | The final flush is performed only for a completely full buffer. |
+| 35 | SYSTEMS | Clean After Flush | 17 | 490 | A successful flush leaves the buffer marked dirty, so later flushes save it again. |
+| 36 | SYSTEMS | Rejected Byte Ledger | 14 | 430 | Each rejected packet contributes one to a counter that is supposed to measure bytes. |
+| 37 | SYSTEMS | Partial Buffer Drain | 16 | 470 | An oversized drain is reduced to zero instead of to the number of queued bytes. |
+| 38 | SYSTEMS | Suppressed Log Clock | 20 | 560 | The last-written time is updated for suppressed attempts as well as written logs. |
+| 39 | SYSTEMS | Empty File Still Exists | 14 | 430 | The existence test excludes zero-length files along with unused slots. |
+| 40 | SYSTEMS | One Terminator per Record | 10 | 340 | The record size omits its one-byte ending marker. |
+| 41 | SYSTEMS | Drive Travel Ledger | 18 | 510 | The negative movement adjustment leaves the signed difference negative instead of making it a distance. |
+| 42 | SYSTEMS | Block Wear Allowance | 19 | 540 | The wear guard checks the global acceptance total instead of the target block's write count. |
+| 43 | SYSTEMS | Shared Log Header | 20 | 560 | The header charge is added for every candidate record instead of only while the log is empty. |
+| 44 | SYSTEMS | Seek from File End | 23 | 630 | The end-relative branch chooses the current cursor rather than the fixed file length as its base. |
+| 45 | SYSTEMS | Arrivals Before Service | 24 | 650 | The service amount is based on the old queue rather than the queue after admitting this tick's arrivals. |
+| 46 | SYSTEMS | Whole Range Reservation | 22 | 600 | Encountering an occupied block leaves the reservation marked possible instead of rejecting it. |
+| 47 | SYSTEMS | Checkpoint Log Tail | 24 | 650 | The recovery branch copies the current length into the checkpoint instead of restoring the current length from it. |
+| 48 | SYSTEMS | Packed Record Boundary | 26 | 690 | The completeness check rejects a record whose end is exactly the buffer length. |
+| 49 | SYSTEMS | Cancel a Waiting Print | 31 | 800 | The cancellation shift starts after the cancelled position, leaving that position unchanged. |
+| 50 | SYSTEMS | Discard the Pending Slot | 32 | 820 | Discard marks a slot as having a pending edit instead of clearing that status. |
+| 51 | GRAPHS | Reciprocal Door Pairs | 8 | 290 | The pair test accepts either direction instead of requiring both. |
+| 52 | GRAPHS | One Way Dead Ends | 12 | 380 | The final test includes isolated vertices because it ignores incoming links. |
+| 53 | GRAPHS | Zone Exit Wires | 9 | 320 | The zone test exchanges the sender and receiver roles. |
+| 54 | GRAPHS | Shared Rescue Neighbours | 11 | 360 | The shared-neighbour condition accepts a cable to either post. |
+| 55 | GRAPHS | Triangle Lock Census | 19 | 540 | The triangle check omits the cable joining the first and last vertices. |
+| 56 | GRAPHS | Missing Mesh Cables | 7 | 270 | The pair loop includes both orders of every missing pair. |
+| 57 | GRAPHS | Incident Power Ledger | 10 | 340 | The row total counts cables instead of adding their power values. |
+| 58 | GRAPHS | Sibling Pair Roster | 15 | 450 | The child-pair formula counts both orders without dividing by two. |
+| 59 | GRAPHS | Parent Label Cards | 6 | 250 | The parent assignment stores the relationship in the wrong direction. |
+| 60 | GRAPHS | Inbound Outbound Balance | 12 | 380 | Incoming links are added rather than subtracted. |
+| 61 | GRAPHS | Signed Walk Receipt | 13 | 400 | A later valid step overwrites an earlier failure. |
+| 62 | GRAPHS | Hub And Rim Seal | 18 | 510 | The pair check ignores unexpected cables between outer vertices. |
+| 63 | GRAPHS | Odd Socket Census | 10 | 340 | The odd-degree test accepts only degree one. |
+| 64 | GRAPHS | Cable Colour Split | 14 | 430 | The violation condition rejects different colours instead of equal colours. |
+| 65 | GRAPHS | Tile Boundary Fence | 18 | 510 | A shared side removes only one of its two contributions. |
+| 66 | GRAPHS | Fixed Step Conveyor | 9 | 320 | The crossing loop makes one fewer move than requested. |
+| 67 | GRAPHS | Immediate Return Log | 10 | 340 | The check compares the end of the two-move section with its middle instead of its beginning. |
+| 68 | GRAPHS | Two Link Promise | 24 | 650 | The missing-shortcut test wrongly requires both first-leg table entries instead of the two consecutive legs. |
+| 69 | GRAPHS | Four Door Circuit | 27 | 710 | The final cable returning to the first vertex is not checked. |
+| 70 | GRAPHS | First Crossing Toll | 22 | 600 | The payment table marks only the travel direction, although a cable is shared by both directions. |
+| 71 | GRAPHS | Synchronous Relay Lamps | 26 | 690 | Neighbour counting reads partially updated lamps from the new round. |
+| 72 | GRAPHS | Junction Switch Patrol | 24 | 650 | The switch update toggles the arrival vertex instead of the saved departure vertex. |
+| 73 | GRAPHS | Discovery Sender Cards | 31 | 800 | A newly discovered vertex records the global start instead of the relay currently processing it. |
+| 74 | GRAPHS | Largest Floor Island | 33 | 850 | The left-neighbour offset is zero, so that direction checks the current tile instead. |
+| 75 | GRAPHS | Simultaneous Twig Trim | 32 | 820 | Selection deletes vertices immediately, so later degree checks see a partially trimmed round. |
+| 76 | LOGIC | Single Pilot Signal | 6 | 250 | The decision accepts every positive request total instead of exactly one. |
+| 77 | LOGIC | Inspection Bit | 9 | 320 | The isolated bit is compared with the integer one instead of being tested for a nonzero value. |
+| 78 | LOGIC | Complete Permit Set | 15 | 450 | The test accepts any shared permit and also rejects an empty requirement. |
+| 79 | LOGIC | Heat Band Labels | 7 | 270 | The warm-band branch excludes its lower boundary of twenty. |
+| 80 | LOGIC | Calendar Relay | 8 | 290 | The wrap step subtracts seven once rather than handling every complete week. |
+| 81 | LOGIC | Minute Carry Panel | 12 | 380 | The hour carry uses the remainder of minutes instead of the number of complete hours. |
+| 82 | LOGIC | Latched Distress Light | 10 | 340 | Every report replaces the stored light state instead of preserving earlier alarms. |
+| 83 | LOGIC | Pause Aware Meter | 14 | 430 | The pause command leaves the running flag enabled. |
+| 84 | LOGIC | Bounded Lift Buttons | 11 | 360 | The move guard checks the upper bound but omits the lower bound. |
+| 85 | LOGIC | Fresh Cooldown Pulse | 19 | 540 | Cooldown decreases only on slots containing a pulse. |
+| 86 | LOGIC | Single Use Silencer | 18 | 510 | Suppressing an alarm leaves the silencer armed. |
+| 87 | LOGIC | Neighboring Enabled Lamps | 18 | 510 | The pair test accepts one set bit instead of requiring both bits. |
+| 88 | LOGIC | Two Bit Mode Field | 15 | 450 | The extraction mask retains only the lower field bit. |
+| 89 | LOGIC | Equalizer Tick | 17 | 490 | The downward branch includes equality and moves a dial that is already at its target. |
+| 90 | LOGIC | Leap Day Access | 12 | 380 | The ordinary four-year rule fails to exclude century years. |
+| 91 | LOGIC | Periodic Bell Phase | 8 | 290 | The phase test uses the quotient rather than the remainder. |
+| 92 | LOGIC | Nearest Calibration Mark | 13 | 400 | The upward-rounding check excludes exact halfway ties. |
+| 93 | LOGIC | Remembered Fan Band | 23 | 630 | Every reading below the high threshold is treated as a switch-off reading. |
+| 94 | LOGIC | Pending Rescue Batch | 26 | 690 | Discard is routed through the publication branch. |
+| 95 | LOGIC | Muted Desk Rotation | 27 | 710 | The skip check advances past at most one disabled desk. |
+| 96 | LOGIC | Failure Streak Siren | 22 | 600 | Every failure at or above the threshold raises another siren. |
+| 97 | LOGIC | Consumed Double Tap | 28 | 740 | A completed pair keeps its second tap waiting instead of consuming it. |
+| 98 | LOGIC | Relay Timer Phases | 31 | 800 | The timer-advance phase runs after commands, aging new timers immediately. |
+| 99 | LOGIC | Lift Direction Interlock | 32 | 820 | A successful move stores a stopped direction instead of the movement direction. |
+| 100 | LOGIC | One Step Undo Console | 33 | 850 | An edit leaves the redo availability flag unchanged. |

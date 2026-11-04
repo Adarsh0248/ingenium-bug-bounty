@@ -1,6 +1,7 @@
 import { sha256 } from "../access/credentials.js";
 import { JUDGE_BODY_LIMIT } from "../content/judge-protocol.js";
 import { exchangeProtectedProcess } from "./executor.js";
+import { dockerHttpBody, dockerReadRequest } from "./docker-read.js";
 import type { CapsuleDriver, CapsuleReference, CapsuleState } from "./capsule-lifecycle.js";
 
 const fail = (): never => { throw new Error("Original Docker capsule cannot be verified; retain its reservation."); };
@@ -14,6 +15,7 @@ export function capsuleMounts(ref: CapsuleReference) {
   const working = `${root}/capsules/${ref.intent.nonce}`;
   return [
     { source: `${working}/capsule.json`, target: "/opt/ingenium/judge-executor/capsule.json", readonly: true },
+    { source: CAPSULE_ENTRY, target: CAPSULE_ENTRY, readonly: true },
     { source: "/opt/ingenium/judge-executor/security/isolate", target: "/usr/local/etc/isolate", readonly: true },
     { source: `${root}/checkpoints`, target: `${root}/checkpoints`, readonly: false },
     ...[["memory", "memory"], ["cpu,cpuacct", "cpuacct"], ["pids", "pids"]].map(([host, guest]) =>
@@ -91,14 +93,27 @@ export function inspectDockerCapsule(raw: Buffer, ref: CapsuleReference, seccomp
 export function localDockerCommand(fileDescriptor: number, daemonDescriptor: number, peerDescriptor: number): DockerCommand {
   const descriptors = [peerDescriptor, fileDescriptor, daemonDescriptor];
   if (process.platform !== "linux" || process.getuid?.() !== 0 || descriptors.some(fd => !Number.isSafeInteger(fd) || fd < 3) || new Set(descriptors).size !== 3) return fail();
-  return (args, input, signal) => exchangeProtectedProcess({ file: "/proc/self/fd/3", inheritedFds: descriptors, args }, input, signal);
+  return async (args, input, signal) => {
+    const read = dockerReadRequest(args);
+    if (!read) return exchangeProtectedProcess({ file: "/proc/self/fd/3", inheritedFds: descriptors, args }, input, signal);
+    if (input.length) return fail();
+    const raw = await exchangeProtectedProcess({ file: "/proc/self/fd/3", inheritedFds: descriptors, args: ["--http-get", read.path] }, input, signal);
+    signal.throwIfAborted(); return read.output(dockerHttpBody(raw));
+  };
 }
 export async function assertDockerCapsuleAbsent(command: DockerCommand, ref: CapsuleReference, id: string, signal: AbortSignal) {
   if (!/^[0-9a-f]{64}$/.test(id)) return fail();
-  // Check ID separately from name: renaming must never turn a retained original into apparent absence.
-  for (const filter of [`id=${id}`, `name=^/${ref.name}$`]) {
-    signal.throwIfAborted();
-    if ((await command(["container", "ls", "--all", "--no-trunc", "--filter", filter, "--format", "{{.ID}}"], Buffer.alloc(0), signal)).length !== 0) return fail();
+  signal.throwIfAborted();
+  // One fresh snapshot checks both identities, including an original renamed container.
+  const output = await command(["container", "ls", "--all", "--no-trunc", "--format", "{{.ID}} {{.Names}}"], Buffer.alloc(0), signal);
+  signal.throwIfAborted();
+  if (!Buffer.isBuffer(output) || output.length > JUDGE_BODY_LIMIT || output.some(byte => byte > 127 || byte === 0)) return fail();
+  if (output.length && output[output.length - 1] !== 10) return fail();
+  const seen = new Set<string>();
+  for (const line of output.toString("ascii").split("\n").slice(0, -1)) {
+    const row = /^([0-9a-f]{64}) ([A-Za-z0-9][A-Za-z0-9_.-]*)$/.exec(line);
+    if (!row || seen.has(row[1]!) || row[1] === id || row[2] === ref.name) return fail();
+    seen.add(row[1]!);
   }
 }
 // Preparations are an internal host authority, not a readiness flag: it must verify immutable config/image/security and owned real cgroup-v1 parents.

@@ -18,6 +18,7 @@ function fields(
 }
 
 export function prepareQuestionImport(value: unknown) {
+  const hasBounty = !!value && typeof value === "object" && Object.hasOwn(value, "base_bounty");
   const q = fields(value, [
     "id",
     "round_type",
@@ -29,6 +30,7 @@ export function prepareQuestionImport(value: unknown) {
     "variants",
     "cases",
     "hints",
+    ...(hasBounty ? ["base_bounty"] : []),
   ]);
   let sourceId: string;
   try {
@@ -44,6 +46,7 @@ export function prepareQuestionImport(value: unknown) {
     category: q.category,
     checker_mode: q.checker_mode,
     reward_multiplier: q.round_type === 1 ? 5 : 1,
+    ...(hasBounty ? { base_bounty: q.base_bounty } : {}),
   };
   prepareContent("CREATE", metadata);
   const variants = fields(q.variants, EVENT_LANGUAGES);

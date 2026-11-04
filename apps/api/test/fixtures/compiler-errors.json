@@ -1,0 +1,52 @@
+{
+  "java": {
+    "missing-semicolon": "public class Main { public static void main(String[] args) { int x = 1 } }",
+    "missing-brace": "public class Main { public static void main(String[] args) { int x = 1; }",
+    "undefined-variable": "public class Main { public static void main(String[] args) { System.out.println(missing); } }",
+    "undefined-method": "public class Main { public static void main(String[] args) { missing(1); } }",
+    "wrong-argument-count": "public class Main { static int add(int a, int b) { return a+b; } public static void main(String[] args) { System.out.println(add(1)); } }",
+    "wrong-argument-type": "public class Main { static int add(int a) { return a; } public static void main(String[] args) { System.out.println(add(\"a\")); } }",
+    "non-static-field": "public class Main { int x = 1; public static void main(String[] args) { System.out.println(x); } }",
+    "non-static-method": "public class Main { int value() { return 1; } public static void main(String[] args) { System.out.println(value()); } }",
+    "missing-return": "public class Main { static int value() { int x = 1; } public static void main(String[] args) {} }",
+    "return-from-void": "public class Main { public static void main(String[] args) { return 1; } }",
+    "duplicate-variable": "public class Main { public static void main(String[] args) { int x = 1; int x = 2; } }",
+    "uninitialized-variable": "public class Main { public static void main(String[] args) { int x; System.out.println(x); } }",
+    "unreachable-statement": "public class Main { public static void main(String[] args) { return; System.out.println(1); } }",
+    "boolean-operand": "public class Main { public static void main(String[] args) { boolean x = true && 1; } }",
+    "int-to-string": "public class Main { public static void main(String[] args) { String x = 1; } }",
+    "final-assignment": "public class Main { public static void main(String[] args) { final int x = 1; x = 2; } }",
+    "break-outside-loop": "public class Main { public static void main(String[] args) { break; } }",
+    "continue-outside-loop": "public class Main { public static void main(String[] args) { continue; } }",
+    "else-without-if": "public class Main { public static void main(String[] args) { else {} } }",
+    "unclosed-string": "public class Main { public static void main(String[] args) { System.out.println(\"oops); } }",
+    "unclosed-comment": "public class Main { public static void main(String[] args) { /* comment } }",
+    "large-int-literal": "public class Main { public static void main(String[] args) { int x = 999999999999999999999999; } }",
+    "duplicate-method": "public class Main { static int f() { return 1; } static int f() { return 2; } public static void main(String[] args) {} }",
+    "bad-import": "import nonexistent.Missing; public class Main { public static void main(String[] args) {} }",
+    "array-size-type": "public class Main { public static void main(String[] args) { int[] x = new int[\"a\"]; } }",
+    "dereference-int": "public class Main { public static void main(String[] args) { int x = 1; System.out.println(x.length()); } }",
+    "unchecked-exception": "public class Main { public static void main(String[] args) { Thread.sleep(1); } }"
+  },
+  "cpp": {
+    "missing-semicolon": "int main() { int x = 1 return x; }",
+    "missing-brace": "int main() { return 0;",
+    "undefined-variable": "int main() { return missing; }",
+    "wrong-type": "int main() { int x = \"a\"; return x; }",
+    "constant-assignment": "int main() { const int x = 1; x = 2; return x; }",
+    "missing-header": "#include <ingenium_missing_fixture_header.h>\nint main() { return 0; }",
+    "missing-main": "int other() { return 1; }",
+    "undefined-helper": "int missing(); int main() { return missing(); }",
+    "nested-template-error": "#include <iostream>\n#include <vector>\nint main() { std::vector<int> v; std::cin >> v; }"
+  },
+  "c": {
+    "missing-semicolon": "int main(void) { int x = 1 return x; }",
+    "missing-brace": "int main(void) { return 0;",
+    "undefined-variable": "int main(void) { return missing; }",
+    "unknown-type": "int main(void) { missing_type x = 1; return x; }",
+    "constant-assignment": "int main(void) { const int x = 1; x = 2; return x; }",
+    "missing-header": "#include <ingenium_missing_fixture_header.h>\nint main(void) { return 0; }",
+    "missing-main": "int other(void) { return 1; }",
+    "undefined-helper": "int missing(void); int main(void) { return missing(); }"
+  }
+}

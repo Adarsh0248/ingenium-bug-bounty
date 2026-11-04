@@ -8,9 +8,14 @@ import { checkedExecutionEvidence, EXECUTION_PLAN_SHA256 } from "./execution-pla
 import type { ExecutionPlan } from "./execution-plan.js";
 
 export const CHECKPOINT_DIRECTORY = "/var/lib/ingenium/judge-executor/checkpoints";
+export type BatchPhaseKey = `b${'0'|'1'}${'0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'}`;
+const batchPhaseRecords = Object.fromEntries(Array.from({length:20},(_,i)=>[`b${String(i).padStart(2,'0')}`,i]).flatMap(([key])=>[
+  [`${key}_init`,4096],[`${key}_groups`,4096],[`${key}_result`,32768],
+])) as Record<`${BatchPhaseKey}_${'init'|'groups'|'result'}`,number>;
 const capsuleRecords = { intent: 4096, container: 4096, start: 4096, stopped: 4096, remove: 4096, removed: 4096,
   resource_intent: 32768, resources: 32768, resource_remove: 4096, resource_removed: 4096,
-  compile_init: 4096, compile_groups: 4096, run_init: 4096, run_groups: 4096, storage: 4096, storage_ack: 4096, retirement: 4096 } as const;
+  compile_init: 4096, compile_groups: 4096, run_init: 4096, run_groups: 4096, storage: 4096, storage_ack: 4096, retirement: 4096,
+  batch_compile:131072,batch_artifact:4096,batch_result:JUDGE_BODY_LIMIT,...batchPhaseRecords } as const;
 const fail = (): never => { throw new Error("Protected checkpoint unavailable or inconsistent; retain the execution reservation."); };
 const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === "ENOENT";
 const descriptor = (file: FileHandle) => `/proc/self/fd/${file.fd}`;
@@ -46,14 +51,15 @@ async function directory(path: string, mode: number) {
     return handle;
   } catch (error) { await handle.close(); throw error; }
 }
-async function readRecord(folder: FileHandle, name: string, limit: number): Promise<Buffer | null> {
+async function readRecord(folder: FileHandle, name: string, limit: number, pending = false): Promise<Buffer | null> {
   let file: FileHandle;
-  try { file = await open(`${descriptor(folder)}/${name}.json`, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+  try { file = await open(pending ? `${descriptor(folder)}/.${name}.pending` : `${descriptor(folder)}/${name}.json`, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
   catch (error) { if (missing(error)) return null; throw error; }
   try {
     const info = await file.stat();
     // A crash after link() can leave the same protected inode under its pending name too.
     if (!info.isFile() || info.uid !== 0 || info.gid !== 0 || (info.mode & 0o7777) !== 0o400 || info.nlink < 1 || info.nlink > 2 || info.size > limit) return fail();
+    if (pending) await file.sync();
     const data = Buffer.alloc(limit + 1); let length = 0;
     while (length <= limit) {
       const { bytesRead } = await file.read(data, length, data.length - length, length);
@@ -74,6 +80,10 @@ async function putOnce(folder: FileHandle, name: string, value: unknown, limit: 
     if ((error as NodeJS.ErrnoException)?.code === "EEXIST") {
       const concurrent = await readRecord(folder, name, limit);
       if (concurrent?.equals(bytes)) { await folder.sync(); return; }
+      // Recover only a complete, immutable original write; preserve the pending inode for inspection.
+      if ((await readRecord(folder, name, limit, true))?.equals(bytes)) {
+        await link(pending, target); await folder.sync(); return;
+      }
     }
     throw error;
   }
@@ -81,7 +91,8 @@ async function putOnce(folder: FileHandle, name: string, value: unknown, limit: 
   finally { await file.close(); }
   // Publishing never replaces an original record. Keep incomplete writes private for inspection.
   await link(pending, target); await folder.sync();
-  await unlink(pending); await folder.sync();
+  // Batch case records retain the already durable private hardlink, avoiding a redundant unlink and directory flush.
+  if (!/^b[01][0-9]_(init|groups|result)$/.test(name)) { await unlink(pending); await folder.sync(); }
 }
 
 export async function openExecutionCheckpoints(hostEpochId: string, bootId: string) {
@@ -165,11 +176,12 @@ export async function openExecutionCheckpoints(hostEpochId: string, bootId: stri
       try { await putOnce(folder, "binding", bound, 4096); await putOnce(folder, "intent", intent, 4096); }
       finally { await folder.close(); }
     },
-    async capsule(plan: ExecutionPlan) {
+    async capsule(plan: ExecutionPlan, loadBatch = false) {
       const folder = await entry(plan, true); if (!folder) return null;
       try {
         const rows = {} as Record<keyof typeof capsuleRecords, unknown | null>;
         for (const name of Object.keys(capsuleRecords) as (keyof typeof capsuleRecords)[]) {
+          if(!loadBatch&&(name.startsWith('batch_')||/^b[0-9]{2}_/.test(name))){rows[name]=null;continue;}
           const bytes = await readRecord(folder, name, capsuleRecords[name]); rows[name] = bytes === null ? null : readJudgeJson(bytes);
         }
         return rows;

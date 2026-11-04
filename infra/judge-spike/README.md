@@ -1285,7 +1285,9 @@ and never placed in host command arguments or printed.
 
 Local archive:
 `runtime-data/judge-spike/ingenium-judge-queue-check-20261018-01.tar.gz`.
-It contains only the Python probe, without credentials. SHA-256:
+It contains only the Python probe, without credentials.
+
+Archive checksum (SHA-256):
 `feee99904f00de3b059369f59952a8cfc34c8e4b00a5a7c0643b8faf6da8138f`.
 
 Upload that archive to Cloud Shell using its file-upload menu. From Cloud Shell,

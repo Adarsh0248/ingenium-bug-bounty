@@ -35,6 +35,14 @@ gateway separately on the judge VM, with judge-only credentials and mounts.
 
 ## Database Boundary
 
+For a fresh production registry, `provider-schema.sql` contains the complete
+association schema translated from Judge0 1.13.1's pinned `db/schema.rb`. It keeps
+all upstream columns and the token index. Apply it once to a new, empty private
+database, then apply registry migrations 001–007. The protected executor owns
+compilation, verdict evidence and cleanup; no stock Judge0 worker is installed.
+The smaller `test/provider-structural.sql` remains a rehearsal fixture and must
+not be substituted for this production schema.
+
 `001_registry.sql` is a separately reviewed **judge-database** migration, outside
 the competition app's Drizzle history. It requires the pinned Judge0 provider
 schema and creates `ingenium_judge`, four private tables and narrow functions.

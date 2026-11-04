@@ -12,9 +12,14 @@ round_arg = next((a for a in sys.argv[1:] if a.startswith("--round=")), "--round
 assert round_arg in ("--round=1", "--round=2"), "Choose round 1 or 2"
 sys.argv = [a for a in sys.argv if not a.startswith("--round=")]
 root = Path(__file__).resolve().parent / ("round-" + round_arg.split("=")[1])
-raw = (root / "pack.json").read_bytes()
+pack_arg = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--pack=")), None)
+sys.argv = [a for a in sys.argv if not a.startswith("--pack=")]
+pack_path = Path(pack_arg).resolve() if pack_arg else root / "pack.json"
+raw = pack_path.read_bytes()
 pack = json.loads(raw)
-out = Path(os.environ.get("INGENIUM_CONTENT_EVIDENCE", str(root.parent.parent / "apps" / "api" / "test-results" / ("round" + str(pack["round_type"]) + "-validation"))))
+assert pack["round_type"] == int(round_arg.split("=")[1]), "Pack must match the selected round"
+evidence_name = "round" + str(pack["round_type"]) + "-validation" + ("-" + pack_path.parent.name if pack_arg else "")
+out = Path(os.environ.get("INGENIUM_CONTENT_EVIDENCE", str(root.parent.parent / "apps" / "api" / "test-results" / evidence_name)))
 out.mkdir(parents=True, exist_ok=True)
 tools = {key: shutil.which(name) for key, name in {"c": "gcc", "cpp": "g++", "java": "javac"}.items()}
 tools["python"] = sys.executable

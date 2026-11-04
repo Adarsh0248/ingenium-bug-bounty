@@ -698,7 +698,7 @@ or actual API was executed locally. The first VM probe failed as recorded below.
 The Python probe needs the VM's system Python 3, not a new application
 dependency. Git history and running local application services were not changed.
 
-Prepared public API artifact: `ingenium-judge-api-20261017-01.tar.gz` (1,675
+Prepared public artifact: `ingenium-judge-api-20261017-01.tar.gz` (1,675
 bytes), SHA-256
 `52ad34ad4a045e06aa32f7c412e2c57976b776205b35632cab77ed15cde346d5`.
 Only the Compose override and credential-free probe source are included; their

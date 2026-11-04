@@ -1,149 +1,20 @@
-# Production deployment status
+# Deployment guide and historical boundary
 
-Verified 29 October 2026. The public website and first Super Admin access are
-installed and tested. The competition is not ready to start: this database has
-no registered judge epoch or published questions. Overall engineering completion
-remains roughly 96%; it is not a launch certificate.
+The competition has finished. This public guide omits actual host addresses, account/project identifiers, access-code delivery locations and root-only receipts. Historical operational originals are retained privately. Do not use former event endpoints or replay prior installation controllers.
 
-## Website and control room
+## Components
 
-- Website: https://8-231-75-42.sslip.io/
-- Enter the privately delivered Super Admin code in **Team or staff code**,
-  choose **Enter arena**, then **Open control room**.
-- Staff access uses the main entry page. `/admin` deliberately returns 404.
-- The Super Admin can configure the arena roster/duration and manage staff and
-  content. Starting rounds still requires a healthy installed judge and published,
-  protected-host-validated questions.
-- No arena or round was created or started during administrator verification.
+Deploy the HTTPS edge, web build and restricted API separately from the private judge gateway/supervisor. Application PostgreSQL must not expose owner credentials to the API. Judge PostgreSQL/Redis, frozen runtime images, protected filesystems, private TLS and physical slot limits belong to the judge trust domain.
 
-The code is outside Git in a private local handoff at
-`C:\Users\adars\AppData\Local\Ingenium\private-access\super-admin-access.txt`.
-Its Windows directory permits only the current user and SYSTEM. A matching
-owner-only distribution file is retained in the operator's VM home. The original
-root-only candidate and request are under `/var/lib/ingenium/operator-access`.
-Never copy codes into this document, logs, test evidence or public files. Do not
-run first-admin bootstrap again; use the reviewed recovery workflow if needed.
+Use [app-host definitions](../infra/app-host/README.md), [HTTPS edge](https-edge.md), [clock agent](../infra/clock-agent/README.md), [gateway](../infra/judge-gateway/README.md), [host verification](judge-host-verification.md), [backup/restore](backup-restore.md) and [retention](data-retention.md). Example files contain placeholders only. Generate new credentials, certificate identities and host proofs for a fork.
 
-## Initial application installation
+## Before admitting programs
 
-Project `project-8359d400-686c-4df3-a64`, zone `asia-south1-a`, VM
-`ingenium-app-01`: Ubuntu 22.04, two CPUs, 8 GiB RAM, private IP `10.42.0.10`.
-The external address `8.231.75.42` is reserved as `ingenium-app-ip` and attached
-to this VM. Public web traffic reaches ports 80/443 only through the app tag;
-administration uses IAP SSH. Both old judge labs remain stopped and preserved.
+1. Build from a reviewed commit/lockfile; verify the release inventory and separate service/database users.
+2. Apply application and native database migrations to their respective databases with the correct owner. Back up and test upgrades; never reset existing execution or scoring history.
+3. Install and qualify the actual Linux storage, namespaces, cgroups, AppArmor and frozen toolchain manifests. A mock/TLS pass alone is insufficient.
+4. Configure trusted time and private pinned mutual TLS. Untrusted clocks, stale leases or unavailable physical cleanup must refuse new admission.
+5. Validate/publish the exact question snapshots, check browser-content boundaries, and perform capacity, disconnect and recovery checks using isolated synthetic teams.
+6. Install private backups/monitoring and rehearse a restore into quarantine. Verify staff/participant flows without starting a competition unintentionally.
 
-The data disk is mounted at `/srv/ingenium`. Docker/containerd and PostgreSQL
-store persistent data there. PostgreSQL 17.11 listens on host loopback only;
-all 88 migration hashes were checked. API and judging database accounts and
-Linux users are distinct and restricted.
-
-The installed, immutable application candidate is Git revision
-`e5b0369270b51a9afb68d13e26abc98a73fe31d0`, under `/opt/ingenium/release`.
-Its release manifest SHA-256 is
-`be9ed6ae5dc6d6fbcaa482d5c609cb4eaff1a0ad7708e16e210503026590c7bf`.
-The archive SHA-256 is
-`a535dabf67d309f0d894b9cff2d2bb05c861e4db1129d3494da55081dbd728a6`.
-Production dependencies were installed on Linux from the reviewed lockfile.
-
-The API runs under systemd as `ingenium-api`, on `127.0.0.1:3000`.
-`20-entry-setup.conf` intentionally removes `COMPETITION_RUNTIME_FILE` until
-the real judge descriptor is available. Do not install placeholders or synthetic
-readiness. Chrony uses Google's metadata time source; the API passed its normal
-seven-observation qualification after the clean administrator-bootstrap restart.
-
-Caddy 2.11.7 serves the public frontend and proxies `/api` to the private API.
-Its certificate passed normal client verification. Hashed assets use immutable
-caching and precompressed Brotli/gzip; the entry HTML is not cached. Caddy's
-administration API is disabled, so validate configuration and use a controlled
-restart for changes rather than `caddy reload`. `caddy-api.service` stays masked.
-
-## Verification and remaining work
-
-At initial installation, a real Chromium browser verified the privately issued code, normal staff entry,
-Super Admin authority, the control room, arena configuration reads and staff
-management. The smoke session signed out. Read-only database checks then confirmed
-one committed bootstrap, one enabled Super Admin, zero active staff sessions,
-zero arenas and a healthy clock. Public checks confirmed HTTPS, compression,
-caching and six blocked private paths.
-
-Source-free evidence is under ignored `apps/web/test-results/`:
-`production-admin-smoke-20261029.json` and
-`production-admin-control-room-20261029.png`. No credential appears in them.
-
-Still required for full event deployment:
-
-1. Install/qualify the separate judge and its private TLS connection, then wire
-   the app judging worker and competition runtime to the actual descriptor.
-2. Stage the actual question packs and complete protected validation/publication;
-   local compiler success does not replace this.
-3. Install encrypted off-host backups, verify restore, and configure operational
-   alerts and bounded log retention.
-4. Import the actual registration export and complete the outstanding capacity,
-   device/network and operator launch checks in `pre-deployment-readiness.md`.
-
-## Admin workspace release — 29 October 2026
-
-The follow-up release improves manual teams/questions, editable arena drafts and
-normal staff setup permissions, and replaces repeated staff-code entry with
-session-based action authorization. Migration 0088 brings the total to 89.
-See [staff console](staff-console.md) for the current permission and UI policy.
-
-Deploy candidates into `/opt/ingenium/releases/<git-revision>`, verify every
-manifest file and install Linux production dependencies before activation. Keep
-the previous immutable release. During activation, stop the API cleanly, check
-the clock stopped without a latched fault, take a private PostgreSQL custom-format
-backup under `/srv/ingenium/backups/`, apply and verify migration hashes, then
-switch `/opt/ingenium/release` to the new directory and restart. The normal clock
-warm-up and public HTTPS checks must pass before declaring the update live.
-
-The deployment receipt at `/var/lib/ingenium/deployments/current.json` records the
-source revision, manifest/archive digests, previous release, backup and checks.
-Existing staff credentials, teams and arena history must be preserved. The
-pre-update inspection found three staff identities, two teams and three draft
-arenas; no round was running. Do not bootstrap another Super Admin.
-
-This website/admin update does not install the competition judge or start an
-event. Keep `20-entry-setup.conf` until an actual qualified judge descriptor and
-protected question publication are available.
-
-The earlier failed judge-capacity records, held permits and old lab disks remain
-untouched. No infrastructure guard, result or clock fault was bypassed.
-
-## Event question library update — 29 October 2026
-
-The next release separates the staff question library by round and adds an
-authenticated, atomic question import using the existing authoring guards. No
-additional database migration is needed; the migration count remains 89.
-The production preflight found zero questions and zero runtime manifests.
-
-Load the reviewed packs through `scripts/import-event-questions.mjs` after the
-release passes readiness. Keep its private progress receipt outside the source
-tree and verify the resulting 50/100 definitions, 600 language variants, 450
-hints, 1,135 test cases and 600 hidden starter witnesses. All remain drafts until
-actual runtime configuration and protected validation/publication. See
-[event question library](event-question-library.md) for the import procedure.
-
-The website release receipt remains `/var/lib/ingenium/deployments/current.json`.
-A separate private post-import database backup and source-free verification
-receipt retain the question counts and pack hashes. Existing arena/team/staff
-rows are preserved, and importing does not configure or start any arena.
-
-## Team edit/delete release — 29 October 2026
-
-Migration 0089 adds the reviewed team-profile change function, retained deletion
-timestamp and active-team roster guard, bringing the migration count to 90.
-The Teams page exposes Edit and Delete alongside the existing code controls.
-Editing preserves member IDs and credentials. Deletion disables access and
-removes the team from active pickers without removing historical records.
-Selected draft/active round teams cannot be deleted; active round teams cannot
-be edited. Existing CSV registration mappings cannot recreate a deleted team.
-
-Preflight confirmed two teams, three staff accounts, all 150 imported questions,
-no active round and a healthy clock. Preserve those records during deployment.
-When comparing pre/post migration team rows, ignore the newly added null
-`deleted_at` field; all existing values must match. Keep the previous release
-and a private database backup, apply all 90 reviewed hashes, then verify the
-normal clock warm-up and live Teams controls. No production team needs to be
-changed or deleted to verify this deployment.
-
-The current resource estimate is in [cloud running cost](cloud-running-cost.md).
+`npm run build:release` creates an offline candidate; it does not install credentials, qualify a judge, publish content or deploy. Historical event receipts apply only to their captured release/host identity. The latest repository also contains local-only migration 0094; read [project status](project-status.md) before assuming deployment parity.

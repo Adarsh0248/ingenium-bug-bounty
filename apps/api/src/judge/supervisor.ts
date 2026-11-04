@@ -59,16 +59,25 @@ export async function startJudgeSupervisor(settings: {
   const { store, publisher, session, queues, readiness } = settings;
   const all = [publisher, readiness, session, ...queues, ...settings.executors];
   if (all.some(value => value.hostEpochId !== store.hostEpochId || value.bootId !== store.bootId)
-    || ![2,8].includes(settings.executors.length) || queues.length !== settings.executors.length+1
+    || ![2,4,8,16].includes(settings.executors.length) || queues.length !== settings.executors.length+1
     || new Set(queues).size !== queues.length || new Set(settings.executors).size !== settings.executors.length
     || new Set<object>([...settings.executors,readiness]).size !== settings.executors.length+1) throw new Error("Independent, matching supervisor resources required.");
-  let preflight=Promise.resolve();
+  const preflights: ({ at: number; check: Promise<void> } | undefined)[] = [undefined, undefined];
   const workers = settings.executors.map((executor, i) => createJudgeExecutionWorker(store, queues[i + 1]!, {
     ...executor,
-    assertReady(signal){
-      // Serialise expensive pre-claim observations; actual executions still have eight independent slots.
-      const turn=preflight.then(async()=>{signal.throwIfAborted();await executor.assertReady(signal);});
-      preflight=turn.catch(()=>{});return turn;
+    async assertReady(signal) {
+      signal.throwIfAborted();
+      const lane = i % preflights.length;
+      let observation = preflights[lane];
+      if (!observation || performance.now() - observation.at >= 5000) {
+        // Share only an actual fresh inspection; every launch still performs its full host verification.
+        const at = performance.now();
+        observation = { at, check: executor.assertReady(AbortSignal.any([signal, AbortSignal.timeout(5000)])) };
+        preflights[lane] = observation;
+      }
+      await observation.check;
+      signal.throwIfAborted();
+      if (performance.now() - observation.at >= 5000) throw new Error("Pre-claim readiness observation expired.");
     },
   }));
   const stop = new AbortController(), signal = AbortSignal.any([stop.signal, session.signal, settings.signal]);

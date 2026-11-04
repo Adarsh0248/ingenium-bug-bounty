@@ -31,16 +31,17 @@ export class PhaseCapture {
 }
 
 // Requires a separately verified, fresh private Isolate container/workspace/cgroup. This grants no start permission.
-export function isolatePhaseCommand(plan: ExecutionPlan, phase: "compile" | "run", nonce: string) {
+export function isolatePhaseCommand(plan: ExecutionPlan, phase: "compile" | "run", nonce: string, record: "compile" | "run" | `b${string}` = phase) {
   challenge(nonce);
-  if (!["compile", "run"].includes(phase)) return bad();
+  if (!["compile", "run"].includes(phase) || record !== phase && !(phase === "run" && /^b(?:0[0-9]|1[0-9])$/.test(record))) return bad();
   const safe = reviewedExecutionPlan(plan);
   const stage = safe[phase]; if (!stage) return bad();
   const seconds = (ms: number) => `${Math.floor(ms / 1000)}.${String(ms % 1000).padStart(3, "0")}`;
   return { file: "/usr/local/bin/isolate", args: ["--cg", "--box-id=0", "--no-default-dirs", "--dir=/box=/run/ingenium/workspace:rw",
-    "--dir=/usr", "--dir=/lib", "--dir=/lib64:maybe", "--processes=64", "--stack=65536", "--fsize=16384",
+    // RLIMIT_NPROC counts the shared host UID; each capsule's parent cgroup separately caps all its tasks at 64.
+    "--dir=/usr", "--dir=/lib", "--dir=/lib64:maybe", "--processes=1024", "--stack=65536", "--fsize=16384",
     `--time=${seconds(stage.limits.cpuMs)}`, "--extra-time=0", `--wall-time=${seconds(stage.limits.wallMs)}`, `--cg-mem=${stage.limits.memoryKb}`,
-    `--meta=/run/ingenium/control/${phase}.meta`, "--inherit-fds", "--run", "--", "/usr/local/bin/ingenium-phase-exec", nonce, "3", phase === "compile" ? "1" : "4", "--", ...stage.argv],
+    `--meta=/run/ingenium/control/${record}.meta`, "--inherit-fds", "--run", "--", "/usr/local/bin/ingenium-phase-exec", nonce, "3", phase === "compile" ? "1" : "4", "--", ...stage.argv],
     kind: phase, wallMs: stage.limits.wallMs + 5000 } as const;
 }
 

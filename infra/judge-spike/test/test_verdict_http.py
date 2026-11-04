@@ -27,7 +27,7 @@ inside = load("bound_verdict_runtime_tests", ROOT / "verdict-transport/runtime.p
 SHA = "a" * 64
 BINDING = {"attempt_id": "8cf9f0bd-8374-4d81-bbf5-405d0df22442", "host_epoch": "53cb2405-35a8-4f72-909a-7fb9aab466e3", "manifest_sha256": SHA, "payload_sha256": SHA}
 OWNER = "f552aef0-df03-4d5d-9586-ac86d783b224"
-TOKEN = "f552aef0-df03-4d5d-9586-ac86d783b225"
+TOKEN = "f552aef0-df03-4d5d-9586-ac86d783b225"  # gitleaks:allow -- synthetic fixture UUID
 FROZEN = {"image_id": "sha256:" + SHA, "observed": {"fixed": "versions"}}
 
 

@@ -31,15 +31,15 @@ prompt before continuing. Do not paste credentials into chat.
 echo 'e7b3f0d28772f16b75290170e89a00b2241a91116f18844b3cc922fb90a9379c  cloud-operations-20261022-v2.tar.gz' | sha256sum -c -
 
 gcloud compute instances start ingenium-judge-spike-01 \
-  --project=project-8359d400-686c-4df3-a64 --zone=asia-south1-a
+  --project=EXAMPLE_CLOUD_PROJECT --zone=asia-south1-a
 
 gcloud compute scp ~/cloud-operations-20261022-v2.tar.gz \
   ingenium-judge-spike-01:~/cloud-operations-20261022-v2.tar.gz \
-  --project=project-8359d400-686c-4df3-a64 --zone=asia-south1-a \
+  --project=EXAMPLE_CLOUD_PROJECT --zone=asia-south1-a \
   --tunnel-through-iap
 
 gcloud compute ssh ingenium-judge-spike-01 \
-  --project=project-8359d400-686c-4df3-a64 --zone=asia-south1-a \
+  --project=EXAMPLE_CLOUD_PROJECT --zone=asia-south1-a \
   --tunnel-through-iap
 ```
 
@@ -90,7 +90,7 @@ After success or a blocking failure, exit the VM to return to Cloud Shell, then:
 
 ```bash
 gcloud compute instances stop ingenium-judge-spike-01 \
-  --project=project-8359d400-686c-4df3-a64 --zone=asia-south1-a
+  --project=EXAMPLE_CLOUD_PROJECT --zone=asia-south1-a
 ```
 
 Keep the VM and disk. This rehearsal does not resolve the separate production

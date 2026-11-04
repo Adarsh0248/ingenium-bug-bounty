@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { bounty, compareStandings, createDrawCipher, createDrawPlan, drawCommitment, hintPrice, qualifiers, ranked, solveTime, winPoints } from "../src/competition/policy.js";
 
-test("boosted Round 1 rewards keep exact hint percentages while legacy snapshots and Round 2 stay unchanged", () => {
+test("boosted Round 1 rewards keep exact hint percentages while legacy snapshots stay unchanged", () => {
   for (const d of [1,3,20,40,100]) {
     const boosted=bounty(d,5);
     assert.equal(boosted,50*d);
@@ -12,11 +12,17 @@ test("boosted Round 1 rewards keep exact hint percentages while legacy snapshots
     assert.equal(boosted-[1,2,3].reduce((n,level)=>n+hintPrice(1,d,level,boosted),0),10*d);
     assert.equal(winPoints(1,d,0),10*d);
     assert.equal(hintPrice(2,d,3),8*d);
-    assert.throws(()=>hintPrice(2,d,1,boosted));
-    assert.throws(()=>winPoints(2,d,0,boosted));
+    if(boosted>=250 && boosted<=1000){assert.equal(hintPrice(2,d,1,boosted),boosted/10);assert.equal(winPoints(2,d,0,boosted),boosted);}
+    else{assert.throws(()=>hintPrice(2,d,1,boosted));assert.throws(()=>winPoints(2,d,0,boosted));}
   }
   for (const multiplier of [0,2,6,1.5,NaN]) assert.throws(()=>bounty(20,multiplier));
   assert.throws(()=>hintPrice(1,20,1,999));
+});
+
+test("easy Round 2 questions keep independent rewards and exact admission-tier points",()=>{
+  assert.deepEqual([0,1,2,3].map(t=>winPoints(2,6,t,750)),[750,675,525,375]);
+  for(const amount of [249,255,1001,NaN])assert.throws(()=>winPoints(2,6,0,amount));
+  assert.throws(()=>winPoints(1,6,0,750));
 });
 
 test("bounty, both hint schedules and admission-tier points are exact integer game units", () => {

@@ -12,7 +12,7 @@ import { judgingFeedback } from "./feedback.js";
 import { createStaffJudgingService } from "./staff-judging.js";
 import type { FinalResults } from "./results.js";
 
-export const STAFF_ACTIONS = ["CONFIGURE", "READY", "START", "PAUSE", "RESUME", "CLOSE", "FINALISE", "QUALIFY", "SETUP_R2", "DISCARD", "CANCEL_ROUND", "FINISH_CANCEL"] as const;
+export const STAFF_ACTIONS = ["CONFIGURE", "APPEND_QUESTIONS", "READY", "START", "PAUSE", "RESUME", "CLOSE", "FINALISE", "QUALIFY", "SETUP_R2", "DISCARD", "CANCEL_ROUND", "FINISH_CANCEL"] as const;
 export interface CompetitionCommand {
   action: typeof STAFF_ACTIONS[number]; roundId: string; requestKey: string; expectedRevision: string; reason: string; payload: Record<string, unknown>; ownCode?: string;
 }
@@ -45,6 +45,7 @@ function staffPayload(input: CompetitionCommand) {
     return { arena_id: uuid(p.arena_id), cancellation_id: uuid(p.cancellation_id) };
   }
   if (input.action === "CONFIGURE") { exact(p, ["snapshots"]); return { snapshots: identifiers(p.snapshots, 100) }; }
+  if (input.action === "APPEND_QUESTIONS") { exact(p, ["snapshots"]); return { snapshots: identifiers(p.snapshots, 20) }; }
   if (input.action === "SETUP_R2") {
     exact(p, ["teams", "duration_ms"]);
     if (!Number.isSafeInteger(p.duration_ms) || (p.duration_ms as number) < 1 || (p.duration_ms as number) > 18000000) throw new AccessError("INVALID_CONTEXT");

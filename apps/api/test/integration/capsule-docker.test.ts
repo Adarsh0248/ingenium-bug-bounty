@@ -61,7 +61,13 @@ async function fixture(wait = false, detachedChild = false) {
       assert.equal(await command(["start", "--attach", "--interactive", id], s, input), "TRUSTED_FIXTURE"); },
     async stop(ref, id, s) { await inspect(ref, id); assert.equal(await command(["stop", "--timeout", "1", id], s), id); },
     async remove(ref, id, s) { const state = await inspect(ref, id); assert.equal(state.running, false); assert.equal(state.pid, 0); assert.ok(rows.remove); assert.equal(await command(["rm", id], s), id); },
-    assertAbsent: (ref, id, s) => assertDockerCapsuleAbsent(async (args, input, stopped) => Buffer.from(await command([...args], stopped, input)), ref, id, s),
+    assertAbsent: (ref, id, s) => assertDockerCapsuleAbsent(async (args, input, stopped) => {
+      const task = exec("docker", [...args], { timeout: 20000, maxBuffer: 1048576, windowsHide: true, signal: stopped });
+      task.child.stdin!.end(input);
+      const result = await task;
+      assert.equal(result.stderr, "");
+      return Buffer.from(result.stdout);
+    }, ref, id, s),
   };
   const lifecycle = () => createCapsuleLifecycle(store, driver, { imageId: image, digest: "a".repeat(64) }, syntheticCapsuleResources);
   async function cleanup() {

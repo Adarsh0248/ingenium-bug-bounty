@@ -1,7 +1,8 @@
 import { sha256, uuid } from "../access/credentials.js";
 import { judgeJson } from "../content/judge-protocol.js";
 import type { PhysicalExecutionIdentity } from "./checkpoints.js";
-import { reviewedExecutionPlan } from "./execution-plan.js";
+import {createExecutionPlan, reviewedExecutionPlan} from './execution-plan.js';
+import type {ParticipantBatchCase} from '../content/batch-protocol.js';
 import type { ExecutionPlan } from "./execution-plan.js";
 import type { InodeIdentity } from "./capsule-configuration.js";
 
@@ -46,6 +47,37 @@ export function retainedPhaseGroups(plan: ExecutionPlan, boot: string, physical:
       if (judgeJson(evidence) !== judgeJson(checked)) return fail();
       latest.groups = checked.groups; if (kind === "compile") compiled = true;
     }
+  }
+  return latest;
+}
+
+export function retainedBatchPhaseGroups(original:ExecutionPlan,cases:readonly ParticipantBatchCase[],boot:string,
+  physical:Pick<PhysicalExecutionIdentity,'container_id'|'cgroup_parent'>,rows:Record<string,unknown|null>){
+  if(!cases.length||cases.length>20||rows.run_init!==null||rows.run_groups!==null)return fail();
+  let latest=retainedPhaseGroups(original,boot,physical,rows as Parameters<typeof retainedPhaseGroups>[3]),gap=false;
+  const compiled=original.compile===null||latest.phase==='compile'&&latest.groups!==null;
+  const compiler=rows.batch_compile as {phase?:{exit_code?:unknown;failure_attribution?:unknown;infrastructure_error?:unknown}}|null;
+  const rejected=compiler?.phase?.exit_code===1&&compiler.phase.failure_attribution==='PARTICIPANT'&&compiler.phase.infrastructure_error===false;
+  for(let index=0;index<20;index++){
+    const key=`b${String(index).padStart(2,'0')}`,init=rows[`${key}_init`]??null,saved=rows[`${key}_groups`]??null,result=rows[`${key}_result`]??null;
+    if(index>=cases.length){if(init!==null||saved!==null||result!==null)return fail();continue;}
+    if(init===null){if(saved!==null||result!==null&&!rejected)return fail();gap=true;continue;}
+    if(rejected)return fail();
+    if(gap||!compiled)return fail();
+    const plan=createExecutionPlan({payload:cases[index]!.payload,owner:original.owner,providerToken:original.providerToken},
+      new Map([[original.language,{key:original.runtimeKey,digest:original.runtimeDigest}]]));
+    const row=record(init,['version','phase','host_epoch_id','attempt_id','boot_id','container_id','cgroup_parent','nonce']);
+    if(typeof row.nonce!=='string')return fail();
+    const expected=phaseInitialisation(plan,'run',boot,physical,row.nonce);
+    if(judgeJson(row)!==judgeJson(expected))return fail();
+    latest={phase:'run',groups:null};
+    if(saved!==null){
+      const r=record(saved,['init_sha256','groups']),g=record(r.groups,['memory','cpuacct']),checked=phaseResourceRecord(expected,{memory:inode(g.memory),cpuacct:inode(g.cpuacct)});
+      if(judgeJson(r)!==judgeJson(checked))return fail();latest.groups=checked.groups;
+    }
+    if(result!==null&&saved===null)return fail();
+    // A following case cannot initialise until the previous phase's genuine result was retained.
+    if(result===null)gap=true;
   }
   return latest;
 }

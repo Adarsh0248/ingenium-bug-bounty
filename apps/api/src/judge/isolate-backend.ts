@@ -52,28 +52,31 @@ export async function runIsolatePhases(plan: ExecutionPlan, session: TrustedIsol
   return executionEvidence(safe, compile, run);
 }
 
-async function nativePhase(plan: ExecutionPlan, kind: "compile" | "run", checkpoints: ExecutionCheckpoints, signal: AbortSignal): Promise<IsolateObservation> {
+export async function nativePhase(plan: ExecutionPlan, kind: "compile" | "run", checkpoints: ExecutionCheckpoints, signal: AbortSignal,
+  batch?: { original:ExecutionPlan; key:import('./checkpoints.js').BatchPhaseKey }): Promise<IsolateObservation> {
   signal.throwIfAborted(); await verifyParentBudget();
   await protectedDirectory(CONTROL); await protectedDirectory("/var/local/lib/isolate");
   for (const path of [WORK, "/run/ingenium/cgroups/memory/box-0", "/run/ingenium/cgroups/cpuacct/box-0"]) await absent(path);
-  const nonce = randomBytes(32).toString("hex"), command = isolatePhaseCommand(plan, kind, nonce);
-  const start = await open(`${CONTROL}/${kind}.started.json`, constants.O_WRONLY | constants.O_NOFOLLOW | constants.O_CREAT | constants.O_EXCL, 0o600);
+  if(batch&&(kind!=="run"||!/^b(?:0[0-9]|1[0-9])$/.test(batch.key)))return bad();
+  const record=batch?.key??kind,original=batch?.original??plan;
+  const nonce = randomBytes(32).toString("hex"), command = isolatePhaseCommand(plan, kind, nonce,record);
+  const start = await open(`${CONTROL}/${record}.started.json`, constants.O_WRONLY | constants.O_NOFOLLOW | constants.O_CREAT | constants.O_EXCL, 0o600);
   try {
     await start.writeFile(JSON.stringify({ attempt: plan.attemptId, owner: plan.owner, policy: plan.policySha256, nonce }));
     await start.chmod(0o400); await start.sync();
   } finally { await start.close(); }
-  const metadata = await open(`${CONTROL}/${kind}.meta`, constants.O_RDONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  const metadata = await open(`${CONTROL}/${record}.meta`, constants.O_RDONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
   let accounting: Awaited<ReturnType<typeof preparePhaseAccounting>> | undefined;
   try {
     const originalMetadata = await metadata.stat();
-    const physical = await checkpoints.physical(plan); if (!physical) return bad();
+    const physical = await checkpoints.physical(original); if (!physical) return bad();
     const initialisation = phaseInitialisation(plan, kind, checkpoints.bootId, physical, nonce);
-    await checkpoints.saveCapsule(plan, `${kind}_init`, initialisation); signal.throwIfAborted();
+    await checkpoints.saveCapsule(original, `${record}_init`, initialisation); signal.throwIfAborted();
     await manager("init", signal);
     const originalWork = await lstat(WORK);
     if (!originalWork.isDirectory() || originalWork.isSymbolicLink() || originalWork.uid !== 0 || originalWork.gid !== 0 || originalWork.mode & 0o022) return bad();
     accounting = await preparePhaseAccounting(plan, kind);
-    await checkpoints.saveCapsule(plan, `${kind}_groups`, phaseResourceRecord(initialisation, await accounting.originalGroups()));
+    await checkpoints.saveCapsule(original, `${record}_groups`, phaseResourceRecord(initialisation, await accounting.originalGroups()));
     signal.throwIfAborted();
     const cancel = new AbortController(), phaseSignal = AbortSignal.any([signal, cancel.signal]);
     let finished = false, failure: unknown = null, pipes: PhasePipes | undefined, targetObserved = false;
@@ -85,13 +88,14 @@ async function nativePhase(plan: ExecutionPlan, kind: "compile" | "run", checkpo
     } catch (error) { cancel.abort(); failure = error; }
     await capture;
     const wallElapsedMs = Number((process.hrtime.bigint() - startedAt + 999999n) / 1000000n);
-    if (failure || !pipes) return bad();
+    if (failure) throw new Error("Protected phase observation failed; retain its reservation.", { cause: failure });
+    if (!pipes) return bad();
     const counters = await accounting.readStoppedCounters();
     await verifyParentBudget();
-    const info = await lstat(`${CONTROL}/${kind}.meta`);
+    const info = await lstat(`${CONTROL}/${record}.meta`);
     if (!info.isFile() || info.isSymbolicLink() || info.dev !== originalMetadata.dev || info.ino !== originalMetadata.ino || info.uid !== 0 || info.gid !== 0
       || (info.mode & 0o7777) !== 0o600 || info.nlink !== 1 || info.size > 4096) return bad();
-    const raw = await protectedLinuxFile(`${CONTROL}/${kind}.meta`, 4096), workspace = await statfs("/run/ingenium/workspace");
+    const raw = await protectedLinuxFile(`${CONTROL}/${record}.meta`, 4096), workspace = await statfs("/run/ingenium/workspace");
     const observation = { pipes, metadata: raw, counters, targetObserved, wallElapsedMs, workspaceHasRoom: workspace.bavail * workspace.bsize >= 65536 && workspace.ffree >= 8 };
     isolatePhaseEvidence(plan, kind, observation);
     // Cleanup is allowed only after original groups are empty and all result observations have been checked.
@@ -107,7 +111,8 @@ async function nativePhase(plan: ExecutionPlan, kind: "compile" | "run", checkpo
 // Per-capsule backend, not a Docker provisioner or a primary-host readiness authority.
 export function createIsolateBackend(settings: IsolateSettings, checkpoints: ExecutionCheckpoints): TrustedSandboxBackend {
   const copied: IsolateSettings = { hostEpochId: uuid(settings.hostEpochId), bootId: uuid(settings.bootId),
-    runtimes: new Map([...settings.runtimes].map(([key, value]) => [key, { ...value }])), binaries: { ...settings.binaries } };
+    runtimes: new Map([...settings.runtimes].map(([key, value]) => [key, { ...value }])), binaries: { ...settings.binaries },
+    ...(settings.batch?{batch:{...settings.batch,raw:Buffer.from(settings.batch.raw)}}:{}) };
   runtimeRecord(copied.runtimes); let busy = false;
   if (checkpoints.hostEpochId !== copied.hostEpochId || checkpoints.bootId !== copied.bootId) return bad();
   function bound(plan: ExecutionPlan) {
@@ -126,6 +131,12 @@ export function createIsolateBackend(settings: IsolateSettings, checkpoints: Exe
         const physical = await capsuleIdentity();
         await checkpoints.bindPhysical(safe, physical); signal.throwIfAborted();
         await checkpoints.saveCapsule(safe, "storage", await captureStorage(safe, copied.bootId, physical, signal));
+        if(copied.batch){
+          const {executeNativeParticipantBatch}=await import('./native-batch.js');
+          const result=await executeNativeParticipantBatch(copied.batch.raw,{...copied.batch,hostEpochId:copied.hostEpochId},
+            {payload:{...safe,...safe.payloadLimits},owner:safe.owner,providerToken:safe.providerToken},copied.runtimes,checkpoints,signal);
+          return result.evidence;
+        }
         workspace = await prepareExecutionWorkspace(safe, signal);
         const evidence = await runIsolatePhases(safe, { verifySource: workspace.verifyBeforeFirstPhase, phase: (kind, phaseSignal) => nativePhase(safe, kind, checkpoints, phaseSignal) }, signal);
         // Save genuine completed bytes even after caller cancellation; this never launches another phase.

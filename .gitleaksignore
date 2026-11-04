@@ -1,0 +1,10 @@
+# Reviewed synthetic fixtures / public artifact hashes in original history.
+# Request UUID in local runtime fixture:
+07269f73ff3b816d6018e78afd457cf6e277a7f4:infra/judge-gateway/test/app-runtime-linux.mjs:generic-api-key:99
+# Test-only execution token constant:
+489de8ffb05198759a24b8a29f02e9dd8affba39:infra/judge-spike/test/test_verdict_http.py:generic-api-key:30
+# Local lab HTTP address, not a credential:
+fa2f2d78e7625c5fe5e78d373dae8c5b618bcd96:infra/judge-spike/probe-queue.py:generic-api-key:9
+# Public archive SHA-256 inventory:
+fa2f2d78e7625c5fe5e78d373dae8c5b618bcd96:infra/judge-spike/README.md:generic-api-key:1250
+fa2f2d78e7625c5fe5e78d373dae8c5b618bcd96:docs/judge-feasibility.md:generic-api-key:679

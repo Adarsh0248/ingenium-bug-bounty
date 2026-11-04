@@ -26,7 +26,7 @@ export const payloadPurges = pgTable(
     primaryKey({ columns: [t.kind, t.targetId] }),
     check(
       "payload_purge_shape",
-      sql`${t.kind} in ('entry_flows','staff_entry_flows','participant_sessions','staff_sessions','code_drafts','participant_judging','competition_submissions','participant_attempts','authoring_attempts')
+      sql`${t.kind} in ('entry_flows','staff_entry_flows','participant_sessions','staff_sessions','code_drafts','participant_judging','competition_submissions','participant_attempts','authoring_attempts','participant_batches')
     and jsonb_typeof(${t.manifest})='object' and octet_length(${t.manifest}::text) between 1 and 2048`,
     ),
   ],

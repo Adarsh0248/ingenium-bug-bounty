@@ -138,12 +138,31 @@ test("eight independent workers own nine queues and close every resource without
   }
 });
 
-test("eight workers serialise every fresh pre-claim check to protect the inspection budget",async()=>{
-  const f=fixture();while(f.queues.length<9)f.queues.push({...f.queues[0]!});while(f.executors.length<8)f.executors.push({...f.executors[0]!});
+test("four independent workers apply backpressure without changing the registry permit ceiling",async()=>{
+  const f=fixture();while(f.queues.length<5)f.queues.push({...f.queues[0]!});while(f.executors.length<4)f.executors.push({...f.executors[0]!});
+  const service=await startJudgeSupervisor(f.settings);
+  assert.deepEqual(await service.close(),{failed:false});
+  assert.equal(f.closed(),1);assert.equal(f.events.filter(e=>e==="close-queue").length,5);
+});
+
+test("sixteen workers share two actual pre-claim observations without renewing freshness from cache hits",async()=>{
+  const f=fixture();while(f.queues.length<17)f.queues.push({...f.queues[0]!});while(f.executors.length<16)f.executors.push({...f.executors[0]!});
   let active=0,maximum=0,checks=0;
   for(const executor of f.executors)executor.assertReady=async signal=>{signal.throwIfAborted();active++;maximum=Math.max(maximum,active);await delay(20);active--;checks++;};
   for(const queue of f.queues.slice(1))Object.assign(queue,{async entries(){return[{id:"1-0",attempt_id:randomUUID(),provider_token:randomUUID()}];}});
   const service=await startJudgeSupervisor(f.settings);
-  try{const end=performance.now()+3000;while(checks<8){assert.ok(performance.now()<end);await delay(10);}assert.equal(maximum,1);}
+  try{
+    await delay(200);assert.equal(maximum,2);assert.equal(checks,2);
+    await delay(5000);const end=performance.now()+1000;while(checks<4){assert.ok(performance.now()<end);await delay(10);}
+    assert.equal(checks,4);assert.ok(f.events.includes('receive'));
+  }finally{await service.close();}
+});
+
+test("a slow pre-claim reply cannot grant a fresh claim after its original five-second window",async()=>{
+  const f=fixture();
+  for(const executor of f.executors)executor.assertReady=async()=>{await delay(5100);};
+  for(const queue of f.queues.slice(1))Object.assign(queue,{async entries(){return[{id:"1-0",attempt_id:randomUUID(),provider_token:randomUUID()}];}});
+  const service=await startJudgeSupervisor(f.settings);
+  try{assert.equal((await service.completion).failed,true);assert.match(service.failureStage!,/^worker-/);assert.ok(!f.events.includes('receive'));}
   finally{await service.close();}
 });

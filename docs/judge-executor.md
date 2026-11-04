@@ -243,6 +243,10 @@ the displayed filename, catches renamed or deleted-but-open temporary files.
 It never opens file contents, evaluates source, signals processes or deletes
 anything. [Proc FD access](https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html)
 depends on ptrace access checks; an access error is refusal, not evidence of absence.
+The observer may restart the entire census, at most twice under the same total
+five-second budget, for a pinned task's EINVAL mountinfo open or EACCES reference
+readlink/stat. It accepts only a fully successful fresh census. Persistent
+permissions, partial scans and actual retained references still prevent drain.
 
 Inspection has explicit 16,384-process, 32,768-thread and 131,072-FD ceilings,
 bounded per-file reads and cancellation/five-second elapsed checks between I/O

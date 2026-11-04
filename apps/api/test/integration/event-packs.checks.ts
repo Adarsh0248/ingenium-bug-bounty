@@ -36,7 +36,7 @@ export async function eventPackChecks(t:TestContext,owner:Pool,api:Pool){
       digests.push(sha256(await readFile(new URL(`../../../../content/round-${pack.round_type}/pack.json`,import.meta.url))).toString('hex'));
       for(const question of pack.questions){
         assert.ok(!ids.has(question.id));ids.add(question.id);assert.ok(!titles.has(question.title));titles.add(question.title);
-        const version=(await edit('CREATE',null,{round_type:question.round_type,title:question.title,statement:question.statement,difficulty:question.difficulty,category:question.category,checker_mode:question.checker_mode,reward_multiplier:question.round_type===1?5:1})).version_id!;
+        const version=(await edit('CREATE',null,{round_type:question.round_type,title:question.title,statement:question.statement,difficulty:question.difficulty,category:question.category,checker_mode:question.checker_mode,reward_multiplier:question.round_type===1?5:1,...(question.round_type===2?{base_bounty:question.base_bounty}:{})})).version_id!;
         for(const language of EVENT_LANGUAGES){const variant=question.variants[language];await edit('VARIANT',version,{language,starter_code:variant.starter_code,reference_solution_code:variant.reference_solution_code,defect_description:variant.defect_description,runtime_key:`pack-review-${language}`,cpu_time_limit_ms:2000,wall_time_limit_ms:10000,memory_limit_kb:524288});}
         const cases=new Map<number,string>();
         for(const testcase of question.cases)cases.set(testcase.position,(await edit('CASE',version,{case_id:null,...testcase})).case_id!);
@@ -56,7 +56,7 @@ export async function eventPackChecks(t:TestContext,owner:Pool,api:Pool){
     assert.equal((await owner.query('SELECT count(*)::int n FROM validation_snapshot_hints')).rows[0].n,450);
     assert.equal((await owner.query('SELECT count(*)::int n FROM validation_runs')).rows[0].n,0);
     assert.equal((await owner.query('SELECT count(*)::int n FROM bounties')).rows[0].n,0);
-    assert.equal(checks,5140);
+    assert.equal(checks,[...roundOnePack.questions,...roundTwoPack.questions].reduce((sum,q)=>sum+EVENT_LANGUAGES.length*(q.cases.length+1),0));
     console.log(JSON.stringify({scope:'FULL_ACTUAL_PACK_DATABASE_STAGING',questions:150,variants:600,hints:450,planned_checks:checks,paid_clue_bindings:400,pack_sha256:digests,production_judge_validated:false,published:false,event_deployed:false}));
   });
 }

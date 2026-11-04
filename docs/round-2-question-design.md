@@ -1,7 +1,9 @@
 # Round 2 question pack — The Kernel Breach
 
-Confirmed: 100 distinct questions for Round 2, harder than Round 1, with integer
-difficulty 25–100. Participants repair supplied buggy programs. Keep C, C++, Java
+Updated after Round 1 on 30 October: 100 distinct Round 2 questions at the same
+beginner-friendly level as Round 1, with integer difficulty 1–40. Bounties remain
+250–1,000 coins independently of difficulty so the shop stays affordable. Old
+harder versions remain preserved. Participants repair supplied buggy programs. Keep C, C++, Java
 and Python, with equivalent defects, tests, difficulty and rewards across all four.
 
 ## Statement readability
@@ -18,10 +20,9 @@ Both rounds use `content/statement.mjs` for their statement sections.
 
 | Difficulty | Per topic | Total |
 | --- | ---: | ---: |
-| 25–45 | 8 | 32 |
-| 46–65 | 9 | 36 |
-| 66–85 | 5 | 20 |
-| 86–100 | 3 | 12 |
+| 1–20 | 18 arrays/systems; 17 graphs/logic | 70 |
+| 21–30 | 5 | 20 |
+| 31–40 | 2 arrays/systems; 3 graphs/logic | 10 |
 
 The four topics each receive 25 missions: arrays/strings, systems/resources,
 graphs/trees, and logic/state. All live in the shared Kernel Breach arena, with

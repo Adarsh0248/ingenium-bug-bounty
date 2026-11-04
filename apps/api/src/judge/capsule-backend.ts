@@ -33,7 +33,8 @@ export function createCapsuleRecovery(checkpoints: ExecutionCheckpoints, release
 // Only a separately verified host authority may supply readiness and prepared capsule resources.
 export function createCapsuleBackend(checkpoints: ExecutionCheckpoints, driver: CapsuleDriver, release: CapsuleRelease,
   runtimes: JudgeRuntimes, hostReadiness: (signal: AbortSignal) => Promise<Buffer>, resources: CapsuleResources,
-  retirementAuthority?: TrustedHostRetirementAuthority): TrustedSandboxBackend & { retire(plan: ExecutionPlan, signal: AbortSignal): Promise<unknown | null> } {
+  retirementAuthority?: TrustedHostRetirementAuthority,
+  recordResult?: (plan: ExecutionPlan, evidence: unknown) => Promise<void>): TrustedSandboxBackend & { retire(plan: ExecutionPlan, signal: AbortSignal): Promise<unknown | null> } {
   const pinned = new Map([...runtimes].map(([key, value]) => [key, { ...value }])); runtimeRecord(pinned);
   const lifecycle = createCapsuleLifecycle(checkpoints, driver, release, resources); let busy = false;
   const recovery = createCapsuleRecovery(checkpoints, release, pinned);
@@ -57,6 +58,8 @@ export function createCapsuleBackend(checkpoints: ExecutionCheckpoints, driver: 
         await this.assertReady(signal);
         await lifecycle.execute(safe, Buffer.from(judgeJson(executionRequest(claim, checkpoints.bootId, pinned, "EXECUTE"))), signal);
         const evidence = await retained(safe, signal); if (!evidence) throw new Error("No saved capsule result; recover the original attempt.");
+        // Publish genuine completed output while cleanup continues; only positive retirement releases its permit.
+        if (recordResult) await recordResult(safe, evidence);
         await lifecycle.stopAndRemove(safe, signal);
         return retirement ? await retirement.seal(safe, signal) : evidence;
       } finally { busy = false; }

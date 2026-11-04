@@ -30,7 +30,7 @@ export const executionCapacitySlots = pgTable("execution_capacity_slots", {
   participantAttemptId:uuid("participant_attempt_id").references(():AnyPgColumn=>participantAttempts.id,{onDelete:"restrict"}),
   revision:bigint("revision",{mode:"bigint"}).notNull().default(sql`0`),
 },t=>[unique("slot_authoring_attempt_once").on(t.authoringAttemptId),unique("slot_participant_attempt_once").on(t.participantAttemptId),
-  check("slot_one_purpose",sql`num_nonnulls(${t.authoringAttemptId},${t.participantAttemptId})<=1`),check("physical_slot_bounds",sql`${t.id} between 1 and 8 and ${t.revision}>=0`)]);
+  check("slot_one_purpose",sql`num_nonnulls(${t.authoringAttemptId},${t.participantAttemptId})<=1`),check("physical_slot_bounds",sql`${t.id} between 1 and 16 and ${t.revision}>=0`)]);
 export const validationRuns = pgTable("validation_runs", {
   id:id(),snapshotId:uuid("snapshot_id").notNull().references(()=>validationSnapshots.id,{onDelete:"restrict"}),configurationFingerprint:bytes("configuration_fingerprint").notNull(),
   hostEpochId:uuid("host_epoch_id").notNull().references(()=>judgeHostEpochs.id,{onDelete:"restrict"}),status:text("status").notNull(),

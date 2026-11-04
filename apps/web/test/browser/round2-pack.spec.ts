@@ -53,7 +53,7 @@ test("all 100 authored Round 2 missions are offered with four-language starters,
         expect(metadataResponse.ok()).toBe(true);
         const metadata = (await metadataResponse.json()).data;
         expect(metadata.difficulty).toBe(q.difficulty);
-        expect(metadata.base_bounty).toBe(q.difficulty * 10);
+        expect(metadata.base_bounty).toBe(q.base_bounty);
         expect(JSON.stringify(metadata)).not.toMatch(
           /reference_solution_code|defect_description|paid_intel|expected_output|HIDDEN/,
         );

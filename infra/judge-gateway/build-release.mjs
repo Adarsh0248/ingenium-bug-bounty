@@ -21,7 +21,7 @@ for (const name of ["host-cli", "capsule-cli"]) {
   files.push(`app/judge/${name}.js`);
 }
 const copies = ["Dockerfile", "image-tree.py", "ingenium-isolate-executor.apparmor", "native/phase-exec.c", "native/host-observe.c", "native/docker-peer-exec.c", "native/launch.c",
-  "security/seccomp.json", "security/LICENSE.moby", "security/SOURCE.md", "001_registry.sql", "002_queue.sql", "003_execution_lookup.sql", "004_launch_gate.sql", "005_participant_payloads.sql", "006_supervisor_service.sql", "007_eight_slots.sql"];
+  "security/seccomp.json", "security/LICENSE.moby", "security/SOURCE.md", "provider-schema.sql", "001_registry.sql", "002_queue.sql", "003_execution_lookup.sql", "004_launch_gate.sql", "005_participant_payloads.sql", "006_supervisor_service.sql", "007_eight_slots.sql", "008_participant_batches.sql", "009_sixteen_slots.sql"];
 for (const name of copies) {
   const target = name === "ingenium-isolate-executor.apparmor" ? "security/apparmor" : name;
   await mkdir(dirname(join(output, target)), { recursive: true }); await copyFile(new URL(name, import.meta.url), join(output, target)); files.push(target);

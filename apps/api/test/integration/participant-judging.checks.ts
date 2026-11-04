@@ -139,14 +139,29 @@ export async function participantJudgingChecks(t: TestContext, c: Context) {
     assert.equal((await parent(id)).completed_at.getTime(), before);
     assert.equal((await query("SELECT count(*)::integer n FROM bounty_awards WHERE bounty_id=$1", [a.x]))[0].n, 0);
   });
-  await t.test("sample deadline equality releases logical capacity, never physical uncertainty or official receipt priority", async () => {
+  await t.test("queue waiting cannot expire samples; the policy remains immutable and legacy expiry is preserved", async () => {
+    const a = await c.newRound(), id = await admit(a, a.aa, "run");
+    const client = await owner.connect();
+    try {
+      await client.query("BEGIN");
+      const created = (await parent(id)).created_at as Date;
+      const future = new Date(created.getTime() + 600000);
+      await client.query("SELECT participant_refresh($1)", [future]);
+      assert.equal((await client.query("SELECT result FROM participant_judging WHERE id=$1", [id])).rows[0].result, null);
+      assert.equal((await client.query("SELECT sample_run_expired(p,$2) AS expired FROM participant_judging p WHERE id=$1", [id, future])).rows[0].expired, false);
+      assert.equal((await client.query("SELECT sample_run_expired(jsonb_populate_record(NULL::participant_judging,to_jsonb(p)||jsonb_build_object('sample_expiry_policy',1)),$2) AS expired FROM participant_judging p WHERE id=$1", [id, future])).rows[0].expired, true);
+    } finally { await client.query("ROLLBACK"); client.release(); }
+    await assert.rejects(owner.query("UPDATE participant_judging SET sample_expiry_policy=1 WHERE id=$1", [id]), { code: "P0001" });
+    answers.set(id, "PASSED"); await complete(id);
+  });
+  await t.test("sample inactivity deadline equality releases logical capacity, never physical uncertainty or official receipt priority", async () => {
     const a = await c.newRound(), sample = await admit(a, a.aa, "run"), official = await admit(a, a.ab, "submit");
     // No answer is installed yet: both synthetic providers remain pending with occupied physical slots.
     for (let i = 0; i < 2; i++) assert.equal(await c.judge.tick(), "PENDING");
     const client = await owner.connect();
     try {
       await client.query("BEGIN");
-      const created = (await client.query("SELECT created_at FROM participant_judging WHERE id=$1", [sample])).rows[0].created_at as Date;
+      const created = (await client.query("SELECT max(prepared_at) AS created_at FROM participant_attempts WHERE job_id IN (SELECT id FROM participant_jobs WHERE parent_id=$1)", [sample])).rows[0].created_at as Date;
       await client.query("SELECT participant_refresh($1)", [new Date(created.getTime() + 119999)]);
       assert.equal((await client.query("SELECT result FROM participant_judging WHERE id=$1", [sample])).rows[0].result, null);
       await client.query("SELECT participant_refresh($1)", [new Date(created.getTime() + 120000)]);

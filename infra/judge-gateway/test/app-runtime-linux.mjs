@@ -131,7 +131,7 @@ test("operator candidate delivery is private, durable, exclusive and round-trips
     schema_version: 1,
     access_code: "A".repeat(32),
     input: {
-      requestKey: "a229b0ce-1df6-4c12-8702-04a046ad025f",
+      requestKey: "a229b0ce-1df6-4c12-8702-04a046ad025f", // gitleaks:allow -- synthetic request UUID
       action: "CREATE",
       staffId: "99c52f07-73c9-43f0-9469-5e5d27cc9e76",
       credentialId: "a329b0ce-1df6-4c12-8702-04a046ad025f",

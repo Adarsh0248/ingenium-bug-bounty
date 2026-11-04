@@ -1,5 +1,9 @@
 # Separate App-Side Judging Service
 
+Production installation and real execution evidence from 30 October are recorded
+in [the deployment handoff](production-judging-20261030.md). Historical statements
+below about uninstalled services describe the earlier implementation stage.
+
 This completes the primary application's judging-service wiring. It is **not**
 the judge VM's gateway/supervisor installation or a certification of its sandbox.
 Those remain mandatory launch gates. Nothing here deploys a VM, provisions real
@@ -31,7 +35,10 @@ Startup rejects API/owner/privileged database credentials.
 Validation and participant adapters use one process worker UUID and the existing
 generation-fenced thirty-second lease. A turn checks the trusted clock, renews
 private judge compatibility at least every five seconds, then runs the existing
-validation/participant scheduler. Turns are non-overlapping and initially spaced
+validation scheduler followed by two independent participant dispatches sharing
+that same fenced worker identity. Database locks still select/reserve each
+original job and enforce the existing slot limit. Both requests settle before
+the next turn, lease refresh or graceful shutdown. Turns are non-overlapping and initially spaced
 250 ms after completion; per-job polling/backoff and official/sample fairness
 remain in PostgreSQL. An active validation still excludes participant execution.
 No slot count, retry count, runtime limit or scoring rule is increased.

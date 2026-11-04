@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { captureStorage, linuxDevice, mountRecords, retainedStorage, storageRecord, storageAcknowledgement, temporaryMounts } from "../src/judge/capsule-storage.js";
-import { checkMountReferences, checkProcessGroups, checkReference, verifyNoCapsuleReferences } from "../src/judge/capsule-residue.js";
+import { checkMountReferences, checkProcessGroups, checkReference, verifyNoCapsuleReferences, retryTransientTaskScan } from "../src/judge/capsule-residue.js";
 import { CAPSULE_TMPFS } from "../src/judge/docker-capsule.js";
 import { createExecutionPlan } from "../src/judge/execution-plan.js";
 import { judgeJson, readJudgeJson } from "../src/content/judge-protocol.js";
@@ -18,6 +18,49 @@ function fixture() {
   return { plan, boot, saved: storageRecord(plan, boot, physical, table()) };
 }
 const devices = new Set(["0:200", "0:201", "0:202", "0:203"]);
+
+test("exiting-task mountinfo races restart a complete census without accepting a partial pass or weakening failures", async () => {
+  const race = Object.assign(new Error("task exited"), { code: "EINVAL", syscall: "open", path: "/proc/self/fd/18/mountinfo" });
+  let scans = 0;
+  await retryTransientTaskScan(async () => { if (++scans === 1) throw race; }, AbortSignal.timeout(1000));
+  assert.equal(scans, 2);
+  scans = 0;
+  await assert.rejects(retryTransientTaskScan(async () => { scans++; throw race; }, AbortSignal.timeout(1000)), error => error === race);
+  assert.equal(scans, 3);
+  for (const code of ["EMOUNTEMPTY", "EMOUNTTAIL"]) {
+    const changed = Object.assign(new Error("task mount table changed"), { code, syscall: "read", path: "/proc/self/fd/18/mountinfo" });
+    scans = 0;
+    await retryTransientTaskScan(async () => { if (++scans === 1) throw changed; }, AbortSignal.timeout(1000));
+    assert.equal(scans, 2);
+    scans = 0;
+    await assert.rejects(retryTransientTaskScan(async () => { scans++; throw changed; }, AbortSignal.timeout(1000)), error => error === changed);
+    assert.equal(scans, 3);
+  }
+  for (const fault of [new Error("capsule reference remains"), { ...race, code: "EACCES" }, { ...race, syscall: "read" },
+    { ...race, path: "/other/mountinfo" }, { ...race, path: "/proc/self/fd/18/cgroup" }]) {
+    scans = 0;
+    await assert.rejects(retryTransientTaskScan(async () => { scans++; throw fault; }, AbortSignal.timeout(1000)), error => error === fault);
+    assert.equal(scans, 1);
+  }
+  const permission = Object.assign(new Error("proc permissions changed"), { code: "EACCES", syscall: "stat", path: "/proc/self/fd/18/exe" });
+  scans = 0;
+  await retryTransientTaskScan(async () => { if (++scans === 1) throw permission; }, AbortSignal.timeout(1000));
+  assert.equal(scans, 2);
+  scans = 0;
+  await assert.rejects(retryTransientTaskScan(async () => { scans++; throw permission; }, AbortSignal.timeout(1000)), error => error === permission);
+  assert.equal(scans, 3);
+  for (const fault of [{ ...permission, path: "/private/exe" }, { ...permission, syscall: "open" }, { ...permission, path: "/proc/self/fd/18/mountinfo" }]) {
+    scans = 0;
+    await assert.rejects(retryTransientTaskScan(async () => { scans++; throw fault; }, AbortSignal.timeout(1000)), error => error === fault);
+    assert.equal(scans, 1);
+  }
+  scans = 0;
+  const remaining = new Error("original namespace still referenced");
+  await assert.rejects(retryTransientTaskScan(async () => { if (++scans === 1) throw race; throw remaining; }, AbortSignal.timeout(1000)), error => error === remaining);
+  assert.equal(scans, 2);
+  const cancelled = new AbortController(); cancelled.abort();
+  await assert.rejects(retryTransientTaskScan(async () => { assert.fail("cancelled scan ran"); }, cancelled.signal));
+});
 
 test("host storage acknowledgement binds the original physical storage without authorising a verdict or drain",()=>{
   const {plan,boot,saved}=fixture(),ack=storageAcknowledgement(plan,boot,physical,saved);

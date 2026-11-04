@@ -13,6 +13,22 @@ const fail = (): never => { throw new Error("Capsule references remain or cannot
 const fd = (handle: FileHandle) => `/proc/self/fd/${handle.fd}`;
 const gone = (error: unknown) => ["ENOENT", "ESRCH"].includes((error as NodeJS.ErrnoException)?.code ?? "");
 export const CAPSULE_REFERENCE_BUDGET_MS=5000;
+export async function retryTransientTaskScan(scan: () => Promise<void>, signal: AbortSignal) {
+  for (let retries = 0; ; retries++) {
+    signal.throwIfAborted();
+    try { await scan(); return; }
+    catch (error) {
+      const row = error as NodeJS.ErrnoException;
+      // Proc permissions/namespaces can change mid-scan; only a completely successful fresh census can certify absence.
+      const exitingMount = row?.code === "EINVAL" && row.syscall === "open" && /^\/proc\/self\/fd\/[0-9]+\/mountinfo$/.test(row.path ?? "");
+      const changingReference = row?.code === "EACCES" && ["readlink", "stat"].includes(row.syscall ?? "")
+        && /^\/proc\/self\/fd\/[0-9]+\/(?:cwd|root|exe|fd\/[0-9]+)$/.test(row.path ?? "");
+      const changingMountTable = ["EMOUNTEMPTY", "EMOUNTTAIL"].includes(row?.code ?? "") && row.syscall === "read"
+        && /^\/proc\/self\/fd\/[0-9]+\/mountinfo$/.test(row.path ?? "");
+      if (retries === 2 || !exitingMount && !changingReference && !changingMountTable) throw error;
+    }
+  }
+}
 export function checkReference(physical: PhysicalExecutionIdentity, devices: ReadonlySet<string>, target: string, device?: string) {
   if ([physical.pid_namespace, physical.mount_namespace, physical.network_namespace, physical.ipc_namespace].includes(target)
     || device !== undefined && devices.has(device)) return fail();
@@ -32,11 +48,11 @@ export function checkProcessGroups(physical: PhysicalExecutionIdentity, table: s
     if (parts[3] === physical.cgroup_parent || parts[3]!.startsWith(`${physical.cgroup_parent}/`)) return fail();
   }
 }
-function bounded(path: string, limit: number, turn: () => void) {
+function bounded(path: string, limit: number, turn: () => void, buffer: Buffer) {
   turn();
   const file = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    const bytes = Buffer.alloc(limit + 1); let length = 0;
+    const bytes = buffer.subarray(0, limit + 1); let length = 0;
     while (length < bytes.length) {
       turn();
       const size = readSync(file, bytes, length, bytes.length - length, length);
@@ -58,7 +74,9 @@ export async function verifyNoCapsuleReferences(plan: ExecutionPlan, boot: strin
       || Object.keys(value).sort().join(",") !== "device,inode,target" || !/^[1-9][0-9]{0,19}$/.test(value.inode)
       || typeof value.device !== "string" || !/^(0|[1-9][0-9]{0,9}):(0|[1-9][0-9]{0,9})$/.test(value.device)
       || ![physical.pid_namespace, physical.mount_namespace, physical.network_namespace, physical.ipc_namespace].includes(value.target)))) return fail();
+  await retryTransientTaskScan(async () => {
   const root = await open("/proc", constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  const buffer = Buffer.allocUnsafe(1048577), checkedMountTables = new Set<string>();
   let processes = 0, tasks = 0, descriptors = 0;
   function turn() { signal.throwIfAborted(); if (process.hrtime.bigint() >= deadline) throw new Error("Capsule reference inspection exceeded its deadline; retain its reservation."); }
   async function sameBoot() { turn(); if ((await readFile(`${fd(root)}/sys/kernel/random/boot_id`, "ascii")).trim() !== boot) return fail(); }
@@ -89,9 +107,16 @@ export async function verifyNoCapsuleReferences(plan: ExecutionPlan, boot: strin
           try {
             task = await open(`${fd(process)}/task/${thread.name}`, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
             const path = fd(task);
-            checkProcessGroups(physical, bounded(`${path}/cgroup`, 16384, turn));
+            checkProcessGroups(physical, bounded(`${path}/cgroup`, 16384, turn, buffer));
             for (const name of ["pid", "mnt", "net", "ipc"]) { turn(); checkReference(physical, devices, readlinkSync(`${path}/ns/${name}`)); }
-            checkMountReferences(physical, devices, bounded(`${path}/mountinfo`, 1048576, turn));
+            const table = bounded(`${path}/mountinfo`, 1048576, turn, buffer);
+            if (!table.endsWith("\n")) throw Object.assign(new Error("Task mount table incomplete; restart the full census."),
+              { code: table.length ? "EMOUNTTAIL" : "EMOUNTEMPTY", syscall: "read", path: `${path}/mountinfo` });
+            // Every task is read afresh; identical bytes need parsing only once within this census.
+            if (!checkedMountTables.has(table)) {
+              checkMountReferences(physical, devices, table);
+              if (table.length <= 65536 && checkedMountTables.size < 64) checkedMountTables.add(table);
+            }
             for (const name of ["cwd", "root", "exe"]) reference(`${path}/${name}`);
             const files = await opendir(`${path}/fd`, { bufferSize: 256 });
             for await (const file of files) {
@@ -108,4 +133,5 @@ export async function verifyNoCapsuleReferences(plan: ExecutionPlan, boot: strin
     }
     await sameBoot();
   } finally { await root.close(); }
+  }, signal);
 }

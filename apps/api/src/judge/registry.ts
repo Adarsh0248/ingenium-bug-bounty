@@ -5,6 +5,9 @@ import { uuid } from "../access/credentials.js";
 import type { AuthoringPayload } from "../content/execution-policy.js";
 import { acceptJudgeReply, authoringRequest, judgeJson, JUDGE_PROTOCOL, readAuthoringRequest, runtimeRecord } from "../content/judge-protocol.js";
 import type { JudgeRuntimes } from "../content/judge-protocol.js";
+import {readParticipantBatch,PARTICIPANT_BATCH_PROTOCOL} from '../content/batch-protocol.js';
+import {acceptParticipantBatchResult} from '../content/batch-result.js';
+import {sha256} from '../access/credentials.js';
 
 export interface RegistrySettings { hostEpochId: string; bootId: string; runtimes: JudgeRuntimes; }
 export interface JudgeDelivery { attempt_id: string; provider_token: string; }
@@ -34,6 +37,18 @@ export function createJudgeRegistry(pool: Pool, settings: RegistrySettings) {
     acceptJudgeReply(value, p, nonce, 200);
     return { status: 200, value };
   }
+  async function batchLookup(client:PoolClient,batchId:string,digest:string,nonce:string){
+    uuid(batchId);uuid(nonce);if(!/^[0-9a-f]{64}$/.test(digest))throw new Error('Invalid batch identity.');
+    const saved=(await client.query('SELECT ingenium_judge.observe_batch($1,$2,$3,$4) value',[...args,batchId,Buffer.from(digest,'hex')])).rows[0].value;
+    const common={protocol:PARTICIPANT_BATCH_PROTOCOL,request_id:nonce,host_epoch_id:config.hostEpochId,batch_id:batchId,batch_digest:digest};
+    if(!saved)return{status:404,value:{...common,state:'ABSENT',evidence:null}};
+    const raw=Buffer.from(saved.raw_b64,'base64'),identity={batchId,hostEpochId:config.hostEpochId,digest},batch=readParticipantBatch(raw,identity,config.runtimes),first=batch.cases[0]!.payload;
+    const carrier=await lookup(client,first.attemptId,authoringRequest(first,nonce,config.runtimes).payload_digest,nonce);
+    if(carrier.status!==200)throw new Error('Batch carrier record missing.');
+    if(saved.result===null)return{status:200,value:{...common,state:'PENDING',evidence:null}};
+    const evidence={...saved.result,drain:saved.carrier?.drain??null};acceptParticipantBatchResult(raw,identity,config.runtimes,evidence);
+    return{status:200,value:{...common,state:'FINISHED',evidence}};
+  }
   return {
     hostEpochId: config.hostEpochId,
     get runtimes() { return new Map([...config.runtimes].map(([k, v]) => [k, { ...v }])); },
@@ -53,6 +68,14 @@ export function createJudgeRegistry(pool: Pool, settings: RegistrySettings) {
       });
     },
     observe: (attempt: string, digest: string, nonce: string) => transaction(pool, client => lookup(client, attempt, digest, nonce)),
+    async admitBatch(raw:Buffer,batchId:string,digest:string,nonce:string){
+      readParticipantBatch(raw,{batchId,hostEpochId:config.hostEpochId,digest},config.runtimes);
+      return transaction(pool,async client=>{
+        await client.query('SELECT ingenium_judge.admit_batch($1,$2,$3,$4)',[...args,batchId,raw]);
+        const result=await batchLookup(client,batchId,digest,nonce);if(result.status!==200)throw new Error('Batch admission not reconciled.');return{...result,status:201};
+      });
+    },
+    observeBatch:(batchId:string,digest:string,nonce:string)=>transaction(pool,client=>batchLookup(client,batchId,digest,nonce)),
   };
 }
 export function createJudgeSupervisorStore(pool: Pool, settings: RegistrySettings) {
@@ -60,8 +83,27 @@ export function createJudgeSupervisorStore(pool: Pool, settings: RegistrySetting
   return {
     ...deliveryStore(pool, config),
     get runtimes() { return new Map([...config.runtimes].map(([key, value]) => [key, { ...value }])); },
-    async withRetirementInspection<T>(signal: AbortSignal, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    async batchForAttempt(attempt:string){
+      uuid(attempt);
+      return transaction(pool,async client=>{
+        const saved=(await client.query('SELECT ingenium_judge.batch_for_attempt($1,$2,$3) value',[...args,attempt])).rows[0].value;
+        if(!saved)return null;
+        const batchId=uuid(saved.batch_id),raw=Buffer.from(saved.raw_b64,'base64');
+        const batch=readParticipantBatch(raw,{batchId,hostEpochId:config.hostEpochId,digest:saved.digest},config.runtimes);
+        if(batch.cases[0]!.payload.attemptId!==attempt)throw new Error('Foreign batch carrier.');
+        return{batchId,digest:saved.digest as string,raw};
+      });
+    },
+    async sealBatch(attempt:string,token:string,owner:string,answer:unknown){
+      for(const id of [attempt,token,owner])uuid(id);
+      const batch=await this.batchForAttempt(attempt);if(!batch)throw new Error('Original batch registration missing.');
+      const checked=acceptParticipantBatchResult(batch.raw,{...batch,hostEpochId:config.hostEpochId},config.runtimes,answer);
+      if(checked.drain!==null)throw new Error('Batch result cannot invent a physical drain.');
+      await transaction(pool,client=>client.query('SELECT ingenium_judge.seal_batch($1,$2,$3,$4,$5,$6::jsonb)',[...args,attempt,token,owner,JSON.stringify(answer)]));
+    },
+    async withRetirementInspection<T>(signal: AbortSignal, work: (signal: AbortSignal) => Promise<T>, lane = 0): Promise<T> {
       signal.throwIfAborted();
+      if (lane !== 0 && lane !== 1) throw new Error("Unknown retirement inspection lane.");
       const client = await pool.connect(), lost = new AbortController();
       const failed = () => lost.abort(), bounded = AbortSignal.any([signal, lost.signal]);
       client.on("error", failed);
@@ -69,7 +111,7 @@ export function createJudgeSupervisorStore(pool: Pool, settings: RegistrySetting
         // The session lock orders full-host scans only; it grants no execution or drain authority.
         while (true) {
           bounded.throwIfAborted();
-          const locked = (await client.query("SELECT pg_catalog.pg_try_advisory_lock($1::integer,$2::integer) AS locked", [0x494e4745, 0x52455449])).rows[0]?.locked;
+          const locked = (await client.query("SELECT pg_catalog.pg_try_advisory_lock($1::integer,$2::integer) AS locked", [0x494e4745, 0x52455449 + lane])).rows[0]?.locked;
           bounded.throwIfAborted();
           if (locked === true) break;
           if (locked !== false) throw new Error("Retirement inspection lock unverified.");
@@ -85,7 +127,7 @@ export function createJudgeSupervisorStore(pool: Pool, settings: RegistrySetting
     async held(): Promise<string[]> {
       return transaction(pool, async client => {
         const value = (await client.query("SELECT ingenium_judge.held_executions($1,$2) AS value", args)).rows[0].value;
-        if (!Array.isArray(value) || value.length > 8 || new Set(value).size !== value.length) throw new Error("Invalid held-execution inventory.");
+        if (!Array.isArray(value) || value.length > 16 || new Set(value).size !== value.length) throw new Error("Invalid held-execution inventory.");
         return value.map(uuid);
       });
     },

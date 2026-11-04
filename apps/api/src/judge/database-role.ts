@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-// Seven service connections leave room for eight launchers, readiness and PostgreSQL's reserved slots.
+// Seven service connections leave room for sixteen launchers, readiness and PostgreSQL's reserved slots.
 export const JUDGE_DATABASE_POOLS = Object.freeze({ gateway: 2, supervisor: 4, publisher: 1 });
 const roles = { gateway: "ingenium_judge_gateway", supervisor: "ingenium_judge_supervisor", publisher: "ingenium_judge_publisher" } as const;
 export async function assertJudgeDatabaseRole(database: Pick<Pool, "query">, kind: keyof typeof roles) {

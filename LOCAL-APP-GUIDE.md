@@ -11,7 +11,7 @@ this repository. This guide does not deploy the event or start a cloud VM.
 | Review admin and contestants together              | `npm.cmd run preview:app`                   | `http://127.0.0.1:5175`                                   | Its own temporary PostgreSQL container                | No; judging is simulated                               |
 | Work on the normal frontend and backend separately | `npm.cmd run dev:web` and `npm.cmd run dev` | UI: `http://127.0.0.1:5173`; API: `http://127.0.0.1:3000` | Persistent development PostgreSQL, normally port 5433 | Requires the separately configured Linux judge/runtime |
 
-**For our current frontend review, use the first or second row.** Use 5175 when
+**For a first local review, use the first or second row.** Use 5175 when
 you want an admin action to affect the contestant you are watching. Admin actions
 on 5175 do not affect the independent contestant-only demo on 5174.
 
@@ -43,7 +43,7 @@ healthy database alone does not mean that real judging is available.
 Open a terminal and enter the project directory:
 
 ```powershell
-cd "D:\College\Ingenium\Bug bounty"
+cd "C:\path\to\ingenium-bug-bounty"
 ```
 
 Repeat that directory command in every new terminal used for this project. If
@@ -115,7 +115,7 @@ data. Frontend changes normally reload automatically; changes to
 Open Docker Desktop, wait for its engine, then run:
 
 ```powershell
-cd "D:\College\Ingenium\Bug bounty"
+cd "C:\path\to\ingenium-bug-bounty"
 npm.cmd run preview:app
 ```
 
@@ -173,7 +173,7 @@ separate from both preview modes above.
 ### A. Prepare the local environment files once
 
 ```powershell
-cd "D:\College\Ingenium\Bug bounty"
+cd "C:\path\to\ingenium-bug-bounty"
 npm.cmd run setup:env
 ```
 
@@ -214,7 +214,7 @@ generated locally; there is no password to copy from this guide.
 ### C. Start the backend in terminal 1
 
 ```powershell
-cd "D:\College\Ingenium\Bug bounty"
+cd "C:\path\to\ingenium-bug-bounty"
 npm.cmd run dev
 ```
 
@@ -240,7 +240,7 @@ check does not establish that event entry or a judge has been installed.
 ### D. Start the normal frontend in terminal 2
 
 ```powershell
-cd "D:\College\Ingenium\Bug bounty"
+cd "C:\path\to\ingenium-bug-bounty"
 npm.cmd run dev:web
 ```
 

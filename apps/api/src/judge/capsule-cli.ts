@@ -1,4 +1,5 @@
 import { writeSync } from "node:fs";
+import { judgeFaultDiagnostic } from "./fault-diagnostic.js";
 import { lstat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,7 @@ import { storageAcknowledgement } from "./capsule-storage.js";
 import { createIsolateBackend } from "./isolate-backend.js";
 import { protectedDirectory, protectedLinuxFile } from "./isolate-context.js";
 import { readCapsuleRequest } from "./capsule-request.js";
+import {readParticipantBatch,participantBatchWallBudget} from '../content/batch-protocol.js';
 
 const CONFIG = "/opt/ingenium/judge-executor/capsule.json";
 const fail = (): never => { throw new Error("Unusable private capsule request."); };
@@ -47,12 +49,18 @@ async function main() {
   if (process.platform !== "linux" || process.getuid?.() !== 0 || process.pid !== 1) return fail();
   process.umask(0o077);
   // This process is the capsule's namespace init; exiting also stops its remaining descendants, never the host supervisor.
-  const deadline = setTimeout(() => process.exit(125), 80000); deadline.unref();
+  let deadline = setTimeout(() => process.exit(125), 80000); deadline.unref();
   await protectedDirectory("/opt/ingenium/judge-executor");
   const info = await lstat(CONFIG); if ((info.mode & 0o7777) !== 0o400) return fail();
   const configuration = await protectedLinuxFile(CONFIG, 32768), input = Buffer.alloc(JUDGE_BODY_LIMIT); let size = 0;
   for await (const piece of process.stdin) { const bytes = Buffer.from(piece); if (bytes.length > input.length - size) return fail(); bytes.copy(input, size); size += bytes.length; }
-  const signal = AbortSignal.timeout(75000), raw = input.subarray(0, size), response = await capsuleReply(configuration, raw, signal);
+  const raw = input.subarray(0, size),parsed=readCapsuleRequest(configuration,raw);
+  let budget=75000;
+  if(parsed.settings.batch){
+    const b=parsed.settings.batch,batch=readParticipantBatch(b.raw,{...b,hostEpochId:parsed.settings.hostEpochId},parsed.settings.runtimes);
+    budget=participantBatchWallBudget(batch.cases);clearTimeout(deadline);deadline=setTimeout(()=>process.exit(125),budget+5000);deadline.unref();
+  }
+  const signal = AbortSignal.timeout(budget),response = await capsuleReply(configuration, raw, signal);
   const { settings, claim, request } = readCapsuleRequest(configuration, raw);
   if (request.operation === "EXECUTE") {
     // Stay alive until the host owns real namespace handles; device numbers alone can be reused immediately on exit.
@@ -64,5 +72,8 @@ async function main() {
   process.exit(0);
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(() => { try { writeSync(2, "Protected capsule unavailable; retain its original reservation.\n"); } finally { process.exit(125); } });
+  main().catch(error => { try {
+    writeSync(2, "Protected capsule unavailable; retain its original reservation.\n");
+    writeSync(2, "Protected host diagnostic: " + JSON.stringify(judgeFaultDiagnostic(error)) + "\n");
+  } finally { process.exit(125); } });
 }

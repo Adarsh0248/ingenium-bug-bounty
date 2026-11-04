@@ -32,18 +32,21 @@ an unavailable supervisor leaves admission blocked.
    nonce, epoch, boot, runtime set and proof digest. Only that response supplies
    the readiness heartbeat. Observe within five seconds and renew independently
    every five seconds, including while execution workers are busy.
-4. Publish/reconcile the durable outbox and run eight independent execution
+4. Publish/reconcile the durable outbox and run four independent execution
    workers, each with its own queue connection and protected executor client.
    Empty queues do not repeatedly launch an expensive host preflight. The
    reviewed `007_eight_slots.sql` database ceiling of eight undrained permits
-   remains authoritative. Nine distinct queue clients and a separate readiness
-   executor are required; the two-worker form remains only for retained test
-   fixtures. Do not enable extra permits in a retained lab to make a test pass.
+   remains authoritative. Five distinct queue clients and a separate readiness
+   executor are used by the production entry point. The eight-worker/nine-client
+   form remains available for calibrated composition tests; the two-worker form
+   remains for retained fixtures. Do not enable extra permits in a retained lab
+   to make a test pass.
    Execution/recovery host processes use Linux nice level 10 so fresh readiness
    observations retain scheduling priority. A failure to set that priority
    refuses the operation; no file, kernel, peer or deadline check is skipped.
-   Full-host retirement inspections run under an exclusive PostgreSQL session
-   lock. This orders the expensive scans while eight code executions remain
+   Full-host retirement inspections use two exclusive PostgreSQL session
+   locks, selected by the original attempt UUID. This bounds concurrent scans to
+   two while preserving ordering for each attempt. Eight code executions remain
    independent. Each scan retains its five-second bound and every task, FD,
    mount, namespace and cgroup check. The original connection is destroyed on
    completion/failure; a lost session aborts the inspection and cannot supply a

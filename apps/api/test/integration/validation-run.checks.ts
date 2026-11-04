@@ -264,4 +264,24 @@ export async function validationRunChecks(t:TestContext,owner:Pool,api:Pool,cloc
       assert.equal((await owner.query("SELECT count(*)::int n FROM execution_capacity_slots WHERE authoring_attempt_id IS NOT NULL")).rows[0].n,0);
     }finally{await runtime.close();await pool.end();}
   });
+  await t.test("one coordinator dispatches two different authoring checks concurrently under its original lease",async()=>{
+    mode="NORMAL";ready=true;
+    await owner.query("UPDATE judge_control SET lease_until=date_trunc('milliseconds',clock_timestamp())-interval '1 millisecond' WHERE id=1");
+    const pool=new Pool({connectionString:owner.options.connectionString!,options:"-c role=ingenium_app_worker",max:4});
+    let release!:()=>void,reached!:()=>void,failure=false;const barrier=new Promise<void>(resolve=>{release=resolve;}),arrived=new Promise<void>(resolve=>{reached=resolve;}),checks=new Set<string>();
+    sendHook=async p=>{checks.add(p.checkId);if(checks.size===2)reached();await barrier;};
+    const runtime=startJudgingWorker(pool,clock,driver,()=>{failure=true;});
+    try{
+      const deadline=Date.now()+20000;
+      while((await owner.query("SELECT worker_id FROM judge_control WHERE id=1")).rows[0].worker_id!==runtime.workerId){assert.ok(Date.now()<deadline);await setTimeout(50);}
+      const run=await start();
+      await Promise.race([arrived,setTimeout(10000).then(()=>assert.fail('Authoring dispatch remained serial'))]);
+      assert.equal(checks.size,2);
+      assert.equal((await owner.query('SELECT count(*)::int n FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1 AND a.released_at IS NULL',[run])).rows[0].n,2);
+      release();sendHook=undefined;
+      while((await owner.query('SELECT status FROM validation_runs WHERE id=$1',[run])).rows[0].status!=='PASSED'){assert.ok(Date.now()<deadline);await setTimeout(50);}
+      assert.equal(failure,false);
+      assert.equal((await owner.query('SELECT count(*)::int n FROM authoring_attempts a JOIN authoring_checks c ON c.id=a.check_id WHERE c.run_id=$1',[run])).rows[0].n,15);
+    }finally{release();sendHook=undefined;await runtime.close();await pool.end();}
+  });
 }

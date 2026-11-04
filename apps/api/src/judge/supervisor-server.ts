@@ -6,6 +6,7 @@ import type { createJudgeQueue } from "./queue.js";
 import { parseSupervisorRuntime } from "./supervisor-config.js";
 import type { openSupervisorSession, startJudgeSupervisor } from "./supervisor.js";
 import { assertJudgeDatabaseRole, JUDGE_DATABASE_POOLS } from "./database-role.js";
+import { judgeFaultDiagnostic } from "./fault-diagnostic.js";
 
 async function start() {
   const pools: Pool[] = [], queues: ReturnType<typeof createJudgeQueue>[] = [];
@@ -32,12 +33,13 @@ async function start() {
     const queue = () => { const value = createJudgeQueue({ ...config, ...config.redis }); queues.push(value); return value; };
     if (stopping) throw new Error("Startup interrupted.");
     service = await startJudgeSupervisor({ store: createJudgeSupervisorStore(supervisorPool, config), publisher: createJudgePublisherStore(publisherPool, config),
-      session, signal: interrupted.signal, queues: Array.from({length:9},queue), executors: Array.from({length:8},()=>createProtectedExecutorClient(config)), readiness: createProtectedExecutorClient(config) });
+      session, signal: interrupted.signal, queues: Array.from({length:17},queue), executors: Array.from({length:16},()=>createProtectedExecutorClient(config)), readiness: createProtectedExecutorClient(config) });
     if (stopping) await service.close();
     if (!stopping) console.log("Judge supervisor started; only the verified host can admit or execute work.");
     const result = await service.completion;
     if (result.failed || process.exitCode === 1) {
       console.error(`Judge supervisor fault stage: ${service.failureStage ?? "shutdown"}.`);
+      console.error(JSON.stringify(judgeFaultDiagnostic(service.failureCause)));
       throw new Error("Supervisor stopped after a fault.");
     }
   } catch {

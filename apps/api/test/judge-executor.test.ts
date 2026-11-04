@@ -90,7 +90,7 @@ test("caller cancellation stops the launcher promptly and never treats its exit 
 test("whole-launch deadline cannot be extended by an unresponsive helper", async t => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const timed = assert.rejects(exchangeProtectedProcess(command("hang"), Buffer.from("{}"), new AbortController().signal), /uncertain/);
-  try { t.mock.timers.tick(90001); await timed; } finally { t.mock.timers.reset(); }
+  try { t.mock.timers.tick(330001); await timed; } finally { t.mock.timers.reset(); }
 });
 
 test("normal local/Windows startup cannot construct a production executor without a reviewed Linux installation", () => {

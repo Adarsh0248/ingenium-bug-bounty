@@ -6,10 +6,10 @@ import { neon } from "./round-1/neon.mjs";
 import { silicon } from "./round-1/silicon.mjs";
 import { nexus } from "./round-1/nexus.mjs";
 import { core } from "./round-1/core.mjs";
-import { arrays } from "./round-2/arrays.mjs";
-import { systems } from "./round-2/systems.mjs";
-import { graphs } from "./round-2/graphs.mjs";
-import { logic } from "./round-2/logic.mjs";
+import { arrays } from "./round-2/revision-easy/arrays.mjs";
+import { systems } from "./round-2/revision-easy/systems.mjs";
+import { graphs } from "./round-2/revision-easy/graphs.mjs";
+import { logic } from "./round-2/revision-easy/logic.mjs";
 
 test("both generated packs retain the latest authored statements, hints and readable variable markup", () => {
   const rounds = [

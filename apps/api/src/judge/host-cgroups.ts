@@ -105,7 +105,7 @@ export async function prepareHostCgroup(root: CgroupRoot, parent: string): Promi
       if (await control(group, "cpuacct.usage") !== "0\n") return fail();
       await control(group, "cpu.cfs_period_us", "100000\n"); await control(group, "cpu.cfs_quota_us", "75000\n");
     }
-    if (root.path.endsWith("/pids")) await control(group, "pids.max", "128\n");
+    if (root.path.endsWith("/pids")) await control(group, "pids.max", "64\n");
     if (root.cpus) { await control(group, "cpuset.cpus", cpusetRange(`${root.cpus}\n`)); await control(group, "cpuset.mems", cpusetRange(`${root.mems}\n`)); }
     await mkdir(`${fd(group)}/docker`, { mode: 0o755 }); docker = await directory(`${fd(group)}/docker`); await empty(docker, []);
     if (root.cpus) { await control(docker, "cpuset.cpus", `${root.cpus}\n`); await control(docker, "cpuset.mems", `${root.mems}\n`); }
@@ -117,7 +117,7 @@ async function budget(group: FileHandle, root: CgroupRoot) {
   const values = root.path.endsWith("/memory") ? { "memory.limit_in_bytes": "1610612736\n", "memory.memsw.limit_in_bytes": "1610612736\n", "memory.use_hierarchy": "1\n",
     "memory.failcnt": "0\n", "memory.memsw.failcnt": "0\n", "memory.oom_control": "oom_kill_disable 0\nunder_oom 0\noom_kill 0\n" }
     : root.path.endsWith("/cpu,cpuacct") ? { "cpu.cfs_period_us": "100000\n", "cpu.cfs_quota_us": "75000\n", "cpuacct.usage": "0\n" }
-      : root.path.endsWith("/pids") ? { "pids.max": "128\n", "pids.events": "max 0\n" }
+      : root.path.endsWith("/pids") ? { "pids.max": "64\n", "pids.events": "max 0\n" }
         : root.cpus ? { "cpuset.cpus": `${root.cpus}\n`, "cpuset.mems": `${root.mems}\n` } : {};
   for (const [key, value] of Object.entries(values)) if (await control(group, key) !== value) return fail();
 }
