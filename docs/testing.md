@@ -7,12 +7,14 @@ Run from the repository root with the declared Node/npm versions and locked depe
 ```sh
 npm ci
 npm run typecheck
+npm run build
 npm test
 npm run content:programs:test
-npm run build
 npm run test:bundle --workspace @ingenium/web
 npm run docs:check
 ```
+
+Build before running `npm test`: the release-packaging tests inspect the real `dist/` output from both workspaces.
 
 Unit suites cover protocol/batch binding, receipts, policy, rendering and recovery with isolated fixtures. The public-bundle check verifies that the frontend output does not include organiser-only content. These commands do not certify a sandbox or execute real participant programs.
 

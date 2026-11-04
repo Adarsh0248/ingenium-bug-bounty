@@ -60,9 +60,9 @@ Start with the [architecture](architecture.md), [documentation index](docs/READM
 
 ```sh
 npm run typecheck
+npm run build
 npm test
 npm run content:programs:test
-npm run build
 npm run test:bundle --workspace @ingenium/web
 npm run docs:check
 ```

@@ -10,10 +10,12 @@ Create a branch from `main`. Keep changes focused and reuse the existing API, da
 
 ```sh
 npm run typecheck
+npm run build
 npm test
 npm run content:programs:test
-npm run build
 ```
+
+Build first: packaging tests verify the compiled workspace outputs.
 
 For database changes, run the relevant disposable suite, for example:
 
